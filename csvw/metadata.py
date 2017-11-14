@@ -1,13 +1,14 @@
-# coding: utf8
-"""
-Functionality to read and write metadata for CSV files.
+# metadata.py - 
+
+"""Functionality to read and write metadata for CSV files.
 
 This module implements (partially) the W3C recommendation
 "Metadata Vocabulary for Tabular Data".
 
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
-from __future__ import unicode_literals, print_function, division
+
+from __future__ import unicode_literals
 
 import re
 from collections import OrderedDict
@@ -30,6 +31,7 @@ _varname = re.compile('(' + _varchar + '([.]?' + _varchar + ')*)$')
 
 
 class URITemplate(_URITemplate):
+
     def __eq__(self, other):
         if not hasattr(other, 'uri'):
             return False
@@ -41,6 +43,7 @@ class URITemplate(_URITemplate):
 
 def uri_template_property():
     """
+
     Note: We do not currently provide support for supplying the "_" variables like "_row"
     when expanding a URI template.
 
@@ -54,8 +57,10 @@ def uri_template_property():
 
 class Link(UnicodeMixin):
     """
+
     .. seealso:: http://w3c.github.io/csvw/metadata/#link-properties
     """
+
     def __init__(self, string):
         self.string = string
 
@@ -88,8 +93,10 @@ def link_property():
 
 class NaturalLanguage(UnicodeMixin, OrderedDict):
     """
+
     .. seealso:: http://w3c.github.io/csvw/metadata/#natural-language-properties
     """
+
     def __init__(self, value):
         OrderedDict.__init__(self)
         self.value = value
@@ -128,11 +135,11 @@ class NaturalLanguage(UnicodeMixin, OrderedDict):
 
 @attr.s
 class DescriptionBase(object):
-    """
-    Container for
+    """Container for
     - common properties (see http://w3c.github.io/csvw/metadata/#common-properties)
     - @-properies.
     """
+
     common_props = attr.ib(default=attr.Factory(dict))
     at_props = attr.ib(default=attr.Factory(dict))
 
@@ -187,8 +194,10 @@ def optional_int():
 @attr.s
 class Datatype(DescriptionBase):
     """
+
     .. seealso:: http://w3c.github.io/csvw/metadata/#datatypes
     """
+
     base = attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.in_(DATATYPES)))
@@ -281,11 +290,11 @@ class Datatype(DescriptionBase):
 
 @attr.s
 class Description(DescriptionBase):
-    """
-    Adds support for inherited properties.
+    """Adds support for inherited properties.
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#inherited-properties
     """
+
     # To be able to resolve inheritance chains, we also provide a place to store a
     # reference to the containing object:
     _parent = attr.ib(default=None, repr=False)
@@ -315,6 +324,7 @@ class Description(DescriptionBase):
 
 @attr.s
 class Column(UnicodeMixin, Description):
+
     name = attr.ib(
         default=None,
         validator=attrlib.valid_re(_varname, nullable=True))
@@ -392,6 +402,7 @@ def column_reference():
 
 @attr.s
 class Reference(object):
+
     resource = link_property()
     schemaReference = link_property()
     columnReference = column_reference()
@@ -403,6 +414,7 @@ class Reference(object):
 
 @attr.s
 class ForeignKey(object):
+
     columnReference = column_reference()
     reference = attr.ib(default=None)
 
@@ -419,6 +431,7 @@ class ForeignKey(object):
 
 @attr.s
 class Schema(Description):
+
     columns = attr.ib(
         default=attr.Factory(list),
         convert=lambda v: [Column.fromvalue(c) for c in v])
@@ -455,6 +468,7 @@ class Schema(Description):
 
 @attr.s
 class TableLike(Description):
+
     dialect = attr.ib(
         default=None, convert=lambda v: Dialect(**v) if isinstance(v, dict) else v)
     notes = attr.ib(default=attr.Factory(list))
@@ -476,6 +490,7 @@ class TableLike(Description):
 
 @attr.s
 class Table(TableLike):
+
     url = link_property()
     suppressOutput = attr.ib(default=False)
 
@@ -580,6 +595,7 @@ class Table(TableLike):
 
 @attr.s
 class TableGroup(TableLike):
+
     _fname = attr.ib(default=None)
     url = attr.ib(default=None)
     tables = attr.ib(

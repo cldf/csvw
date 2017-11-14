@@ -1,11 +1,13 @@
-"""
-Datatypes
+# datatypes.py - 
+
+"""Datatypes
 
 We model the hierarchy of basic datatypes using derived classes.
 
 .. seealso:: http://w3c.github.io/csvw/metadata/#datatypes
 """
-from __future__ import unicode_literals, print_function, division
+
+from __future__ import unicode_literals
 
 import re
 from json import loads, dumps
@@ -97,6 +99,7 @@ class base64Binary(anyAtomicType):
 
 
 class hexBinary(anyAtomicType):
+
     name = 'hexBinary'
 
     @staticmethod
@@ -117,9 +120,8 @@ class hexBinary(anyAtomicType):
 
 
 class boolean(anyAtomicType):
-    """
-    http://w3c.github.io/csvw/syntax/#formats-for-booleans
-    """
+    """http://w3c.github.io/csvw/syntax/#formats-for-booleans"""
+
     name = 'boolean'
 
     @staticmethod
@@ -146,6 +148,7 @@ class boolean(anyAtomicType):
 
 
 class dateTime(anyAtomicType):
+
     name = 'datetime'
     minmax = True
 
@@ -199,6 +202,7 @@ class dateTime(anyAtomicType):
 
 
 class date(dateTime):
+
     name = 'date'
 
     @staticmethod
@@ -211,6 +215,7 @@ class date(dateTime):
 
 
 class dateTimeStamp(dateTime):
+
     name = 'dateTimeStamp'
 
     @staticmethod
@@ -222,6 +227,7 @@ class dateTimeStamp(dateTime):
 
 
 class _time(dateTime):
+
     name = 'time'
 
     @staticmethod
@@ -235,6 +241,7 @@ class _time(dateTime):
 
 
 class duration(anyAtomicType):
+
     name = 'duration'
 
     @staticmethod
@@ -253,6 +260,7 @@ class duration(anyAtomicType):
 
 
 class decimal(anyAtomicType):
+
     name = 'decimal'
     minmax = True
 
@@ -304,6 +312,7 @@ class decimal(anyAtomicType):
 
 
 class integer(decimal):
+
     name = 'integer'
 
     @staticmethod
@@ -312,6 +321,7 @@ class integer(decimal):
 
 
 class _float(anyAtomicType):
+
     name = 'float'
     minmax = True
 
@@ -328,42 +338,52 @@ class _float(anyAtomicType):
 
 
 class number(_float):
+
     name = 'number'
 
 
 class QName(string):
+
     name = 'QName'
 
 
 class gDay(string):
+
     name = 'gDay'
 
 
 class gMonth(string):
+
     name = 'gMonth'
 
 
 class gMonthDay(string):
+
     name = 'gMonthDay'
 
 
 class gYear(string):
+
     name = 'gYear'
 
 
 class gYearMonth(string):
+
     name = 'gYearMonth'
 
 
 class xml(string):
+
     name = 'xml'
 
 
 class html(string):
+
     name = 'html'
 
 
 class json(string):
+
     name = 'json'
 
     @staticmethod
@@ -385,6 +405,7 @@ for cls in anyAtomicType.__subclasses__():
 
 def dt_format_and_regex(fmt, no_date=False):
     """
+
     .. seealso:: http://w3c.github.io/csvw/syntax/#formats-for-dates-and-times
     """
     if fmt is None:

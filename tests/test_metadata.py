@@ -1,10 +1,13 @@
 # coding: utf8
-from __future__ import unicode_literals, print_function, division
+
+from __future__ import unicode_literals
+
 from unittest import TestCase
 from collections import OrderedDict
 import json
 
 from mock import Mock
+
 import clldutils
 from clldutils.path import Path, copy, write_text, read_text
 from clldutils.testing import WithTempDir
@@ -15,6 +18,7 @@ FIXTURES = Path(clldutils.__file__).parent.joinpath('tests', 'fixtures')
 
 
 class TestColumnAccess(TestCase):
+
     def test_get_column(self):
         from clldutils.csvw.metadata import Table
 
@@ -34,6 +38,7 @@ class TestColumnAccess(TestCase):
 
 
 class TestDialect(WithTempDir):
+
     def _roundtrip(self, t, fname, *items):
         t.write(items, fname=fname)
         return read_text(fname), list(t.iterdicts(fname=fname))
@@ -76,6 +81,7 @@ class TestDialect(WithTempDir):
 
 
 class NaturalLanguageTests(TestCase):
+
     def test_string(self):
         from clldutils.csvw.metadata import NaturalLanguage
 
@@ -147,6 +153,7 @@ class TestColumn(TestCase):
 
 
 class LinkTests(TestCase):
+
     def test_link(self):
         from clldutils.csvw.metadata import Link
 
@@ -158,6 +165,7 @@ class LinkTests(TestCase):
 
 
 class TableGroupTests(WithTempDir):
+
     def _make_tablegroup(self, data=None, metadata=None):
         from clldutils.csvw.metadata import TableGroup
 

@@ -1,5 +1,6 @@
 # coding: utf8
-from __future__ import unicode_literals, print_function, division
+
+from __future__ import unicode_literals
 
 from unittest import TestCase
 from decimal import Decimal
@@ -7,6 +8,7 @@ import datetime
 
 
 class DatatypeTests(TestCase):
+
     def _make_one(self, value):
         from clldutils.csvw.metadata import Datatype
 
