@@ -14,7 +14,7 @@ from clldutils.testing import WithTempDir
 from clldutils import jsonlib
 from clldutils.dsv import Dialect
 
-FIXTURES = Path(clldutils.__file__).parent.joinpath('tests', 'fixtures')
+FIXTURES = Path(__file__).parent / 'fixtures'
 
 
 class TestColumnAccess(TestCase):
