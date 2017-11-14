@@ -23,7 +23,8 @@ from clldutils.jsonlib import load, dump
 from clldutils.path import Path
 from clldutils.misc import UnicodeMixin, NO_DEFAULT, log_or_raise
 from clldutils import attrlib
-from clldutils.csvw.datatypes import DATATYPES
+
+from .datatypes import DATATYPES
 
 # Level 1 variable names according to https://tools.ietf.org/html/rfc6570#section-2.3:
 _varchar = '([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'

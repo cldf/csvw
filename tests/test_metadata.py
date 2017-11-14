@@ -20,7 +20,7 @@ FIXTURES = Path(__file__).parent / 'fixtures'
 class TestColumnAccess(TestCase):
 
     def test_get_column(self):
-        from clldutils.csvw.metadata import Table
+        from csvw.metadata import Table
 
         t = Table.fromvalue({
             "url": '',
@@ -44,7 +44,7 @@ class TestDialect(WithTempDir):
         return read_text(fname), list(t.iterdicts(fname=fname))
 
     def test_doubleQuote(self):
-        from clldutils.csvw.metadata import Table
+        from csvw.metadata import Table
 
         fname = self.tmp_path('test')
         t = Table.fromvalue({
@@ -83,7 +83,7 @@ class TestDialect(WithTempDir):
 class NaturalLanguageTests(TestCase):
 
     def test_string(self):
-        from clldutils.csvw.metadata import NaturalLanguage
+        from csvw.metadata import NaturalLanguage
 
         l = NaturalLanguage('abc')
         self.assertEqual(l.getfirst(), 'abc')
@@ -91,7 +91,7 @@ class NaturalLanguageTests(TestCase):
         self.assertEqual('{0}'.format(l), 'abc')
 
     def test_array(self):
-        from clldutils.csvw.metadata import NaturalLanguage
+        from csvw.metadata import NaturalLanguage
 
         l = NaturalLanguage(['abc', 'def'])
         self.assertEqual(l.getfirst(), 'abc')
@@ -99,7 +99,7 @@ class NaturalLanguageTests(TestCase):
         self.assertEqual('{0}'.format(l), 'abc')
 
     def test_object(self):
-        from clldutils.csvw.metadata import NaturalLanguage
+        from csvw.metadata import NaturalLanguage
 
         l = NaturalLanguage(OrderedDict([('en', ['abc', 'def']), ('de', 'äöü')]))
         self.assertEqual(l.getfirst('de'), 'äöü')
@@ -107,13 +107,13 @@ class NaturalLanguageTests(TestCase):
         self.assertEqual('{0}'.format(l), 'abc')
 
     def test_error(self):
-        from clldutils.csvw.metadata import NaturalLanguage
+        from csvw.metadata import NaturalLanguage
 
         with self.assertRaises(ValueError):
             NaturalLanguage(1)
 
     def test_serialize(self):
-        from clldutils.csvw.metadata import NaturalLanguage
+        from csvw.metadata import NaturalLanguage
 
         l = NaturalLanguage('ä')
         self.assertEqual(json.dumps(l.asdict()), '"\\u00e4"')
@@ -127,7 +127,7 @@ class NaturalLanguageTests(TestCase):
 class TestColumn(TestCase):
 
     def _make_column(self, value):
-        from clldutils.csvw.metadata import Column
+        from csvw.metadata import Column
 
         return Column.fromvalue(value)
 
@@ -155,7 +155,7 @@ class TestColumn(TestCase):
 class LinkTests(TestCase):
 
     def test_link(self):
-        from clldutils.csvw.metadata import Link
+        from csvw.metadata import Link
 
         l = Link('a.csv')
         self.assertEqual('{0}'.format(l), l.resolve(None))
@@ -167,7 +167,7 @@ class LinkTests(TestCase):
 class TableGroupTests(WithTempDir):
 
     def _make_tablegroup(self, data=None, metadata=None):
-        from clldutils.csvw.metadata import TableGroup
+        from csvw.metadata import TableGroup
 
         md = self.tmp_path('md')
         if metadata is None:
@@ -199,7 +199,7 @@ class TableGroupTests(WithTempDir):
             jsonlib.load(FIXTURES.joinpath('csv.txt-metadata.json')))
 
     def test_all(self):
-        from clldutils.csvw.metadata import NaturalLanguage
+        from csvw.metadata import NaturalLanguage
 
         t = self._make_tablegroup()
         self.assertEqual(len(list(t.tables[0])), 2)
@@ -427,7 +427,7 @@ GID,On Street,Species,Trim Cycle,Inventory Date
             break
 
     def test_foreign_keys(self):
-        from clldutils.csvw.metadata import ForeignKey
+        from csvw.metadata import ForeignKey
 
         with self.assertRaises(ValueError):
             ForeignKey.fromdict({

@@ -10,7 +10,7 @@ import datetime
 class DatatypeTests(TestCase):
 
     def _make_one(self, value):
-        from clldutils.csvw.metadata import Datatype
+        from csvw.metadata import Datatype
 
         return Datatype.fromvalue(value)
 
