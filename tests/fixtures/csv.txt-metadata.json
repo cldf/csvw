@@ -1,0 +1,23 @@
+{
+    "@context": [
+        "http://www.w3.org/ns/csvw",
+        {
+            "@language": "en"
+        }
+    ],
+    "dialect": {
+        "header": false,
+        "encoding": "utf-8-sig"
+    },
+    "tables": [
+        {
+            "url": "csv.txt",
+            "tableSchema": {
+                "columns": [
+                    {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
+                    {"datatype": "string"}
+                ]
+            }
+        }
+    ]
+}
