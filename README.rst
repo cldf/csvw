@@ -3,6 +3,8 @@ Csvw
 
 |PyPI version| |License| |Supported Python| |Format|
 
+|Travis|
+
 CSV on the web
 
 
@@ -58,3 +60,6 @@ This package is distributed under the `Apache 2.0 license`_.
 .. |Format| image:: https://img.shields.io/pypi/format/csvw.svg
     :target: https://pypi.python.org/pypi/csvw
     :alt: Format
+.. |Travis| image:: https://img.shields.io/travis/cldf/csvw.svg
+   :target: https://travis-ci.org/cldf/csvw
+   :alt: Travis
