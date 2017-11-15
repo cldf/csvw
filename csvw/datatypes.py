@@ -113,7 +113,7 @@ class hexBinary(anyAtomicType):
             hexBinary.value_error(v[:10])
         try:
             binascii.unhexlify(res)
-        except TypeError:
+        except (binascii.Error, TypeError):
             raise ValueError('invalid hexBinary encoding')
         return res
 
