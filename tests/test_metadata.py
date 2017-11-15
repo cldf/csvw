@@ -170,20 +170,20 @@ class TestTableGroup(Helpers):
 
     @classmethod
     def _make_tablegroup(cls, tmpdir, data=None, metadata=None):
-        md = str(tmpdir / 'md')
+        md = tmpdir / 'md'
         if metadata is None:
             shutil.copy(str(FIXTURES / 'csv.txt-metadata.json'), str(md))
         else:
-            cls._write_text(md, metadata)
+            cls._write_text(str(md), metadata)
         if isinstance(data, dict):
             for fname, content in data.items():
-                cls._write_text(tmpdir / fname, content)
+                cls._write_text(str(tmpdir / fname), content)
         else:
             cls._write_text(
-                tmpdir / 'csv.txt',
+                str(tmpdir / 'csv.txt'),
                 data or cls._read_text(FIXTURES / 'csv.txt'),
                 newline='')
-        return csvw.TableGroup.from_file(md)
+        return csvw.TableGroup.from_file(str(md))
 
     def test_roundtrip(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
@@ -499,7 +499,7 @@ AF,1962,9989846"""}
         tg.tabledict['countries.csv'].check_primary_key()
         tg.check_referential_integrity()
         self._write_text(
-            tmpdir / 'country_slice.csv',
+            str(tmpdir / 'country_slice.csv'),
             data['country_slice.csv'].replace('AF', 'AX'))
         with pytest.raises(ValueError):
             tg.check_referential_integrity()
@@ -553,7 +553,7 @@ AF,9799379"""}
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
         tg.check_referential_integrity()
         self._write_text(
-            tmpdir / 'country_slice.csv',
+            str(tmpdir / 'country_slice.csv'),
             data['country_slice.csv'].replace('AF;AD', 'AF;AX'))
         with pytest.raises(ValueError):
             tg.check_referential_integrity()
