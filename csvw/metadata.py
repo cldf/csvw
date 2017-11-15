@@ -540,6 +540,18 @@ class Table(TableLike):
         return self.iterdicts()
 
     def iterdicts(self, log=None, with_metadata=False, fname=None):
+        """Iterate over the rows of the table
+        Create an iterator that maps the information in each row to a `dict` whose keys are
+        the column names of the table and whose values are the values in the corresponding
+        table cells, or for virtual columns (which have no values) the valueUrl for that
+        column. This includes columns not specified in the table specification.
+        :param log: Logger object (default None) The object that reports parsing errors.\
+        If none is given, parsing errors raise ValueError instead.
+        :param bool with_metadata: (default False) Also yield fname and lineno
+        :param fname: file-like, pathlib.Path, or str (default None)\
+        The file to be read. Defaults to inheriting from a parent object, if one exists.
+        :return: A generator of dicts or triples (fname, lineno, dict) if with_metadata
+        """
         dialect = self._get_dialect()
         fname = fname or self.url.resolve(self._parent.base)
         colnames, virtualcols = [], []
