@@ -162,13 +162,13 @@ class TestDatatype(object):
             t.parse('J')
 
         t = Datatype.fromvalue({'base': 'boolean'})
-        assert '{0}'.format(t.basetype) == 'boolean'
-        assert t.parse(False) == False
-        assert t.parse('false') == False
+        assert '{}'.format(t.basetype()) == 'boolean'
+        assert t.parse(False) is False
+        assert t.parse('false') is False
         assert t.formatted(True) == 'true'
 
         t = Datatype.fromvalue({'base': 'boolean', 'format': 'J|N'})
-        assert t.parse('J') == True
+        assert t.parse('J') is True
         assert t.formatted(True) == 'J'
 
         t = Datatype.fromvalue({'base': 'binary'})

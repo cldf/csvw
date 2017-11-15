@@ -24,18 +24,27 @@ import dateutil.parser
 
 __all__ = ['DATATYPES']
 
+DATATYPES = {}
 
+
+def register(cls):
+    DATATYPES[cls.name] = cls
+    return cls
+
+
+@register
 @py3_unicode_to_str
 class anyAtomicType(object):
+
     name = 'any'
     minmax = False
 
     @classmethod
     def value_error(cls, v):
-        raise ValueError('invalid lexical value for {0}: {1}'.format(cls.name, v))
+        raise ValueError('invalid lexical value for {}: {}'.format(cls.name, v))
 
     def __unicode__(self):
-        return self.name or self.__class__.__name__
+        return self.name
 
     @staticmethod
     def derived_description(datatype):
@@ -47,18 +56,20 @@ class anyAtomicType(object):
 
     @staticmethod
     def to_string(v, **kw):
-        return '{0}'.format(v)
+        return '{}'.format(v)
 
 
+@register
 class string(anyAtomicType):
+
     name = 'string'
 
     @staticmethod
     def derived_description(datatype):
         # We wrap a regex soecified as `format` property into a group and add `$` to
         # make sure the whole string is matched when validating.
-        return dict(regex=re.compile(
-            '({0})$'.format(datatype.format)) if datatype.format else None)
+        return {'regex': re.compile(
+            '({})$'.format(datatype.format)) if datatype.format else None}
 
     @staticmethod
     def to_python(v, regex=None):
@@ -67,7 +78,9 @@ class string(anyAtomicType):
         return v
 
 
+@register
 class anyURI(string):
+
     name = 'anyURI'
 
     @staticmethod
@@ -80,7 +93,9 @@ class anyURI(string):
         return v.unsplit()
 
 
+@register
 class base64Binary(anyAtomicType):
+
     name = 'binary'
 
     @staticmethod
@@ -100,6 +115,7 @@ class base64Binary(anyAtomicType):
         return v.decode()
 
 
+@register
 class hexBinary(anyAtomicType):
 
     name = 'hexBinary'
@@ -121,6 +137,7 @@ class hexBinary(anyAtomicType):
         return v.decode()
 
 
+@register
 class boolean(anyAtomicType):
     """http://w3c.github.io/csvw/syntax/#formats-for-booleans"""
 
@@ -132,7 +149,7 @@ class boolean(anyAtomicType):
             true, false = [[v] for v in datatype.format.split('|')]
         else:
             true, false = ['true', '1'], ['false', '0']
-        return dict(true=true, false=false)
+        return {'true': true, 'false': false}
 
     @staticmethod
     def to_python(s, true=('true', '1'), false=('false', '0')):
@@ -146,9 +163,10 @@ class boolean(anyAtomicType):
 
     @staticmethod
     def to_string(v, true=('true', '1'), false=('false', '0')):
-        return true[0] if v else false[0]
+        return (true if v else false)[0]
 
 
+@register
 class dateTime(anyAtomicType):
 
     name = 'datetime'
@@ -186,7 +204,7 @@ class dateTime(anyAtomicType):
     def to_string(v, regex=None, fmt=None, tz_marker=None):
         if fmt is None:
             return v.isoformat()
-        res = fmt.format(dt=v, microsecond='{0:%f}'.format(v))
+        res = fmt.format(dt=v, microsecond='{:%f}'.format(v))
         if tz_marker:
             # We start out with the default timezone info: +##:##
             tz_offset = v.isoformat()[-6:]
@@ -203,6 +221,7 @@ class dateTime(anyAtomicType):
         return res
 
 
+@register
 class date(dateTime):
 
     name = 'date'
@@ -216,6 +235,7 @@ class date(dateTime):
         return dateTime.to_python(v, regex=regex, fmt=fmt).date()
 
 
+@register
 class dateTimeStamp(dateTime):
 
     name = 'dateTimeStamp'
@@ -228,6 +248,7 @@ class dateTimeStamp(dateTime):
         return res
 
 
+@register
 class _time(dateTime):
 
     name = 'time'
@@ -242,18 +263,19 @@ class _time(dateTime):
         return dateTime._parse(v, datetime.time, regex, tz_marker=tz_marker)
 
 
+@register
 class duration(anyAtomicType):
 
     name = 'duration'
 
     @staticmethod
     def derived_description(datatype):
-        return dict(format=datatype.format)
+        return {'format': datatype.format}
 
     @staticmethod
     def to_python(v, format=None, **kw):
         if format and not re.match(format, v):
-            raise ValueError()
+            raise ValueError
         return isodate.parse_duration(v)
 
     @staticmethod
@@ -261,6 +283,7 @@ class duration(anyAtomicType):
         return isodate.duration_isoformat(v)
 
 
+@register
 class decimal(anyAtomicType):
 
     name = 'decimal'
@@ -280,7 +303,7 @@ class decimal(anyAtomicType):
     def derived_description(datatype):
         if datatype.format:
             return datatype.format if isinstance(datatype.format, dict) \
-                else dict(pattern=datatype.format)
+                else {'pattern': datatype.format}
         return {}
 
     @staticmethod
@@ -298,9 +321,9 @@ class decimal(anyAtomicType):
 
     @staticmethod
     def to_string(v, pattern=None, decimalChar=None, groupChar=None):
-        if '{0}'.format(v) in decimal._reverse_special:
-            return decimal._reverse_special['{0}'.format(v)]
-        fmt = '{0}' if groupChar is None else '{0:,}'
+        if '{}'.format(v) in decimal._reverse_special:
+            return decimal._reverse_special['{}'.format(v)]
+        fmt = '{}' if groupChar is None else '{:,}'
         v = fmt.format(v)
         if groupChar or decimalChar:
             def repl(m):
@@ -308,11 +331,12 @@ class decimal(anyAtomicType):
                     return groupChar
                 if m.group('c') == '.':
                     return decimalChar
-            r = '(?P<c>[{0}])'.format(re.escape((decimalChar or '') + (groupChar or '')))
+            r = '(?P<c>[{}])'.format(re.escape((decimalChar or '') + (groupChar or '')))
             v = re.sub(r, repl, v)
         return v
 
 
+@register
 class integer(decimal):
 
     name = 'integer'
@@ -322,6 +346,7 @@ class integer(decimal):
         return int(decimal.to_python(v, **kw))
 
 
+@register
 class _float(anyAtomicType):
 
     name = 'float'
@@ -336,54 +361,64 @@ class _float(anyAtomicType):
 
     @staticmethod
     def to_string(v, **kw):
-        return '{0}'.format(v)
+        return '{}'.format(v)
 
 
+@register
 class number(_float):
 
     name = 'number'
 
 
+@register
 class QName(string):
 
     name = 'QName'
 
 
+@register
 class gDay(string):
 
     name = 'gDay'
 
 
+@register
 class gMonth(string):
 
     name = 'gMonth'
 
 
+@register
 class gMonthDay(string):
 
     name = 'gMonthDay'
 
 
+@register
 class gYear(string):
 
     name = 'gYear'
 
 
+@register
 class gYearMonth(string):
 
     name = 'gYearMonth'
 
 
+@register
 class xml(string):
 
     name = 'xml'
 
 
+@register
 class html(string):
 
     name = 'html'
 
 
+@register
 class json(string):
 
     name = 'json'
@@ -399,21 +434,13 @@ class json(string):
         return _json.dumps(v)
 
 
-DATATYPES = {'any': anyAtomicType()}
-# We register two levels of derived datatypes:
-for cls in anyAtomicType.__subclasses__():
-    DATATYPES[cls.name] = cls()
-    for subcls in cls.__subclasses__():
-        DATATYPES[subcls.name] = subcls()
-
-
 def dt_format_and_regex(fmt, no_date=False):
     """
 
     .. seealso:: http://w3c.github.io/csvw/syntax/#formats-for-dates-and-times
     """
     if fmt is None:
-        return dict(fmt=None, tz_marker=None, regex=None)
+        return {'fmt': None, 'tz_marker': None, 'regex': None}
 
     # First, we strip off an optional timezone marker:
     tz_marker = None
@@ -521,4 +548,4 @@ def dt_format_and_regex(fmt, no_date=False):
         format += '.{microsecond:.%s}' % msecs
         regex += '\.(?P<microsecond>[0-9]{1,%s})' % msecs
 
-    return dict(regex=re.compile(regex), fmt=format, tz_marker=tz_marker)
+    return {'regex': re.compile(regex), 'fmt': format, 'tz_marker': tz_marker}

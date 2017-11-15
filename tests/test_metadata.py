@@ -54,7 +54,7 @@ class TestColumnAccess(object):
         })
         assert t.get_column('col1').name == 'col1'
         assert t.get_column('http://example.org').name == 'col2'
-        assert t.get_column('xyz').name == None
+        assert t.get_column('xyz').name is None
 
 
 class TestDialect(Helpers):
@@ -105,19 +105,19 @@ class TestNaturalLanguage(object):
         l = csvw.NaturalLanguage('abc')
         assert l.getfirst() == 'abc'
         assert l.get(None) == ['abc']
-        assert '{0}'.format(l) == 'abc'
+        assert '{}'.format(l) == 'abc'
 
     def test_array(self):
         l = csvw.NaturalLanguage(['abc', 'def'])
         assert l.getfirst() == 'abc'
         assert l.get(None) == ['abc', 'def']
-        assert '{0}'.format(l) == 'abc'
+        assert '{}'.format(l) == 'abc'
 
     def test_object(self):
         l = csvw.NaturalLanguage(collections.OrderedDict([('en', ['abc', 'def']), ('de', '\u00e4\u00f6\u00fc')]))
         assert l.getfirst('de') == '\u00e4\u00f6\u00fc'
         assert l.get('en') == ['abc', 'def']
-        assert '{0}'.format(l) == 'abc'
+        assert '{}'.format(l) == 'abc'
 
     def test_error(self):
         with pytest.raises(ValueError):
@@ -160,21 +160,19 @@ class TestLink(object):
 
     def test_link(self):
         l = csvw.Link('a.csv')
-        assert '{0}'.format(l) == l.resolve(None)
+        assert '{}'.format(l) == l.resolve(None)
         assert 'http://example.org/a.csv' == l.resolve('http://example.org')
         base = pathlib.Path('.')
         assert base == l.resolve(base).parent
 
 
-
 class TestTableGroup(Helpers):
-
 
     @classmethod
     def _make_tablegroup(cls, tmpdir, data=None, metadata=None):
         md = str(tmpdir / 'md')
         if metadata is None:
-            shutil.copy(str(FIXTURES /'csv.txt-metadata.json'), str(md))
+            shutil.copy(str(FIXTURES / 'csv.txt-metadata.json'), str(md))
         else:
             cls._write_text(md, metadata)
         if isinstance(data, dict):
@@ -190,12 +188,12 @@ class TestTableGroup(Helpers):
     def test_roundtrip(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
         assert self._load_json(t.to_file(str(tmpdir / 'out'))) == \
-               self._load_json(FIXTURES /'csv.txt-metadata.json')
+               self._load_json(FIXTURES / 'csv.txt-metadata.json')
         t.common_props['dc:title'] = 'the title'
         t.aboutUrl = 'http://example.org/{ID}'
         assert self._load_json(t.to_file(str(tmpdir / 'out'))) != \
-               self._load_json(FIXTURES /'csv.txt-metadata.json')
-        assert self._load_json(t.to_file(str(tmpdir /'out'), omit_defaults=False)) != \
+               self._load_json(FIXTURES / 'csv.txt-metadata.json')
+        assert self._load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
                self._load_json(FIXTURES / 'csv.txt-metadata.json')
 
     def test_all(self, tmpdir):

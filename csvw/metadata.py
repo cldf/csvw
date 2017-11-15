@@ -14,8 +14,7 @@ import re
 import json
 import collections
 
-from ._compat import pathlib
-from ._compat import (text_type, iteritems, itervalues,
+from ._compat import (pathlib, text_type, iteritems, itervalues,
     py3_unicode_to_str, json_open)
 
 import attr
@@ -34,6 +33,7 @@ __all__ = [
     'Link', 'NaturalLanguage',
     'Datatype',
 ]
+
 
 # Level 1 variable names according to https://tools.ietf.org/html/rfc6570#section-2.3:
 _varchar = '([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
@@ -55,7 +55,7 @@ class URITemplate(uritemplate.URITemplate):
         return super(URITemplate, self).__eq__(self, other)  # pragma: no cover
 
     def asdict(self, **kw):
-        return '{0}'.format(self)
+        return '{}'.format(self)
 
 
 def uri_template_property():
@@ -231,6 +231,20 @@ class Datatype(DescriptionBase):
     minExclusive = attr.ib(default=None)
     maxExclusive = attr.ib(default=None)
 
+    @classmethod
+    def fromvalue(cls, v):
+        """
+        either a single string that is the main datatype of the values of the cell or a
+        datatype description object.
+        """
+        if isinstance(v, text_type):
+            return cls(base=v)
+
+        if isinstance(v, dict):
+            return cls(**DescriptionBase.partition_properties(v))
+
+        raise ValueError(v)
+
     def __attrs_post_init__(self):
         if self.length is not None:
             if self.minLength is not None and self.length < self.minLength:
@@ -246,20 +260,6 @@ class Datatype(DescriptionBase):
 
         if not isinstance(self.derived_description, dict):
             raise ValueError()  # pragma: no cover
-
-    @classmethod
-    def fromvalue(cls, v):
-        """
-        either a single string that is the main datatype of the values of the cell or a
-        datatype description object.
-        """
-        if isinstance(v, text_type):
-            return cls(base=v)
-
-        if isinstance(v, dict):
-            return cls(**DescriptionBase.partition_properties(v))
-
-        raise ValueError(v)
 
     def asdict(self, omit_defaults=True):
         res = DescriptionBase.asdict(self, omit_defaults=omit_defaults)
@@ -359,11 +359,11 @@ class Column(Description):
     def __unicode__(self):
         return self.name or \
             (self.titles and self.titles.getfirst()) or \
-            '_col.{0}'.format(self._number)
+            '_col.{}'.format(self._number)
 
     @property
     def header(self):
-        return '{0}'.format(self)
+        return '{}'.format(self)
 
     def read(self, v):
         required = self.inherit('required')
@@ -384,8 +384,7 @@ class Column(Description):
             elif v in null:
                 v = None
             else:
-                v = v.split(separator)
-                v = [vv or default for vv in v]
+                v = (vv or default for vv in v.split(separator))
                 v = [None if vv in null else vv for vv in v]
         elif v in null:
             v = None
@@ -635,14 +634,36 @@ class TableGroup(TableLike):
         default=attr.Factory(list),
         convert=lambda v: [Table.fromvalue(vv) for vv in v])
 
+    @classmethod
+    def from_file(cls, fname):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        with json_open(str(fname)) as f:
+            data = json.load(f)
+        res = cls.fromvalue(data)
+        res._fname = fname
+        return res
+
     def __attrs_post_init__(self):
         TableLike.__attrs_post_init__(self)
         for table in self.tables:
             table._parent = self
 
+    def to_file(self, fname, omit_defaults=True):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        data = self.asdict(omit_defaults=omit_defaults)
+        with json_open(str(fname), 'w') as f:
+            json.dump(data, f, indent=4, separators=(',', ': '))
+        return fname
+
     @property
     def tabledict(self):
         return {t.local_name: t for t in self.tables}
+
+    @property
+    def base(self):
+        return self._fname.parent
 
     def check_referential_integrity(self, data=None, log=None):
         if data is None:
@@ -680,25 +701,3 @@ class TableGroup(TableLike):
     #
     # FIXME: to_sqlite()!
     #
-
-    @property
-    def base(self):
-        return self._fname.parent
-
-    @classmethod
-    def from_file(cls, fname):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
-        with json_open(str(fname)) as f:
-            data = json.load(f)
-        res = cls.fromvalue(data)
-        res._fname = fname
-        return res
-
-    def to_file(self, fname, omit_defaults=True):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
-        data = self.asdict(omit_defaults=omit_defaults)
-        with json_open(str(fname), 'w') as f:
-            json.dump(data, f, indent=4, separators=(',', ': '))
-        return fname
