@@ -46,15 +46,15 @@ This package is distributed under the `Apache 2.0 license`_.
 .. |--| unicode:: U+2013
 
 
-.. |PyPI version| image:: https://img.shields.io/pypi/v/graphviz.svg
-    :target: https://pypi.python.org/pypi/graphviz
+.. |PyPI version| image:: https://img.shields.io/pypi/v/csvw.svg
+    :target: https://pypi.python.org/pypi/csvw
     :alt: Latest PyPI Version
-.. |License| image:: https://img.shields.io/pypi/l/graphviz.svg
-    :target: https://pypi.python.org/pypi/graphviz
+.. |License| image:: https://img.shields.io/pypi/l/csvw.svg
+    :target: https://pypi.python.org/pypi/csvw
     :alt: License
-.. |Supported Python| image:: https://img.shields.io/pypi/pyversions/graphviz.svg
-    :target: https://pypi.python.org/pypi/graphviz
+.. |Supported Python| image:: https://img.shields.io/pypi/pyversions/csvw.svg
+    :target: https://pypi.python.org/pypi/csvw
     :alt: Supported Python Versions
-.. |Format| image:: https://img.shields.io/pypi/format/graphviz.svg
-    :target: https://pypi.python.org/pypi/graphviz
+.. |Format| image:: https://img.shields.io/pypi/format/csvw.svg
+    :target: https://pypi.python.org/pypi/csvw
     :alt: Format
