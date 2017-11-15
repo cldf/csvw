@@ -12,9 +12,9 @@ from __future__ import unicode_literals
 import re
 import json as _json
 import base64
+import decimal as _decimal
 import binascii
 import datetime
-import decimal as _decimal
 
 from ._compat import to_binary, iteritems, py3_unicode_to_str
 
@@ -73,7 +73,7 @@ class anyURI(string):
     @staticmethod
     def to_python(v, regex=None):
         res = string.to_python(v, regex=regex)
-        return rfc3986.uri.URIReference.from_string(res.encode('utf8'))
+        return rfc3986.uri.URIReference.from_string(res.encode('utf-8'))
 
     @staticmethod
     def to_string(v, **kw):
@@ -391,7 +391,7 @@ class json(string):
     # FIXME: ignored **kw?
     # why not just to_python = staticmethod(_json.loads)?
     @staticmethod
-    def to_python(v, **kw):  
+    def to_python(v, **kw):
         return _json.loads(v)
 
     @staticmethod

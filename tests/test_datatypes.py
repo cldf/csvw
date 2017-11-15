@@ -1,5 +1,3 @@
-# coding: utf8
-
 from __future__ import unicode_literals
 
 import decimal
@@ -176,13 +174,13 @@ class TestDatatype(object):
         t = Datatype.fromvalue({'base': 'binary'})
         assert t.formatted(t.parse('aGVsbG8gd29ybGQ=')) == 'aGVsbG8gd29ybGQ='
         with pytest.raises(ValueError):
-            t.parse('ä')
+            t.parse('sp\u00e4m')
         with pytest.raises(ValueError):
             t.parse('aGVsbG8gd29ybGQ')
 
         t = Datatype.fromvalue({'base': 'hexBinary'})
         assert t.formatted(t.parse('abcdef12')) == 'abcdef12'
         with pytest.raises(ValueError):
-            t.parse('ä')
+            t.parse('sp\u00e4m')
         with pytest.raises(ValueError):
-            t.parse('a')
+            t.parse('spam')

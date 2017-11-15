@@ -699,6 +699,6 @@ class TableGroup(TableLike):
         if not isinstance(fname, pathlib.Path):
             fname = pathlib.Path(fname)
         data = self.asdict(omit_defaults=omit_defaults)
-        with json_open(str(fname),'w') as f:
+        with json_open(str(fname), 'w') as f:
             json.dump(data, f, indent=4, separators=(',', ': '))
         return fname

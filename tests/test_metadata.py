@@ -1,5 +1,3 @@
-# coding: utf8
-
 from __future__ import unicode_literals
 
 import json
@@ -116,8 +114,8 @@ class TestNaturalLanguage(object):
         assert '{0}'.format(l) == 'abc'
 
     def test_object(self):
-        l = csvw.NaturalLanguage(collections.OrderedDict([('en', ['abc', 'def']), ('de', 'äöü')]))
-        assert l.getfirst('de') == 'äöü'
+        l = csvw.NaturalLanguage(collections.OrderedDict([('en', ['abc', 'def']), ('de', '\u00e4\u00f6\u00fc')]))
+        assert l.getfirst('de') == '\u00e4\u00f6\u00fc'
         assert l.get('en') == ['abc', 'def']
         assert '{0}'.format(l) == 'abc'
 
@@ -126,11 +124,11 @@ class TestNaturalLanguage(object):
             csvw.NaturalLanguage(1)
 
     def test_serialize(self):
-        l = csvw.NaturalLanguage('ä')
+        l = csvw.NaturalLanguage('\u00e4')
         assert json.dumps(l.asdict()) == '"\\u00e4"'
         l.add('a')
         assert json.dumps(l.asdict()) == '["\\u00e4", "a"]'
-        l.add('ö', 'de')
+        l.add('\u00f6', 'de')
         assert json.dumps(l.asdict()) == \
                '{"und": ["\\u00e4", "a"], "de": "\\u00f6"}'
 
