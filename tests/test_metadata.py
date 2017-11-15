@@ -14,7 +14,7 @@ from clldutils.dsv import Dialect  # FIXME: merge dsv into csvw?
 
 import csvw
 
-FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
+FIXTURES = pathlib.Path(__file__).parent
 
 
 class Helpers(object):
