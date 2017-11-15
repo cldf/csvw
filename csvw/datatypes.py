@@ -10,16 +10,17 @@ We model the hierarchy of basic datatypes using derived classes.
 from __future__ import unicode_literals
 
 import re
-from json import loads, dumps
-import datetime
-from decimal import Decimal, InvalidOperation
+import json as _json
 import base64
 import binascii
-from collections import OrderedDict
+import datetime
+import decimal as _decimal
 
-from dateutil import parser
+from ._compat import iteritems
+
 import isodate
 import rfc3986
+import dateutil
 
 from clldutils.misc import UnicodeMixin, to_binary
 
@@ -170,16 +171,16 @@ class dateTime(anyAtomicType):
             # then (in case we got less precision) right-padding with 0 to get a
             # 6-digit number.
             comps['microsecond'] = comps['microsecond'][:6].ljust(6, '0')
-        res = cls(**{k: int(v) for k, v in comps.items()})
+        res = cls(**{k: int(v) for k, v in iteritems(comps)})
         if tz_marker:
             # Let dateutils take care of parsing the timezone info:
-            res = res.replace(tzinfo=parser.parse(v).tzinfo)
+            res = res.replace(tzinfo=dateutil.parser.parse(v).tzinfo)
         return res
 
     @staticmethod
     def to_python(v, regex=None, fmt=None, tz_marker=None):
         if regex is None:
-            return parser.parse(v)
+            return dateutil.parser.parse(v)
         return dateTime._parse(v, datetime.datetime, regex, tz_marker=tz_marker)
 
     @staticmethod
@@ -271,7 +272,7 @@ class decimal(anyAtomicType):
         '-INF': '-Infinity',
         'NaN': 'NaN',
     }
-    _reverse_special = {v: k for k, v in _special.items()}
+    _reverse_special = {v: k for k, v in iteritems(_special)}
 
     # TODO:
     # - use babel.numbers.NumberPattern.apply to format a value!
@@ -279,21 +280,21 @@ class decimal(anyAtomicType):
     @staticmethod
     def derived_description(datatype):
         if datatype.format:
-            return datatype.format if isinstance(datatype.format, (dict, OrderedDict)) \
+            return datatype.format if isinstance(datatype.format, dict) \
                 else dict(pattern=datatype.format)
         return {}
 
     @staticmethod
     def to_python(v, pattern=None, decimalChar=None, groupChar=None):
         if v in decimal._special:
-            return Decimal(decimal._special[v])
+            return _decimal.Decimal(decimal._special[v])
         if groupChar:
             v = v.replace(groupChar, '')
         if decimalChar and decimalChar != '.':
             v = v.replace(decimalChar, '.')
         try:
-            return Decimal(v)
-        except (TypeError, InvalidOperation):
+            return _decimal.Decimal(v)
+        except (TypeError, _decimal.InvalidOperation):
             decimal.value_error(v)
 
     @staticmethod
@@ -388,13 +389,15 @@ class json(string):
 
     name = 'json'
 
+    # FIXME: ignored **kw?
+    # why not just to_python = staticmethod(_json.loads)?
     @staticmethod
-    def to_python(v, **kw):
-        return loads(v)
+    def to_python(v, **kw):  
+        return _json.loads(v)
 
     @staticmethod
     def to_string(v, **kw):
-        return dumps(v)
+        return _json.dumps(v)
 
 
 DATATYPES = {'any': anyAtomicType()}

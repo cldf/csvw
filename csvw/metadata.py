@@ -11,12 +11,12 @@ This module implements (partially) the W3C recommendation
 from __future__ import unicode_literals
 
 import re
-from collections import OrderedDict
+import collections
 
-from six import text_type
+from ._compat import text_type, iteritems, itervalues
 
 import attr
-from uritemplate import URITemplate as _URITemplate
+import uritemplate
 
 from clldutils.dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
 from clldutils.jsonlib import load, dump
@@ -38,12 +38,12 @@ _varchar = '([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
 _varname = re.compile('(' + _varchar + '([.]?' + _varchar + ')*)$')
 
 
-class URITemplate(_URITemplate):
+class URITemplate(uritemplate.URITemplate):
 
     def __eq__(self, other):
         if not hasattr(other, 'uri'):
             return False
-        return _URITemplate.__eq__(self, other)  # pragma: no cover
+        return super(URITemplate, self).__eq__(self, other)  # pragma: no cover
 
     def asdict(self, **kw):
         return '{0}'.format(self)
@@ -99,21 +99,21 @@ def link_property():
         convert=lambda v: v if v is None else Link(v))
 
 
-class NaturalLanguage(UnicodeMixin, OrderedDict):
+class NaturalLanguage(UnicodeMixin, collections.OrderedDict):
     """
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#natural-language-properties
     """
 
     def __init__(self, value):
-        OrderedDict.__init__(self)
+        super(NaturalLanguage, self).__init__()
         self.value = value
         if isinstance(self.value, text_type):
             self[None] = [self.value]
         elif isinstance(self.value, (list, tuple)):
             self[None] = list(self.value)
-        elif isinstance(self.value, (dict, OrderedDict)):
-            for k, v in self.value.items():
+        elif isinstance(self.value, dict):
+            for k, v in iteritems(self.value):
                 if not isinstance(v, (list, tuple)):
                     v = [v]
                 self[k] = v
@@ -125,9 +125,9 @@ class NaturalLanguage(UnicodeMixin, OrderedDict):
             if len(self[None]) == 1:
                 return self.getfirst()
             return self[None]
-        return OrderedDict(
-            [('und' if k is None else k, v[0] if len(v) == 1 else v)
-             for k, v in self.items()])
+        return collections.OrderedDict(
+            (('und' if k is None else k, v[0] if len(v) == 1 else v)
+             for k, v in iteritems(self)))
 
     def add(self, string, lang=None):
         if lang not in self:
@@ -135,7 +135,7 @@ class NaturalLanguage(UnicodeMixin, OrderedDict):
         self[lang].append(string)
 
     def __unicode__(self):
-        return self.getfirst() or list(self.values())[0][0]
+        return self.getfirst() or next(itervalues(self))[0]
 
     def getfirst(self, lang=None):
         return self.get(lang, [None])[0]
@@ -154,7 +154,7 @@ class DescriptionBase(object):
     @staticmethod
     def partition_properties(d):
         c, a, dd = {}, {}, {}
-        for k, v in (d or {}).items():
+        for k, v in iteritems(d or {}):
             if k.startswith('@'):
                 a[k[1:]] = v
             elif ':' in k:
@@ -176,20 +176,20 @@ class DescriptionBase(object):
                 return [_asdict_single(vv) for vv in v]
             return _asdict_single(v)
 
-        for k, v in sorted(self.at_props.items()):
+        for k, v in sorted(iteritems(self.at_props)):
             yield '@' + k, _asdict_multiple(v)
 
-        for k, v in sorted(self.common_props.items()):
+        for k, v in sorted(iteritems(self.common_props)):
             yield k, _asdict_multiple(v)
 
-        for k, v in attrlib.asdict(self, omit_defaults=omit_defaults).items():
+        for k, v in iteritems(attrlib.asdict(self, omit_defaults=omit_defaults)):
             if k not in ['common_props', 'at_props']:
                 yield k, _asdict_multiple(v)
 
     def asdict(self, omit_defaults=True):
-        return OrderedDict(
-            [(k, v) for k, v in
-             self._iter_dict_items(omit_defaults) if v not in [None, [], {}]])
+        return collections.OrderedDict(
+            ((k, v) for k, v in
+             self._iter_dict_items(omit_defaults) if v not in [None, [], {}]))
 
 
 def optional_int():
@@ -245,7 +245,7 @@ class Datatype(DescriptionBase):
         if isinstance(v, text_type):
             return cls(base=v)
 
-        if isinstance(v, (dict, OrderedDict)):
+        if isinstance(v, dict):
             return cls(**DescriptionBase.partition_properties(v))
 
         raise ValueError(v)
@@ -582,7 +582,7 @@ class Table(TableLike):
                     cols_in_order = header == colnames
                     continue
 
-                res = OrderedDict()
+                res = collections.OrderedDict()
                 error = False
                 for j, (k, v) in enumerate(zip(header, row)):
                     # see http://w3c.github.io/csvw/syntax/#parsing-cells
@@ -635,10 +635,10 @@ class TableGroup(TableLike):
     def check_referential_integrity(self, data=None, log=None):
         if data is None:
             data = {}
-            for n, table in self.tabledict.items():
+            for n, table in iteritems(self.tabledict):
                 data[n] = list(table.iterdicts(log=log, with_metadata=True))
 
-        for n, table in self.tabledict.items():
+        for n, table in iteritems(self.tabledict):
             for fk in table.tableSchema.foreignKeys:
                 if fk.reference.schemaReference:
                     # FIXME: We only support Foreign Key references between tables!
