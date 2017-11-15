@@ -6,7 +6,7 @@ import json
 import shutil
 import collections
 
-from csvw._compat import pathlib
+from csvw._compat import pathlib, json_open
 
 import pytest
 
@@ -34,6 +34,11 @@ class Helpers(object):
         # PY 3.5 has Path.write_text but no newline arg
         with fname.open('w', encoding=encoding, newline=newline) as f:
             return f.write(text)
+
+    @staticmethod
+    def _load_json(path):
+        with json_open(str(path)) as f:
+            return json.load(f)
 
 
 class TestColumnAccess(object):
@@ -166,10 +171,6 @@ class TestLink(object):
 
 class TestTableGroup(Helpers):
 
-    @staticmethod
-    def _load_json(path, encoding='utf-8'):
-        with path.open(encoding=encoding) as f:
-            return json.load(f)
 
     @classmethod
     def _make_tablegroup(cls, tmpdir, data=None, metadata=None):

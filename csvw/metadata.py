@@ -15,7 +15,8 @@ import json
 import collections
 
 from ._compat import pathlib
-from ._compat import text_type, iteritems, itervalues, py3_unicode_to_str
+from ._compat import (text_type, iteritems, itervalues,
+    py3_unicode_to_str, json_open)
 
 import attr
 import uritemplate
@@ -685,19 +686,19 @@ class TableGroup(TableLike):
         return self._fname.parent
 
     @classmethod
-    def from_file(cls, fname, encoding='utf-8'):
+    def from_file(cls, fname):
         if not isinstance(fname, pathlib.Path):
             fname = pathlib.Path(fname)
-        with fname.open(encoding=encoding) as f:
+        with json_open(str(fname)) as f:
             data = json.load(f)
         res = cls.fromvalue(data)
         res._fname = fname
         return res
 
-    def to_file(self, fname, omit_defaults=True, encoding='utf-8'):
+    def to_file(self, fname, omit_defaults=True):
         if not isinstance(fname, pathlib.Path):
             fname = pathlib.Path(fname)
         data = self.asdict(omit_defaults=omit_defaults)
-        with fname.open('w', encoding=encoding) as f:
+        with json_open(str(fname),'w') as f:
             json.dump(data, f, indent=4, separators=(',', ': '))
         return fname
