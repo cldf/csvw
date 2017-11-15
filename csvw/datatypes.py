@@ -23,6 +23,8 @@ import rfc3986
 
 from clldutils.misc import UnicodeMixin, to_binary
 
+__all__ = ['DATATYPES']
+
 
 class anyAtomicType(UnicodeMixin):
     name = 'any'

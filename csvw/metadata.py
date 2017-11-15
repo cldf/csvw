@@ -26,6 +26,13 @@ from clldutils import attrlib
 
 from .datatypes import DATATYPES
 
+__all__ = [
+    'TableGroup',
+    'Table', 'Column', 'ForeignKey',
+    'Link', 'NaturalLanguage',
+    'Datatype',
+]
+
 # Level 1 variable names according to https://tools.ietf.org/html/rfc6570#section-2.3:
 _varchar = '([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
 _varname = re.compile('(' + _varchar + '([.]?' + _varchar + ')*)$')

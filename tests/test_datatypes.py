@@ -7,7 +7,7 @@ import datetime
 
 import pytest
 
-from csvw.metadata import Datatype
+from csvw import Datatype
 
 
 class TestDatatype(object):

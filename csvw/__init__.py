@@ -1,6 +1,14 @@
 # csvw - https://w3c.github.io/csvw/primer/
 
-__all__ = []
+from .metadata import (TableGroup, Table, Column, ForeignKey,
+    Link, NaturalLanguage, Datatype)
+
+__all__ = [
+    'TableGroup',
+    'Table', 'Column', 'ForeignKey',
+    'Link', 'NaturalLanguage',
+    'Datatype',
+]
 
 __title__ = 'csvw'
 __version__ = '0.0.dev0'

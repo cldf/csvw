@@ -11,15 +11,15 @@ from clldutils.path import Path, copy, write_text, read_text
 from clldutils import jsonlib
 from clldutils.dsv import Dialect
 
+import csvw
+
 FIXTURES = Path(__file__).parent / 'fixtures'
 
 
 class TestColumnAccess(object):
 
     def test_get_column(self):
-        from csvw.metadata import Table
-
-        t = Table.fromvalue({
+        t = csvw.Table.fromvalue({
             "url": '',
             "tableSchema": {
                 "columns": [
@@ -41,10 +41,8 @@ class TestDialect(object):
         return read_text(fname), list(t.iterdicts(fname=fname))
 
     def test_doubleQuote(self, tmpdir):
-        from csvw.metadata import Table
-
         fname = str(tmpdir / 'test')
-        t = Table.fromvalue({
+        t = csvw.Table.fromvalue({
             "url": fname,
             "dialect": {"doubleQuote": True},
             "tableSchema": {
@@ -80,39 +78,29 @@ class TestDialect(object):
 class TestNaturalLanguage(object):
 
     def test_string(self):
-        from csvw.metadata import NaturalLanguage
-
-        l = NaturalLanguage('abc')
+        l = csvw.NaturalLanguage('abc')
         assert l.getfirst() == 'abc'
         assert l.get(None) == ['abc']
         assert '{0}'.format(l) == 'abc'
 
     def test_array(self):
-        from csvw.metadata import NaturalLanguage
-
-        l = NaturalLanguage(['abc', 'def'])
+        l = csvw.NaturalLanguage(['abc', 'def'])
         assert l.getfirst() == 'abc'
         assert l.get(None) == ['abc', 'def']
         assert '{0}'.format(l) == 'abc'
 
     def test_object(self):
-        from csvw.metadata import NaturalLanguage
-
-        l = NaturalLanguage(collections.OrderedDict([('en', ['abc', 'def']), ('de', 'äöü')]))
+        l = csvw.NaturalLanguage(collections.OrderedDict([('en', ['abc', 'def']), ('de', 'äöü')]))
         assert l.getfirst('de') == 'äöü'
         assert l.get('en') == ['abc', 'def']
         assert '{0}'.format(l) == 'abc'
 
     def test_error(self):
-        from csvw.metadata import NaturalLanguage
-
         with pytest.raises(ValueError):
-            NaturalLanguage(1)
+            csvw.NaturalLanguage(1)
 
     def test_serialize(self):
-        from csvw.metadata import NaturalLanguage
-
-        l = NaturalLanguage('ä')
+        l = csvw.NaturalLanguage('ä')
         assert json.dumps(l.asdict()) == '"\\u00e4"'
         l.add('a')
         assert json.dumps(l.asdict()) == '["\\u00e4", "a"]'
@@ -123,13 +111,8 @@ class TestNaturalLanguage(object):
 
 class TestColumn(object):
 
-    def _make_column(self, value):
-        from csvw.metadata import Column
-
-        return Column.fromvalue(value)
-
     def test_read_rite_with_separator(self):
-        col = self._make_column({'separator': ';', 'null': 'nn'})
+        col = csvw.Column.fromvalue({'separator': ';', 'null': 'nn'})
         for parsed, serialized in [
                 (['a', 'b'], 'a;b'),
                 (['a', None], 'a;nn'),
@@ -140,21 +123,19 @@ class TestColumn(object):
         assert col.write('') == ''
 
     def test_read_required_empty_string(self):
-        col = self._make_column({'required': True})
+        col = csvw.Column.fromvalue({'required': True})
         with pytest.raises(ValueError):
             col.read('')
 
     def test_read_required_empty_string_no_null(self):
-        col = self._make_column({'required': True, 'null': None})
+        col = csvw.Column.fromvalue({'required': True, 'null': None})
         assert col.read('') == ''
 
 
 class TestLink(object):
 
     def test_link(self):
-        from csvw.metadata import Link
-
-        l = Link('a.csv')
+        l = csvw.Link('a.csv')
         assert '{0}'.format(l) == l.resolve(None)
         assert 'http://example.org/a.csv' == l.resolve('http://example.org')
         base = Path('.')
@@ -165,8 +146,6 @@ class TestTableGroup(object):
 
     @staticmethod
     def _make_tablegroup(tmpdir, data=None, metadata=None):
-        from csvw.metadata import TableGroup
-
         md = str(tmpdir / 'md')
         if metadata is None:
             copy(FIXTURES /'csv.txt-metadata.json', md)
@@ -180,7 +159,7 @@ class TestTableGroup(object):
                 str(tmpdir / 'csv.txt'),
                 data or read_text(FIXTURES / 'csv.txt'),
                 newline='')
-        return TableGroup.from_file(md)
+        return csvw.TableGroup.from_file(md)
 
     def test_roundtrip(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
@@ -194,8 +173,6 @@ class TestTableGroup(object):
                jsonlib.load(FIXTURES / 'csv.txt-metadata.json')
 
     def test_all(self, tmpdir):
-        from csvw.metadata import NaturalLanguage
-
         t = self._make_tablegroup(tmpdir)
         assert len(list(t.tables[0])) == 2
 
@@ -209,7 +186,7 @@ class TestTableGroup(object):
         assert list(t.tables[0])[0]['_col.2'] == ['li', 'e']
 
         t = self._make_tablegroup(tmpdir)
-        t.tables[0].tableSchema.columns[1].titles = NaturalLanguage('colname')
+        t.tables[0].tableSchema.columns[1].titles = csvw.NaturalLanguage('colname')
         assert 'colname' in list(t.tables[0])[0]
 
         t = self._make_tablegroup(tmpdir)
@@ -418,10 +395,8 @@ GID,On Street,Species,Trim Cycle,Inventory Date
             break
 
     def test_foreign_keys(self):
-        from csvw.metadata import ForeignKey
-
         with pytest.raises(ValueError):
-            ForeignKey.fromdict({
+            csvw.ForeignKey.fromdict({
                 "columnReference": "countryRef",
                 "reference": {
                     "resource": "http://example.org/countries.csv",
