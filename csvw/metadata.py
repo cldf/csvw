@@ -11,20 +11,21 @@ This module implements (partially) the W3C recommendation
 from __future__ import unicode_literals
 
 import re
+import json
 import collections
 
-from ._compat import text_type, iteritems, itervalues
+from ._compat import pathlib
+from ._compat import text_type, iteritems, itervalues, py3_unicode_to_str
 
 import attr
 import uritemplate
 
-from clldutils.dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
-from clldutils.jsonlib import load, dump
-from clldutils.path import Path
-from clldutils.misc import UnicodeMixin, NO_DEFAULT, log_or_raise
 from clldutils import attrlib
+from clldutils.dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
 
 from .datatypes import DATATYPES
+
+DEFAULT = object()
 
 __all__ = [
     'TableGroup',
@@ -36,6 +37,13 @@ __all__ = [
 # Level 1 variable names according to https://tools.ietf.org/html/rfc6570#section-2.3:
 _varchar = '([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
 _varname = re.compile('(' + _varchar + '([.]?' + _varchar + ')*)$')
+
+
+def log_or_raise(msg, log=None, level='warn', exception_cls=ValueError):
+    if log:
+        getattr(log, level)(msg)
+    else:
+        raise exception_cls(msg)
 
 
 class URITemplate(uritemplate.URITemplate):
@@ -63,7 +71,8 @@ def uri_template_property():
         convert=lambda v: v if v is None else URITemplate(v))
 
 
-class Link(UnicodeMixin):
+@py3_unicode_to_str
+class Link(object):
     """
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#link-properties
@@ -85,7 +94,7 @@ class Link(UnicodeMixin):
     def resolve(self, base):
         if not base:
             return self.string
-        if isinstance(base, Path):
+        if isinstance(base, pathlib.Path):
             return base.joinpath(self.string)
         if not base.endswith('/'):
             base += '/'
@@ -99,7 +108,8 @@ def link_property():
         convert=lambda v: v if v is None else Link(v))
 
 
-class NaturalLanguage(UnicodeMixin, collections.OrderedDict):
+@py3_unicode_to_str
+class NaturalLanguage(collections.OrderedDict):
     """
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#natural-language-properties
@@ -331,7 +341,8 @@ class Description(DescriptionBase):
 
 
 @attr.s
-class Column(UnicodeMixin, Description):
+@py3_unicode_to_str
+class Column(Description):
 
     name = attr.ib(
         default=None,
@@ -509,10 +520,10 @@ class Table(TableLike):
     def _get_dialect(self):
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()
 
-    def write(self, items, fname=NO_DEFAULT):
+    def write(self, items, fname=DEFAULT):
         dialect = self._get_dialect()
         non_virtual_cols = [c for c in self.tableSchema.columns if not c.virtual]
-        if fname is NO_DEFAULT:
+        if fname is DEFAULT:
             fname = self.url.resolve(self._parent.base)
 
         with UnicodeWriter(fname, dialect=dialect) as writer:
@@ -674,11 +685,19 @@ class TableGroup(TableLike):
         return self._fname.parent
 
     @classmethod
-    def from_file(cls, fname):
-        res = cls.fromvalue(load(fname))
-        res._fname = Path(fname)
+    def from_file(cls, fname, encoding='utf-8'):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        with fname.open(encoding=encoding) as f:
+            data = json.load(f)
+        res = cls.fromvalue(data)
+        res._fname = fname
         return res
 
-    def to_file(self, fname, omit_defaults=True):
-        dump(self.asdict(omit_defaults=omit_defaults), fname, indent=4)
+    def to_file(self, fname, omit_defaults=True, encoding='utf-8'):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        data = self.asdict(omit_defaults=omit_defaults)
+        with fname.open('w', encoding=encoding) as f:
+            json.dump(data, f, indent=4, separators=(',', ': '))
         return fname

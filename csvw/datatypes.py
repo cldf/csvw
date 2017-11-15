@@ -16,18 +16,17 @@ import binascii
 import datetime
 import decimal as _decimal
 
-from ._compat import iteritems
+from ._compat import to_binary, iteritems, py3_unicode_to_str
 
 import isodate
 import rfc3986
-import dateutil
-
-from clldutils.misc import UnicodeMixin, to_binary
+import dateutil.parser
 
 __all__ = ['DATATYPES']
 
 
-class anyAtomicType(UnicodeMixin):
+@py3_unicode_to_str
+class anyAtomicType(object):
     name = 'any'
     minmax = False
 

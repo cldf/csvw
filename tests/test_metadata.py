@@ -3,17 +3,37 @@
 from __future__ import unicode_literals
 
 import json
+import shutil
 import collections
+
+from csvw._compat import pathlib
 
 import pytest
 
-from clldutils.path import Path, copy, write_text, read_text
-from clldutils import jsonlib
-from clldutils.dsv import Dialect
+from clldutils.dsv import Dialect  # FIXME: merge dsv into csvw?
 
 import csvw
 
-FIXTURES = Path(__file__).parent / 'fixtures'
+FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
+
+
+class Helpers(object):
+
+    @staticmethod
+    def _read_text(fname, encoding='utf-8', newline=None):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        # PY 3.5 has Path.read_text but no newline arg
+        with fname.open(encoding=encoding, newline=newline) as f:
+            return f.read()
+
+    @staticmethod
+    def _write_text(fname, text, encoding='utf-8', newline=None):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        # PY 3.5 has Path.write_text but no newline arg
+        with fname.open('w', encoding=encoding, newline=newline) as f:
+            return f.write(text)
 
 
 class TestColumnAccess(object):
@@ -34,11 +54,12 @@ class TestColumnAccess(object):
         assert t.get_column('xyz').name == None
 
 
-class TestDialect(object):
+class TestDialect(Helpers):
 
-    def _roundtrip(self, t, fname, *items):
+    @classmethod
+    def _roundtrip(cls, t, fname, *items):
         t.write(items, fname=fname)
-        return read_text(fname), list(t.iterdicts(fname=fname))
+        return cls._read_text(fname), list(t.iterdicts(fname=fname))
 
     def test_doubleQuote(self, tmpdir):
         fname = str(tmpdir / 'test')
@@ -138,39 +159,45 @@ class TestLink(object):
         l = csvw.Link('a.csv')
         assert '{0}'.format(l) == l.resolve(None)
         assert 'http://example.org/a.csv' == l.resolve('http://example.org')
-        base = Path('.')
+        base = pathlib.Path('.')
         assert base == l.resolve(base).parent
 
 
-class TestTableGroup(object):
+
+class TestTableGroup(Helpers):
 
     @staticmethod
-    def _make_tablegroup(tmpdir, data=None, metadata=None):
+    def _load_json(path, encoding='utf-8'):
+        with path.open(encoding=encoding) as f:
+            return json.load(f)
+
+    @classmethod
+    def _make_tablegroup(cls, tmpdir, data=None, metadata=None):
         md = str(tmpdir / 'md')
         if metadata is None:
-            copy(FIXTURES /'csv.txt-metadata.json', md)
+            shutil.copy(str(FIXTURES /'csv.txt-metadata.json'), str(md))
         else:
-            write_text(md, metadata)
+            cls._write_text(md, metadata)
         if isinstance(data, dict):
             for fname, content in data.items():
-                write_text(str(tmpdir / fname), content)
+                cls._write_text(tmpdir / fname, content)
         else:
-            write_text(
-                str(tmpdir / 'csv.txt'),
-                data or read_text(FIXTURES / 'csv.txt'),
+            cls._write_text(
+                tmpdir / 'csv.txt',
+                data or cls._read_text(FIXTURES / 'csv.txt'),
                 newline='')
         return csvw.TableGroup.from_file(md)
 
     def test_roundtrip(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
-        assert jsonlib.load(t.to_file(str(tmpdir / 'out'))) == \
-               jsonlib.load(FIXTURES /'csv.txt-metadata.json')
+        assert self._load_json(t.to_file(str(tmpdir / 'out'))) == \
+               self._load_json(FIXTURES /'csv.txt-metadata.json')
         t.common_props['dc:title'] = 'the title'
         t.aboutUrl = 'http://example.org/{ID}'
-        assert jsonlib.load(t.to_file(str(tmpdir / 'out'))) != \
-               jsonlib.load(FIXTURES /'csv.txt-metadata.json')
-        assert jsonlib.load(t.to_file(str(tmpdir /'out'), omit_defaults=False)) != \
-               jsonlib.load(FIXTURES / 'csv.txt-metadata.json')
+        assert self._load_json(t.to_file(str(tmpdir / 'out'))) != \
+               self._load_json(FIXTURES /'csv.txt-metadata.json')
+        assert self._load_json(t.to_file(str(tmpdir /'out'), omit_defaults=False)) != \
+               self._load_json(FIXTURES / 'csv.txt-metadata.json')
 
     def test_all(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
@@ -474,8 +501,8 @@ AF,1962,9989846"""}
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
         tg.tabledict['countries.csv'].check_primary_key()
         tg.check_referential_integrity()
-        write_text(
-            str(tmpdir / 'country_slice.csv'),
+        self._write_text(
+            tmpdir / 'country_slice.csv',
             data['country_slice.csv'].replace('AF', 'AX'))
         with pytest.raises(ValueError):
             tg.check_referential_integrity()
@@ -528,8 +555,8 @@ AF,9799379"""}
 }"""
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
         tg.check_referential_integrity()
-        write_text(
-            str(tmpdir / 'country_slice.csv'),
+        self._write_text(
+            tmpdir / 'country_slice.csv',
             data['country_slice.csv'].replace('AF;AD', 'AF;AX'))
         with pytest.raises(ValueError):
             tg.check_referential_integrity()
