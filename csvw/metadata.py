@@ -14,7 +14,7 @@ import re
 import json
 import collections
 
-from ._compat import (pathlib, text_type, iteritems, itervalues,
+from ._compat import (pathlib, text_type, iteritems, itervalues, zip,
     py3_unicode_to_str, json_open)
 
 import attr
@@ -132,13 +132,13 @@ class NaturalLanguage(collections.OrderedDict):
             raise ValueError('invalid value type for NaturalLanguage')
 
     def asdict(self, omit_defaults=True):
-        if list(self.keys()) == [None]:
+        if list(self) == [None]:
             if len(self[None]) == 1:
                 return self.getfirst()
             return self[None]
         return collections.OrderedDict(
-            (('und' if k is None else k, v[0] if len(v) == 1 else v)
-             for k, v in iteritems(self)))
+            ('und' if k is None else k, v[0] if len(v) == 1 else v)
+             for k, v in iteritems(self))
 
     def add(self, string, lang=None):
         if lang not in self:
@@ -194,13 +194,13 @@ class DescriptionBase(object):
             yield k, _asdict_multiple(v)
 
         for k, v in iteritems(attrlib.asdict(self, omit_defaults=omit_defaults)):
-            if k not in ['common_props', 'at_props']:
+            if k not in ('common_props', 'at_props'):
                 yield k, _asdict_multiple(v)
 
     def asdict(self, omit_defaults=True):
         return collections.OrderedDict(
-            ((k, v) for k, v in
-             self._iter_dict_items(omit_defaults) if v not in [None, [], {}]))
+            (k, v) for k, v in
+             self._iter_dict_items(omit_defaults) if v not in (None, [], {}))
 
 
 def optional_int():

@@ -15,6 +15,8 @@ if PY2:  # pragma: no cover
     iteritems = lambda x: x.iteritems()
     itervalues = lambda x: x.itervalues()
 
+    from itertools import  izip as zip
+
     def py3_unicode_to_str(cls):
         if not hasattr(cls, '__str__'):  # maybe not needed
             cls.__str__ = lambda self: self.__unicode__().encode('utf-8')
@@ -39,6 +41,8 @@ else:  # pragma: no cover
 
     iteritems = lambda x: iter(x.items())
     itervalues = lambda x: iter(x.values())
+
+    zip = zip
 
     def py3_unicode_to_str(cls):
         cls.__str__ = cls.__unicode__
