@@ -17,7 +17,7 @@ setup(
     install_requires=[
         'attrs>=17.1.0',
         'clldutils>=1.13.10',
-        'pathlib2; python_version < "3"',
+        'pathlib2; python_version < "3.5"',
         'uritemplate>=3.0.0',
     ],
     extras_require={

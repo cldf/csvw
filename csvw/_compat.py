@@ -3,6 +3,11 @@
 import io
 import sys
 
+try:
+    import pathlib2 as pathlib
+except ImportError:
+    import pathlib
+
 PY2 = sys.version_info < (3,)
 
 
@@ -21,8 +26,6 @@ if PY2:  # pragma: no cover
         if not hasattr(cls, '__str__'):  # maybe not needed
             cls.__str__ = lambda self: self.__unicode__().encode('utf-8')
         return cls
-
-    import pathlib2 as pathlib
 
     def json_open(filename, mode='rb', encoding='utf-8'):
         if not mode.endswith('b'):
@@ -48,8 +51,6 @@ else:  # pragma: no cover
         cls.__str__ = cls.__unicode__
         del cls.__unicode__
         return cls
-
-    import pathlib
 
     def json_open(filename, mode='r', encoding='utf-8'):
         assert encoding == 'utf-8'  # cf. above
