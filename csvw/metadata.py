@@ -1,4 +1,4 @@
-# metadata.py - 
+# metadata.py
 
 """Functionality to read and write metadata for CSV files.
 
