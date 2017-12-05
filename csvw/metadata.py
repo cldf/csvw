@@ -14,7 +14,7 @@ import re
 import json
 import collections
 
-from ._compat import (pathlib, text_type, iteritems, itervalues, zip,
+from ._compat import (Path, text_type, iteritems, itervalues, zip,
     py3_unicode_to_str, json_open)
 
 import attr
@@ -95,8 +95,8 @@ class Link(object):
     def resolve(self, base):
         if not base:
             return self.string
-        if isinstance(base, pathlib.Path):
-            return base.joinpath(self.string)
+        if isinstance(base, Path):
+            return base / self.string
         if not base.endswith('/'):
             base += '/'
         return base + self.string
@@ -636,8 +636,8 @@ class TableGroup(TableLike):
 
     @classmethod
     def from_file(cls, fname):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
+        if not isinstance(fname, Path):
+            fname = Path(fname)
         with json_open(str(fname)) as f:
             data = json.load(f)
         res = cls.fromvalue(data)
@@ -650,8 +650,8 @@ class TableGroup(TableLike):
             table._parent = self
 
     def to_file(self, fname, omit_defaults=True):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
+        if not isinstance(fname, Path):
+            fname = Path(fname)
         data = self.asdict(omit_defaults=omit_defaults)
         with json_open(str(fname), 'w') as f:
             json.dump(data, f, indent=4, separators=(',', ': '))

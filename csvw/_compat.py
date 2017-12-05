@@ -3,12 +3,7 @@
 import io
 import sys
 
-#try:
-#    import pathlib2 as pathlib
-#except ImportError:
-#    import pathlib
-from clldutils import path as pathlib
-assert pathlib.Path
+from clldutils.path import Path  # use the same variant as clldutils.dsv
 
 PY2 = sys.version_info < (3,)
 

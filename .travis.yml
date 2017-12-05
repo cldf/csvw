@@ -5,8 +5,6 @@ python:
   - "3.5"
   - "3.6"
 cache: pip
-before_cache:
-  - rm -f $HOME/.cache/pip/log/debug.log
-install:
-  - pip install -e .[test]
+before_cache: rm -f $HOME/.cache/pip/log/debug.log
+install: pip install -e .[test]
 script: pytest

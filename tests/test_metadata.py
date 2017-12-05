@@ -4,7 +4,7 @@ import json
 import shutil
 import collections
 
-from csvw._compat import pathlib, json_open
+from csvw._compat import Path, json_open
 
 import pytest
 
@@ -12,23 +12,23 @@ from clldutils.dsv import Dialect  # FIXME: merge dsv into csvw?
 
 import csvw
 
-FIXTURES = pathlib.Path(__file__).parent
+FIXTURES = Path(__file__).parent
 
 
 class Helpers(object):
 
     @staticmethod
     def _read_text(fname, encoding='utf-8', newline=None):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
+        if not isinstance(fname, Path):
+            fname = Path(fname)
         # PY 3.5 has Path.read_text but no newline arg
         with fname.open(encoding=encoding, newline=newline) as f:
             return f.read()
 
     @staticmethod
     def _write_text(fname, text, encoding='utf-8', newline=None):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
+        if not isinstance(fname, Path):
+            fname = Path(fname)
         # PY 3.5 has Path.write_text but no newline arg
         with fname.open('w', encoding=encoding, newline=newline) as f:
             return f.write(text)
@@ -162,7 +162,7 @@ class TestLink(object):
         l = csvw.Link('a.csv')
         assert '{}'.format(l) == l.resolve(None)
         assert 'http://example.org/a.csv' == l.resolve('http://example.org')
-        base = pathlib.Path('.')
+        base = Path('.')
         assert base == l.resolve(base).parent
 
 

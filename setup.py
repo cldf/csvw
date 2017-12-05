@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='0.2.dev0',
+    version='0.1.1.dev0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
@@ -16,16 +16,15 @@ setup(
     zip_safe=False,
     install_requires=[
         'attrs>=17.1.0',
-        'clldutils>=1.13.10',
-#        'pathlib2; python_version < "3.5"',
+        'clldutils>=1.14.0',
         'uritemplate>=3.0.0',
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
         'test': [
+            'mock',
             'pytest>=3.1',
             'pytest-mock',
-            'mock',
             'pytest-cov',
         ],
     },
