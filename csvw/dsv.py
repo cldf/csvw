@@ -464,13 +464,14 @@ class Dialect(object):
         return attrlib.asdict(self, omit_defaults=omit_defaults)
 
     def as_python_formatting_parameters(self):
-        return dict(
-            delimiter=self.delimiter,
-            doublequote=self.doubleQuote,
+        return {
+            'delimiter': self.delimiter,
+            'doublequote': self.doubleQuote,
             # We have to hack around incompatible ways escape char is interpreted in csvw
             # and python's csv lib:
-            escapechar=self.escape_character if self.escape_character is None else '\\',
-            lineterminator=self.line_terminators[0],
-            quotechar=self.quoteChar,
-            skipinitialspace=self.skipInitialSpace,
-            strict=True)
+            'escapechar': self.escape_character if self.escape_character is None else '\\',
+            'lineterminator': self.line_terminators[0],
+            'quotechar': self.quoteChar,
+            'skipinitialspace': self.skipInitialSpace,
+            'strict': True,
+        }

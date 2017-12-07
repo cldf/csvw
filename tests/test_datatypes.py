@@ -158,8 +158,8 @@ def test_misc():
     assert t.formatted(3.123456789) == '3.123456789'
 
     t = Datatype.fromvalue({'base': 'json'})
-    assert t.parse('{"a": 5}') == dict(a=5)
-    assert t.formatted(dict(a=5)) == '{"a": 5}'
+    assert t.parse('{"a": 5}') == {'a': 5}
+    assert t.formatted({'a': 5}) == '{"a": 5}'
 
     t = Datatype.fromvalue({'base': 'boolean'})
     with pytest.raises(ValueError):

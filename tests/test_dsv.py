@@ -53,7 +53,7 @@ def test_reader():
 
     r = reader(
         ['a,b', '1,2,3,4', '1'], dicts=True, restkey='x', restval='y', delimiter=',')
-    assert list(r) == [dict(a='1', b='2', x=['3', '4']), dict(a='1', b='y')]
+    assert list(r) == [{'a': '1', 'b': '2', 'x': ['3', '4']}, {'a': '1', 'b': 'y'}]
 
 
 def test_writer(tmpdir):

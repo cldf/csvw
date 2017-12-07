@@ -439,8 +439,8 @@ class ForeignKey(object):
 
     @classmethod
     def fromdict(cls, d):
-        d = dict(d, reference=Reference(**d['reference']))
-        return cls(**d)
+        kw = dict(d, reference=Reference(**d['reference']))
+        return cls(**kw)
 
     def asdict(self, **kw):
         res = attrlib.asdict(self, **kw)
