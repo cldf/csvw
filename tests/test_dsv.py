@@ -1,5 +1,3 @@
-# coding: utf8
-
 from __future__ import unicode_literals
 
 import shutil
@@ -16,14 +14,14 @@ FIXTURES = Path(__file__).parent
 
 
 def test_reader():
-    lines = ['first\tline', 'sücond\tläneß']
-    encoded_lines = [l.encode('utf8') for l in lines]
+    lines = ['first\tline', 's\u00fccond\tl\u00e4ne\u00df']
+    encoded_lines = [l.encode('utf-8') for l in lines]
     csv_lines = [l.replace('\t', ',') for l in lines]
 
     def check(r):
         res = list(r)
         assert len(res) == 2
-        assert res[1][1] == 'läneß'
+        assert res[1][1] == 'l\u00e4ne\u00df'
 
     check(reader(lines, delimiter='\t'))
     for lt in ['\n', '\r\n', '\r']:
@@ -42,11 +40,11 @@ def test_reader():
     assert res[2].a_name is None
 
     r = list(reader(lines, dicts=True, delimiter='\t'))
-    assert len(r) == 1 and r[0]['first'] == 'sücond'
+    assert len(r) == 1 and r[0]['first'] == 's\u00fccond'
     r = list(reader(lines, namedtuples=True, delimiter='\t'))
-    assert len(r) == 1 and r[0].first == 'sücond'
+    assert len(r) == 1 and r[0].first == 's\u00fccond'
     r = list(reader(csv_lines, namedtuples=True))
-    assert len(r) == 1 and r[0].first == 'sücond'
+    assert len(r) == 1 and r[0].first == 's\u00fccond'
     
     assert list(reader([], dicts=True, delimiter='\t')) == []
     assert list(reader([''], dicts=True, fieldnames=['a', 'b'], delimiter='\t')) == \
@@ -59,8 +57,8 @@ def test_reader():
 
 
 def test_writer(tmpdir):
-    row = [None, 0, 1.2, 'äöü']
-    as_csv = ',0,1.2,äöü'
+    row = [None, 0, 1.2, '\u00e4\u00f6\u00fc']
+    as_csv = ',0,1.2,\u00e4\u00f6\u00fc'
 
     with UnicodeWriter() as writer:
         writer.writerows([row])
