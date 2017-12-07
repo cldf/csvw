@@ -29,13 +29,17 @@ from clldutils.path import move
 from clldutils.misc import normalize_name, to_binary, encoded, lazyproperty
 
 
-def fix_kw(kw):
-    """We make sure format parameters have the correct type."""
-    for name in 'delimiter quotechar escapechar'.split():
-        c = kw.get(name)
-        if c and PY2 and isinstance(c, text_type):
-            kw[name] = to_binary(c)
-    return kw
+if PY2:
+    def fix_kw(kw):
+        """Make sure format parameters are str instances."""
+        for name in ('delimiter', 'quotechar', 'escapechar'):
+            v = kw.get(name)
+            if isinstance(v, unicode):
+                kw[name] = str(v)
+        return kw
+else:
+    def fix_kw(kw):
+        return kw
 
 
 class UTF8Recoder(object):
@@ -333,6 +337,9 @@ def add_rows(fname, *rows):
     with tempfile.NamedTemporaryFile(delete=False) as fp:
         tmp = Path(fp.name)
 
+    if not isinstance(fname, Path):
+        assert isinstance(fname, string_types)
+        fname = Path(fname)
     with UnicodeWriter(tmp) as writer:
         if fname.exists():
             with UnicodeReader(fname) as reader_:
