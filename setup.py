@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='0.1.1',
+    version='0.2.dev0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
@@ -14,6 +14,8 @@ setup(
     url='https://github.com/cldf/csvw',
     packages=find_packages(),
     zip_safe=False,
+    platforms='any',
+    python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*',
     install_requires=[
         'attrs>=17.1.0',
         'clldutils>=1.14.0',
@@ -21,14 +23,8 @@ setup(
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
-        'test': [
-            'mock',
-            'pytest>=3.1',
-            'pytest-mock',
-            'pytest-cov',
-        ],
+        'test': ['mock', 'pytest>=3.3', 'pytest-mock', 'pytest-cov'],
     },
-    platforms='any',
     long_description=open('README.rst').read(),
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
