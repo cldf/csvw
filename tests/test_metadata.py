@@ -8,9 +8,8 @@ from csvw._compat import Path, json_open
 
 import pytest
 
-from clldutils.dsv import Dialect  # FIXME: merge dsv into csvw?
-
 import csvw
+from csvw.dsv import Dialect
 
 FIXTURES = Path(__file__).parent
 

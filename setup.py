@@ -19,6 +19,7 @@ setup(
     install_requires=[
         'attrs>=17.1.0',
         'clldutils>=1.14.0',
+        'six>=1.11.0',
         'uritemplate>=3.0.0',
     ],
     extras_require={

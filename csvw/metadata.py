@@ -21,9 +21,9 @@ import attr
 import uritemplate
 
 from clldutils import attrlib
-from clldutils.dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
 
 from .datatypes import DATATYPES
+from .dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
 
 DEFAULT = object()
 

@@ -9,6 +9,8 @@ PY2 = sys.version_info < (3,)
 
 
 if PY2:  # pragma: no cover
+    string_types = basestring
+    binary_type = str
     text_type = unicode
 
     def to_binary(s, encoding='utf-8'):
@@ -17,7 +19,7 @@ if PY2:  # pragma: no cover
     iteritems = lambda x: x.iteritems()
     itervalues = lambda x: x.itervalues()
 
-    from itertools import  izip as zip
+    from itertools import imap as map, izip as zip
 
     def py3_unicode_to_str(cls):
         if not hasattr(cls, '__str__'):  # maybe not needed
@@ -32,7 +34,8 @@ if PY2:  # pragma: no cover
 
 
 else:  # pragma: no cover
-    text_type = str
+    string_types = text_type = str
+    binary_type = bytes
 
     def to_binary(s, encoding='utf-8'):
         if not isinstance(s, bytes):
@@ -42,7 +45,7 @@ else:  # pragma: no cover
     iteritems = lambda x: iter(x.items())
     itervalues = lambda x: iter(x.values())
 
-    zip = zip
+    map, zip = map, zip
 
     def py3_unicode_to_str(cls):
         cls.__str__ = cls.__unicode__
