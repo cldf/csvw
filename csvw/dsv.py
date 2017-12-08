@@ -24,7 +24,7 @@ from ._compat import (PY2, string_types, binary_type, text_type, iteritems,
 from six import Iterator, BytesIO, StringIO
 
 from clldutils.path import move
-from clldutils.misc import normalize_name, encoded
+from clldutils.misc import normalize_name, lazyproperty
 
 from .dialects import Dialect
 
@@ -55,7 +55,6 @@ class UnicodeWriter(object):
     def __init__(self, f=None, dialect=None, **kw):
         self.f = f
         self.encoding = kw.pop('encoding', 'utf-8')
-        self._close = False
         if isinstance(dialect, Dialect):
             self.encoding = dialect.encoding
             self.kw = dialect.as_python_formatting_parameters()
@@ -97,7 +96,7 @@ class UnicodeWriter(object):
         if self._close:
             self.f.close()
 
-    def _encoded(self, s):
+    def _escapedoubled(self, s):
         #
         # As per https://docs.python.org/3/library/csv.html#csv.Dialect.escapechar:
         # > On reading, the escapechar removes any special meaning from the following
@@ -110,9 +109,9 @@ class UnicodeWriter(object):
         return s
 
     def writerow(self, row):
-        row = [self._encoded(s) for s in row]
+        row = [self._escapedoubled(s) for s in row]
         if PY2:
-            row = ['' if s is None else encoded('%s' % s, self.encoding) for s in row]
+            row = [('%s' % s).encode(self.encoding) if s is not None else s for s in row]
         self.writer.writerow(row)
 
     def writerows(self, rows):
@@ -131,10 +130,9 @@ def reader(lines_or_file, namedtuples=False, dicts=False, encoding='utf-8', **kw
     :param kw: Keyword parameters are passed through to csv.reader.
     :return: A generator over the rows.
     """
-    # Either namedtuples or dicts can be chosen as output format.
-    assert not (namedtuples and dicts)
-
-    if namedtuples:
+    if namedtuples and dicts:
+        raise ValueError('either namedtuples or dicts can be chosen as output format')
+    elif namedtuples:
         _reader = NamedTupleReader
     elif dicts:
         _reader = UnicodeDictReader
@@ -230,7 +228,7 @@ class UnicodeReaderWithLineNumber(UnicodeReader):
         :return: a pair (1-based line number in the input, row)
         """
         # Retrieve the row, thereby incrementing the line number:
-        row = UnicodeReader.__next__(self)
+        row = super(UnicodeReaderWithLineNumber, self).__next__()
         return self.lineno + 1, row
 
 
@@ -283,16 +281,10 @@ class UnicodeDictReader(UnicodeReader):
 class NamedTupleReader(UnicodeDictReader):
     """Read namedtuple objects from a csv file."""
 
-    def __init__(self, f, **kw):
-        self._cls = None
-        super(NamedTupleReader, self).__init__(f, **kw)
-
-    @property
+    @lazyproperty
     def cls(self):
-        if self._cls is None:
-            fieldnames = list(map(normalize_name, self.fieldnames))
-            self._cls = collections.namedtuple('Row', fieldnames)
-        return self._cls
+        fieldnames = list(map(normalize_name, self.fieldnames))
+        return collections.namedtuple('Row', fieldnames)
 
     def item(self, row):
         d = UnicodeDictReader.item(self, row)

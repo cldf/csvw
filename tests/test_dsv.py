@@ -1,5 +1,7 @@
 from __future__ import unicode_literals
 
+import pytest
+
 import shutil
 
 from six import PY3, BytesIO, StringIO
@@ -14,6 +16,9 @@ FIXTURES = Path(__file__).parent
 
 
 def test_reader():
+    with pytest.raises(ValueError, match=r'either namedtuples or dicts'):
+        next(reader([], namedtuples=True, dicts=True))
+
     lines = ['first\tline', 's\u00fccond\tl\u00e4ne\u00df']
     encoded_lines = [l.encode('utf-8') for l in lines]
     csv_lines = [l.replace('\t', ',') for l in lines]
