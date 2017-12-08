@@ -32,6 +32,10 @@ if PY2:  # pragma: no cover
         assert encoding == 'utf-8'  # default of json.dump() json.load()
         return io.open(filename, mode)
 
+    def fix_kw(kw):
+        """Convert unicode parameters to str."""
+        return {k: str(v) if isinstance(v, unicode) else v for k, v in iteritems(kw)}
+
 
 else:  # pragma: no cover
     string_types = text_type = str
@@ -55,3 +59,6 @@ else:  # pragma: no cover
     def json_open(filename, mode='r', encoding='utf-8'):
         assert encoding == 'utf-8'  # cf. above
         return io.open(filename, mode, encoding=encoding)
+
+    def fix_kw(kw):
+        return kw

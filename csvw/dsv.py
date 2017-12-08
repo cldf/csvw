@@ -19,27 +19,21 @@ import codecs
 import tempfile
 import collections
 
-from ._compat import PY2, string_types, binary_type, text_type, iteritems, map, zip, Path
+from ._compat import (PY2, string_types, binary_type, text_type, iteritems,
+    map, zip, fix_kw, Path)
 from six import Iterator, BytesIO, StringIO
 
-import attr
-
-from clldutils import attrlib
 from clldutils.path import move
-from clldutils.misc import normalize_name, to_binary, encoded, lazyproperty
+from clldutils.misc import normalize_name, encoded
 
+from .dialects import Dialect
 
-if PY2:
-    def fix_kw(kw):
-        """Make sure format parameters are str instances."""
-        for name in ('delimiter', 'quotechar', 'escapechar'):
-            v = kw.get(name)
-            if isinstance(v, unicode):
-                kw[name] = str(v)
-        return kw
-else:
-    def fix_kw(kw):
-        return kw
+__all__ = [
+    'UnicodeWriter',
+    'reader',
+    'UnicodeReader', 'UnicodeReaderWithLineNumber', 'UnicodeDictReader', 'NamedTupleReader',
+    'rewrite', 'filter_rows_as_dict',
+]
 
 
 class UTF8Recoder(object):
@@ -85,7 +79,7 @@ class UnicodeWriter(object):
                 self.f = open(self.f, 'wt', encoding=self.encoding, newline='')
             self._close = True
         elif self.f is None:
-            self.f = BytesIO() if PY2 else StringIO(newline='') 
+            self.f = BytesIO() if PY2 else StringIO(newline='')
 
         self.writer = csv.writer(self.f, **self.kw)
         return self
@@ -124,6 +118,32 @@ class UnicodeWriter(object):
     def writerows(self, rows):
         for row in rows:
             self.writerow(row)
+
+
+def reader(lines_or_file, namedtuples=False, dicts=False, encoding='utf-8', **kw):
+    """Convenience factory function for csv reader.
+
+    :param lines_or_file: Content to be read. Either a file handle, a file path or a list\
+    of strings.
+    :param namedtuples: Yield namedtuples.
+    :param dicts: Yield dicts.
+    :param encoding: Encoding of the content.
+    :param kw: Keyword parameters are passed through to csv.reader.
+    :return: A generator over the rows.
+    """
+    # Either namedtuples or dicts can be chosen as output format.
+    assert not (namedtuples and dicts)
+
+    if namedtuples:
+        _reader = NamedTupleReader
+    elif dicts:
+        _reader = UnicodeDictReader
+    else:
+        _reader = UnicodeReader
+
+    with _reader(lines_or_file, encoding=encoding, **fix_kw(kw)) as r:
+        for item in r:
+            yield item
 
 
 class UnicodeReader(Iterator):
@@ -282,32 +302,6 @@ class NamedTupleReader(UnicodeDictReader):
             **{normalize_name(k): v for k, v in iteritems(d) if k in self.fieldnames})
 
 
-def reader(lines_or_file, namedtuples=False, dicts=False, encoding='utf-8', **kw):
-    """Convenience factory function for csv reader.
-
-    :param lines_or_file: Content to be read. Either a file handle, a file path or a list\
-    of strings.
-    :param namedtuples: Yield namedtuples.
-    :param dicts: Yield dicts.
-    :param encoding: Encoding of the content.
-    :param kw: Keyword parameters are passed through to csv.reader.
-    :return: A generator over the rows.
-    """
-    # Either namedtuples or dicts can be chosen as output format.
-    assert not (namedtuples and dicts)
-
-    if namedtuples:
-        _reader = NamedTupleReader
-    elif dicts:
-        _reader = UnicodeDictReader
-    else:
-        _reader = UnicodeReader
-
-    with _reader(lines_or_file, encoding=encoding, **fix_kw(kw)) as r:
-        for item in r:
-            yield item
-
-
 def rewrite(fname, visitor, **kw):
     """Utility function to rewrite rows in tsv files.
 
@@ -349,6 +343,21 @@ def add_rows(fname, *rows):
     move(tmp, fname)
 
 
+def filter_rows_as_dict(fname, filter_, **kw):
+    """Rewrite a dsv file, filtering the rows.
+
+    :param fname: Path to dsv file
+    :param filter_: callable which accepts a `dict` with a row's data as single argument\
+    returning a `Boolean` indicating whether to keep the row (`True`) or to discard it \
+    `False`.
+    :param kw: Keyword arguments to be passed `UnicodeReader` and `UnicodeWriter`.
+    :return: The number of rows that have been removed.
+    """
+    filter_ = DictFilter(filter_)
+    rewrite(fname, filter_, **kw)
+    return filter_.removed
+
+
 class DictFilter(object):
 
     def __init__(self, filter_):
@@ -366,112 +375,3 @@ class DictFilter(object):
                 return row
             else:
                 self.removed += 1
-
-
-def filter_rows_as_dict(fname, filter_, **kw):
-    """
-    Rewrite a dsv file, filtering the rows.
-
-    :param fname: Path to dsv file
-    :param filter_: callable which accepts a `dict` with a row's data as single argument\
-    returning a `Boolean` indicating whether to keep the row (`True`) or to discard it \
-    `False`.
-    :param kw: Keyword arguments to be passed `UnicodeReader` and `UnicodeWriter`.
-    :return: The number of rows that have been removed.
-    """
-    filter_ = DictFilter(filter_)
-    rewrite(fname, filter_, **kw)
-    return filter_.removed
-
-
-def non_negative_int(*_):
-    return attr.validators.and_(
-        attr.validators.instance_of(int), attrlib.valid_range(0, None))
-
-
-@attr.s
-class Dialect(object):
-    """A CSV dialect specification.
-
-    .. seealso:: http://w3c.github.io/csvw/metadata/#dialect-descriptions
-    """
-
-    encoding = attr.ib(
-        default="utf-8",
-        validator=attr.validators.instance_of(text_type))
-    lineTerminators = attr.ib(
-        default=attr.Factory(lambda: ["\r\n", "\n"]))
-    quoteChar = attr.ib(
-        default='"',
-    )
-    doubleQuote = attr.ib(
-        default=True,
-        validator=attr.validators.instance_of(bool))
-    skipRows = attr.ib(
-        default=0,
-        validator=non_negative_int)
-    commentPrefix = attr.ib(
-        default="#",
-        validator=attr.validators.optional(attr.validators.instance_of(text_type)))
-    header = attr.ib(
-        default=True,
-        validator=attr.validators.instance_of(bool))
-    headerRowCount = attr.ib(
-        default=1,
-        validator=non_negative_int)
-    delimiter = attr.ib(
-        default=",",
-        validator=attr.validators.instance_of(text_type))
-    skipColumns = attr.ib(
-        default=0,
-        validator=non_negative_int)
-    skipBlankRows = attr.ib(
-        default=False,
-        validator=attr.validators.instance_of(bool))
-    skipInitialSpace = attr.ib(
-        default=False,
-        validator=attr.validators.instance_of(bool))
-    trim = attr.ib(
-        default='false',
-        validator=attr.validators.in_(['true', 'false', 'start', 'end']),
-        convert=lambda v: '{0}'.format(v).lower() if isinstance(v, bool) else v)
-
-    def updated(self, **kw):
-        res = Dialect(**attr.asdict(self))
-        for k, v in iteritems(kw):
-            setattr(res, k, v)
-        return res
-
-    @lazyproperty
-    def escape_character(self):
-        return None if self.quoteChar is None else ('"' if self.doubleQuote else '\\')
-
-    @lazyproperty
-    def line_terminators(self):
-        return [self.lineTerminators] \
-            if isinstance(self.lineTerminators, text_type) else self.lineTerminators
-
-    @lazyproperty
-    def trimmer(self):
-        return {
-            'true': lambda s: s.strip(),
-            'false': lambda s: s,
-            'start': lambda s: s.lstrip(),
-            'end': lambda s: s.rstrip()
-        }[self.trim]
-
-    def asdict(self, omit_defaults=True):
-        return attrlib.asdict(self, omit_defaults=omit_defaults)
-
-    def as_python_formatting_parameters(self):
-        return {
-            'delimiter': self.delimiter,
-            'doublequote': self.doubleQuote,
-            # We have to hack around incompatible ways escape char is interpreted in csvw
-            # and python's csv lib:
-            'escapechar': self.escape_character if self.escape_character is None else '\\',
-            'lineterminator': self.line_terminators[0],
-            'quotechar': self.quoteChar,
-            'skipinitialspace': self.skipInitialSpace,
-            'strict': True,
-        }
