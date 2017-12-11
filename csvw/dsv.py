@@ -26,7 +26,7 @@ from six import Iterator, BytesIO, StringIO
 from clldutils.path import move
 from clldutils.misc import normalize_name, lazyproperty
 
-from .dialects import Dialect
+from .dsv_dialects import Dialect
 
 __all__ = [
     'UnicodeWriter',
