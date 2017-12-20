@@ -591,7 +591,7 @@ class Table(TableLike):
             if dialect.header:
                 try:
                     _, header = next(reader)
-                except StopIteration:
+                except StopIteration:  # pragma: no cover
                     return
             else:
                 header = colnames
@@ -599,16 +599,16 @@ class Table(TableLike):
             # If columns in the data are ordered as in the spec, we can match values to
             # columns by index, rather than looking up columns by name.
             if header == colnames:
-                colmap = dict(zip(header, self.tableSchema.columns))
+                header_cols = list(zip(header, self.tableSchema.columns))
             else:
-                colmap = {h: self.tableSchema.get_column(h) for h in header}
+                header_cols = [(h, self.tableSchema.get_column(h)) for h in header]
+            header_cols = [(j, h, c) for j, (h, c) in enumerate(header_cols)]
 
             for lineno, row in reader:
                 res = _Row()
                 error = False
-                for j, (k, v) in enumerate(zip(header, row)):
+                for (j, k, col), v in zip(header_cols, row):
                     # see http://w3c.github.io/csvw/syntax/#parsing-cells
-                    col = colmap[k]
                     if col:
                         try:
                             res[col.header] = col.read(v)
@@ -700,7 +700,8 @@ class TableGroup(TableLike):
                     else:
                         colrefs = [colref]
                     for colref in colrefs:
-                        if not single_column and None in colref:
+                        if not single_column and None in colref:  # pragma: no cover
+                            # TODO: raise if any(c is not None for c in colref)?
                             continue
                         elif colref not in keys:
                             log_or_raise(
