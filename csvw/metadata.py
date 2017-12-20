@@ -12,6 +12,7 @@ from __future__ import unicode_literals
 
 import re
 import json
+import operator
 import collections
 
 from ._compat import (Path, text_type, iteritems, itervalues, zip,
@@ -542,22 +543,24 @@ class Table(TableLike):
                 return writer.read()
 
     def check_primary_key(self, log=None, items=None):
-        pks = set()
         if self.tableSchema.primaryKey:
-            for fname, lineno, row in (
-                self.iterdicts(log=log, with_metadata=True) if items is None else items
-            ):
-                pk = tuple(row[col] for col in self.tableSchema.primaryKey)
-                if pk in pks:
+            get_pk = operator.itemgetter(*self.tableSchema.primaryKey)
+            seen = set()
+            if items is None:
+                items = self.iterdicts(log=log, with_metadata=True)
+            for fname, lineno, row in items:
+                pk = get_pk(row)
+                if pk in seen:
                     log_or_raise(
                         '{0}:{1} duplicate primary key: {2}'.format(fname, lineno, pk),
                         log=log)
-                pks.add(pk)
+                else:
+                    seen.add(pk)
 
     def __iter__(self):
         return self.iterdicts()
 
-    def iterdicts(self, log=None, with_metadata=False, fname=None):
+    def iterdicts(self, log=None, with_metadata=False, fname=None, _Row=collections.OrderedDict):
         """Iterate over the rows of the table
         Create an iterator that maps the information in each row to a `dict` whose keys are
         the column names of the table and whose values are the values in the corresponding
@@ -581,27 +584,31 @@ class Table(TableLike):
                 colnames.append(col.header)
 
         with UnicodeReaderWithLineNumber(fname, dialect=dialect) as reader:
-            header = colnames
+            reader = iter(reader)
+
+            # If the data file has a header row, this row overrides the header as
+            # specified in the metadata.
+            if dialect.header:
+                try:
+                    _, header = next(reader)
+                except StopIteration:
+                    return
+            else:
+                header = colnames
+
             # If columns in the data are ordered as in the spec, we can match values to
             # columns by index, rather than looking up columns by name.
-            cols_in_order = True
-            for i, (lineno, row) in enumerate(reader):
-                if dialect.header and i == 0:
-                    # If the data file has a header row, this row overrides the header as
-                    # specified in the metadata.
-                    header = row
-                    cols_in_order = header == colnames
-                    continue
+            if header == colnames:
+                colmap = dict(zip(header, self.tableSchema.columns))
+            else:
+                colmap = {h: self.tableSchema.get_column(h) for h in header}
 
-                res = collections.OrderedDict()
+            for lineno, row in reader:
+                res = _Row()
                 error = False
                 for j, (k, v) in enumerate(zip(header, row)):
                     # see http://w3c.github.io/csvw/syntax/#parsing-cells
-                    if cols_in_order:
-                        col = self.tableSchema.columns[j]
-                    else:
-                        col = self.tableSchema.get_column(k)
-
+                    col = colmap[k]
                     if col:
                         try:
                             res[col.header] = col.read(v)
