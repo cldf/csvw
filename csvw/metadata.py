@@ -684,19 +684,25 @@ class TableGroup(TableLike):
                     # FIXME: We only support Foreign Key references between tables!
                     continue
 
-                keys = set(tuple(ref[k] for k in fk.reference.columnReference)
-                           for _, _, ref in data[fk.reference.resource.string])
+                single_column = (len(fk.columnReference) == 1)
+                get_ref = operator.itemgetter(*fk.columnReference)
+                get_key = operator.itemgetter(*fk.reference.columnReference)
+                keys = {get_key(ref) for _, _, ref in data[fk.reference.resource.string]}
                 for fname, lineno, item in data[n]:
-                    colref = tuple(item[k] for k in fk.columnReference)
-                    if len(colref) == 1 and isinstance(colref[0], list):
+                    colref = get_ref(item)
+                    if colref is None:
+                        continue
+                    elif single_column and isinstance(colref, list):
                         # We allow list-valued columns as foreign key columns in case
                         # it's not a composite key. If a foreign key is list-valued, we
                         # check for a matching row for each of the values in the list.
-                        colrefs = [(cr,) for cr in colref[0]]
+                        colrefs = colref
                     else:
                         colrefs = [colref]
                     for colref in colrefs:
-                        if any(c is not None for c in colref) and colref not in keys:
+                        if not single_column and None in colref:
+                            continue
+                        elif colref not in keys:
                             log_or_raise(
                                 '{0}:{1} Key {2} not found in table {3}'.format(
                                     fname,
