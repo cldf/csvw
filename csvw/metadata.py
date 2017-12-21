@@ -138,7 +138,7 @@ class NaturalLanguage(collections.OrderedDict):
             return self[None]
         return collections.OrderedDict(
             ('und' if k is None else k, v[0] if len(v) == 1 else v)
-             for k, v in iteritems(self))
+            for k, v in iteritems(self))
 
     def add(self, string, lang=None):
         if lang not in self:
@@ -192,7 +192,7 @@ class DescriptionBase(object):
 
         for k, v in sorted(iteritems(self.common_props)):
             yield k, _asdict_multiple(v)
-        
+
         for k, v in iteritems(utils.attr_asdict(self, omit_defaults=omit_defaults)):
             if k not in ('common_props', 'at_props'):
                 yield k, _asdict_multiple(v)
@@ -200,7 +200,7 @@ class DescriptionBase(object):
     def asdict(self, omit_defaults=True):
         return collections.OrderedDict(
             (k, v) for k, v in
-             self._iter_dict_items(omit_defaults) if v not in (None, [], {}))
+            self._iter_dict_items(omit_defaults) if v not in (None, [], {}))
 
 
 def optional_int():
@@ -287,12 +287,12 @@ class Datatype(DescriptionBase):
         if v is None:
             return v
         try:
-            l = len(v or '')
-            if self.length is not None and l != self.length:
+            l_ = len(v or '')
+            if self.length is not None and l_ != self.length:
                 raise ValueError()
-            if self.minLength is not None and l < self.minLength:
+            if self.minLength is not None and l_ < self.minLength:
                 raise ValueError()
-            if self.maxLength is not None and l > self.maxLength:
+            if self.maxLength is not None and l_ > self.maxLength:
                 raise ValueError()
         except TypeError:
             pass

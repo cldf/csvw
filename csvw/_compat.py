@@ -1,4 +1,5 @@
 # _compat.py - Python 2/3 compatibility
+# flake8: noqa
 
 import io
 import sys

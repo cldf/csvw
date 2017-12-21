@@ -73,8 +73,8 @@ class lazyproperty(object):
 
     def __init__(self, fget):
         self.fget = fget
-        for attr in ('__module__', '__name__', '__doc__'):
-            setattr(self, attr, getattr(fget, attr))
+        for attr_ in ('__module__', '__name__', '__doc__'):
+            setattr(self, attr_, getattr(fget, attr_))
 
     def __get__(self, instance, owner):
         if instance is None:
