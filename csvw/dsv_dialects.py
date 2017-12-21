@@ -4,8 +4,6 @@ from ._compat import text_type, iteritems
 
 import attr
 
-from clldutils.misc import lazyproperty
-
 from . import utils
 
 __all__ = ['Dialect']
@@ -82,16 +80,16 @@ class Dialect(object):
             setattr(res, k, v)
         return res
 
-    @lazyproperty
+    @utils.lazyproperty
     def escape_character(self):
         return None if self.quoteChar is None else ('"' if self.doubleQuote else '\\')
 
-    @lazyproperty
+    @utils.lazyproperty
     def line_terminators(self):
         return [self.lineTerminators] \
             if isinstance(self.lineTerminators, text_type) else self.lineTerminators
 
-    @lazyproperty
+    @utils.lazyproperty
     def trimmer(self):
         return {
             'true': lambda s: s.strip(),

@@ -24,8 +24,9 @@ from ._compat import (PY2, string_types, binary_type, text_type, iteritems,
 from six import Iterator, BytesIO, StringIO
 
 from clldutils.path import move
-from clldutils.misc import normalize_name, lazyproperty
+from clldutils.misc import normalize_name
 
+from . import utils
 from .dsv_dialects import Dialect
 
 __all__ = [
@@ -281,7 +282,7 @@ class UnicodeDictReader(UnicodeReader):
 class NamedTupleReader(UnicodeDictReader):
     """Read namedtuple objects from a csv file."""
 
-    @lazyproperty
+    @utils.lazyproperty
     def cls(self):
         fieldnames = list(map(normalize_name, self.fieldnames))
         return collections.namedtuple('Row', fieldnames)
