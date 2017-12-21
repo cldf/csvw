@@ -4,15 +4,17 @@ from ._compat import text_type, iteritems
 
 import attr
 
-from clldutils import attrlib
 from clldutils.misc import lazyproperty
+
+from . import utils
 
 __all__ = ['Dialect']
 
 
-def non_negative_int(*_):
-    return attr.validators.and_(
-        attr.validators.instance_of(int), attrlib.valid_range(0, None))
+non_negative_int = [
+    attr.validators.instance_of(int),
+    utils.attr_valid_range(0, None),
+]
 
 
 @attr.s
@@ -99,7 +101,7 @@ class Dialect(object):
         }[self.trim]
 
     def asdict(self, omit_defaults=True):
-        return attrlib.asdict(self, omit_defaults=omit_defaults)
+        return utils.attr_asdict(self, omit_defaults=omit_defaults)
 
     def as_python_formatting_parameters(self):
         return {

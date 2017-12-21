@@ -21,8 +21,7 @@ from ._compat import (Path, text_type, iteritems, itervalues, zip,
 import attr
 import uritemplate
 
-from clldutils import attrlib
-
+from . import utils
 from .datatypes import DATATYPES
 from .dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
 
@@ -193,8 +192,8 @@ class DescriptionBase(object):
 
         for k, v in sorted(iteritems(self.common_props)):
             yield k, _asdict_multiple(v)
-
-        for k, v in iteritems(attrlib.asdict(self, omit_defaults=omit_defaults)):
+        
+        for k, v in iteritems(utils.attr_asdict(self, omit_defaults=omit_defaults)):
             if k not in ('common_props', 'at_props'):
                 yield k, _asdict_multiple(v)
 
@@ -348,7 +347,7 @@ class Column(Description):
 
     name = attr.ib(
         default=None,
-        validator=attrlib.valid_re(_varname, nullable=True))
+        validator=utils.attr_valid_re(_varname, nullable=True))
     suppressOutput = attr.ib(default=False)
     titles = attr.ib(
         default=None,
@@ -444,8 +443,8 @@ class ForeignKey(object):
         return cls(**kw)
 
     def asdict(self, **kw):
-        res = attrlib.asdict(self, **kw)
-        res['reference'] = attrlib.asdict(res['reference'], **kw)
+        res = utils.attr_asdict(self, **kw)
+        res['reference'] = utils.attr_asdict(res['reference'], **kw)
         return res
 
 
