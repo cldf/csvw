@@ -4,14 +4,14 @@ import json
 import shutil
 import collections
 
-from csvw._compat import Path, json_open
+from csvw._compat import pathlib, json_open
 
 import pytest
 
 import csvw
 from csvw.dsv import Dialect
 
-FIXTURES = Path(__file__).parent
+FIXTURES = pathlib.Path(__file__).parent
 
 
 class TestColumnAccess(object):
@@ -138,7 +138,7 @@ class TestLink(object):
         l = csvw.Link('a.csv')
         assert '{}'.format(l) == l.resolve(None)
         assert 'http://example.org/a.csv' == l.resolve('http://example.org')
-        base = Path('.')
+        base = pathlib.Path('.')
         assert base == l.resolve(base).parent
 
 
@@ -156,7 +156,7 @@ class TestTableGroup(object):
                 (tmpdir / fname).write_text(content, encoding='utf-8')
         else:
             data = data or (FIXTURES / 'csv.txt').read_text(encoding='utf-8')
-            with Path(str(tmpdir / 'csv.txt')).open('w', encoding='utf-8', newline='') as f:
+            with pathlib.Path(str(tmpdir / 'csv.txt')).open('w', encoding='utf-8', newline='') as f:
                 f.write(data)
         return csvw.TableGroup.from_file(str(md))
 

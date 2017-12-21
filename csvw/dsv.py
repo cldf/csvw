@@ -16,15 +16,12 @@ from __future__ import unicode_literals
 
 import csv
 import codecs
+import shutil
 import tempfile
 import collections
 
-from ._compat import (PY2, string_types, binary_type, text_type, iteritems,
-    map, zip, fix_kw, Path)
-from six import Iterator, BytesIO, StringIO
-
-from clldutils.path import move
-from clldutils.misc import normalize_name
+from ._compat import (pathlib, PY2, string_types, binary_type, text_type,
+    BytesIO, StringIO, iteritems, Iterator, map, zip, fix_kw)
 
 from . import utils
 from .dsv_dialects import Dialect
@@ -37,17 +34,18 @@ __all__ = [
 ]
 
 
-class UTF8Recoder(object):
-    """Iterator that reads an encoded stream and reencodes the input to UTF-8."""
+if PY2:
+    class UTF8Recoder(object):
+        """Iterator that reads an encoded stream and reencodes the input to UTF-8."""
 
-    def __init__(self, f, encoding):
-        self.reader = codecs.getreader(encoding)(f)
+        def __init__(self, f, encoding):
+            self.reader = codecs.getreader(encoding)(f)
 
-    def __iter__(self):
-        return self
+        def __iter__(self):
+            return self
 
-    def next(self):
-        return self.reader.next().encode('utf-8')
+        def next(self):
+            return self.reader.next().encode('utf-8')
 
 
 class UnicodeWriter(object):
@@ -69,8 +67,8 @@ class UnicodeWriter(object):
         self._close = False
 
     def __enter__(self):
-        if isinstance(self.f, (string_types, Path)):
-            if isinstance(self.f, Path):
+        if isinstance(self.f, (string_types, pathlib.Path)):
+            if isinstance(self.f, pathlib.Path):
                 self.f = self.f.as_posix()
 
             if PY2:
@@ -166,8 +164,8 @@ class UnicodeReader(Iterator):
         self.comments = []
 
     def __enter__(self):
-        if isinstance(self.f, (string_types, Path)):
-            if isinstance(self.f, Path):
+        if isinstance(self.f, (string_types, pathlib.Path)):
+            if isinstance(self.f, pathlib.Path):
                 self.f = self.f.as_posix()
 
             if PY2:
@@ -282,9 +280,11 @@ class UnicodeDictReader(UnicodeReader):
 class NamedTupleReader(UnicodeDictReader):
     """Read namedtuple objects from a csv file."""
 
+    _normalize_fieldname = staticmethod(utils.normalize_name)
+
     @utils.lazyproperty
     def cls(self):
-        fieldnames = list(map(normalize_name, self.fieldnames))
+        fieldnames = list(map(self._normalize_fieldname, self.fieldnames))
         return collections.namedtuple('Row', fieldnames)
 
     def item(self, row):
@@ -292,7 +292,7 @@ class NamedTupleReader(UnicodeDictReader):
         for name in self.fieldnames:
             d.setdefault(name, None)
         return self.cls(
-            **{normalize_name(k): v for k, v in iteritems(d) if k in self.fieldnames})
+            **{self._normalize_fieldname(k): v for k, v in iteritems(d) if k in self.fieldnames})
 
 
 def rewrite(fname, visitor, **kw):
@@ -303,13 +303,13 @@ def rewrite(fname, visitor, **kw):
     (modified) row or None to filter out the row.
     :param kw: Keyword parameters are passed through to csv.reader/csv.writer.
     """
-    if not isinstance(fname, Path):
+    if not isinstance(fname, pathlib.Path):
         assert isinstance(fname, string_types)
-        fname = Path(fname)
+        fname = pathlib.Path(fname)
 
     assert fname.is_file()
     with tempfile.NamedTemporaryFile(delete=False) as fp:
-        tmp = Path(fp.name)
+        tmp = pathlib.Path(fp.name)
 
     with UnicodeReader(fname, **kw) as reader_:
         with UnicodeWriter(tmp, **kw) as writer:
@@ -317,23 +317,23 @@ def rewrite(fname, visitor, **kw):
                 row = visitor(i, row)
                 if row is not None:
                     writer.writerow(row)
-    move(tmp, fname)
+    shutil.move(str(tmp), str(fname))  # Path.replace is Python 3.3+
 
 
 def add_rows(fname, *rows):
     with tempfile.NamedTemporaryFile(delete=False) as fp:
-        tmp = Path(fp.name)
+        tmp = pathlib.Path(fp.name)
 
-    if not isinstance(fname, Path):
+    if not isinstance(fname, pathlib.Path):
         assert isinstance(fname, string_types)
-        fname = Path(fname)
+        fname = pathlib.Path(fname)
     with UnicodeWriter(tmp) as writer:
         if fname.exists():
             with UnicodeReader(fname) as reader_:
                 for row in reader_:
                     writer.writerow(row)
         writer.writerows(rows)
-    move(tmp, fname)
+    shutil.move(str(tmp), str(fname))  # Path.replace is Python 3.3+
 
 
 def filter_rows_as_dict(fname, filter_, **kw):

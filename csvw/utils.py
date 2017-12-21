@@ -1,7 +1,10 @@
 from __future__ import unicode_literals
 
 import re
+import string
+import keyword
 import collections
+import unicodedata
 
 import attr
 
@@ -49,37 +52,21 @@ def attr_valid_re(regex_or_pattern, nullable=False):
     return valid_re
 
 
-def attr_valid_range(min_, max_, nullable=False):
-    assert any(x is not None for x in (min_, max_))
-
-    msg = '{0} is not a valid {1}'
-
-    if nullable:
-        def valid_range(instance, attribute, value):
-            if value is None:
-                pass
-            elif (min_ is not None and value < min_) or (max_ is not None and value > max_):
-                raise ValueError(msg.format(value, attribute.name))
-    else:
-        def valid_range(instance, attribute, value):
-            if (min_ is not None and value < min_) or (max_ is not None and value > max_):
-                raise ValueError(msg.format(value, attribute.name))
-
-    return valid_range
-
-
 class lazyproperty(object):
     """Non-data descriptor caching the computed result as instance attribute.
+    >>> import itertools
     >>> class Spam(object):
     ...     @lazyproperty
-    ...     def eggs(self):
-    ...         return u'spamspamspam'
-    >>> spam=Spam(); print(spam.eggs)
-    spamspamspam
-    >>> spam.eggs='eggseggseggs'; print(spam.eggs)
-    eggseggseggs
-    >>> print(Spam().eggs)
-    spamspamspam
+    ...     def eggs(self, _ints=itertools.count()):
+    ...         return next(_ints)
+    >>> spam=Spam(); spam.eggs
+    0
+    >>> spam.eggs=42; spam.eggs
+    42
+    >>> Spam().eggs
+    1
+    >>> del spam.eggs; spam.eggs, spam.eggs
+    (2, 2)
     >>> Spam.eggs  # doctest: +ELLIPSIS
     <...lazyproperty object at 0x...>
     """
@@ -94,3 +81,50 @@ class lazyproperty(object):
             return self
         result = instance.__dict__[self.__name__] = self.fget(instance)
         return result
+
+
+def normalize_name(s):
+    """Convert a string into a valid python attribute name.
+    This function is called to convert ASCII strings to something that can pass as
+    python attribute name, to be used with namedtuples.
+
+    >>> str(normalize_name('class'))
+    'class_'
+    >>> str(normalize_name('a-name'))
+    'a_name'
+    >>> str(normalize_name('a n\u00e4me'))
+    'a_name'
+    >>> str(normalize_name('Name'))
+    'Name'
+    >>> str(normalize_name(''))
+    '_'
+    >>> str(normalize_name('1'))
+    '_1'
+    """
+    s = s.replace('-', '_').replace('.', '_').replace(' ', '_')
+    if s in keyword.kwlist:
+        return s + '_'
+    s = '_'.join(slug(ss, lowercase=False) for ss in s.split('_'))
+    if not s:
+        s = '_'
+    if s[0] not in string.ascii_letters + '_':
+        s = '_' + s
+    return s
+
+
+def slug(s, remove_whitespace=True, lowercase=True):
+    """Condensed version of s, containing only lowercase alphanumeric characters.
+
+    >>> str(slug('A B. \u00e4C'))
+    'abac'
+    """
+    res = ''.join(c for c in unicodedata.normalize('NFD', s)
+                  if unicodedata.category(c) != 'Mn')
+    if lowercase:
+        res = res.lower()
+    for c in string.punctuation:
+        res = res.replace(c, '')
+    res = re.sub('\s+', '' if remove_whitespace else ' ', res)
+    res = res.encode('ascii', 'ignore').decode('ascii')
+    assert re.match('[ A-Za-z0-9]*$', res)
+    return res

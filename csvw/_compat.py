@@ -3,7 +3,10 @@
 import io
 import sys
 
-from clldutils.path import Path  # use the same variant as clldutils.dsv
+try:
+    import pathlib2 as pathlib
+except ImportError:
+    import pathlib
 
 PY2 = sys.version_info < (3,)
 
@@ -13,11 +16,18 @@ if PY2:  # pragma: no cover
     binary_type = str
     text_type = unicode
 
+    from cStringIO import StringIO
+    BytesIO = StringIO
+
     def to_binary(s, encoding='utf-8'):
         return str(s).encode(encoding)
 
     iteritems = lambda x: x.iteritems()
     itervalues = lambda x: x.itervalues()
+
+    class Iterator(object):
+        def next(self):
+            return self.__next__()
 
     from itertools import imap as map, izip as zip
 
@@ -41,6 +51,8 @@ else:  # pragma: no cover
     string_types = text_type = str
     binary_type = bytes
 
+    StringIO, BytesIO = io.StringIO, io.BytesIO
+
     def to_binary(s, encoding='utf-8'):
         if not isinstance(s, bytes):
             return bytes(s, encoding=encoding)
@@ -48,6 +60,8 @@ else:  # pragma: no cover
 
     iteritems = lambda x: iter(x.items())
     itervalues = lambda x: iter(x.values())
+
+    Iterator = object
 
     map, zip = map, zip
 

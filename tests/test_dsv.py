@@ -1,18 +1,15 @@
 from __future__ import unicode_literals
 
-import pytest
-
 import shutil
 
-from six import PY3, BytesIO, StringIO
+from csvw._compat import PY2, pathlib, BytesIO, StringIO, to_binary
 
-from clldutils.misc import to_binary
-from clldutils.path import Path
+import pytest
 
 from csvw.dsv import (reader, UnicodeReader, UnicodeWriter, rewrite,
     Dialect, add_rows, filter_rows_as_dict)
 
-FIXTURES = Path(__file__).parent
+FIXTURES = pathlib.Path(__file__).parent
 
 
 def test_reader():
@@ -30,16 +27,16 @@ def test_reader():
 
     check(reader(lines, delimiter='\t'))
     for lt in ['\n', '\r\n', '\r']:
-        if PY3:  # pragma: no cover
-            # Simulate file opened in text mode:
-            fp = StringIO(lt.join(lines), newline='')
-        else:
+        if PY2:  # pragma: no cover
             # Simulate file opened in binary mode:
             fp = BytesIO(to_binary(lt).join(encoded_lines))
+        else:
+            # Simulate file opened in text mode:
+            fp = StringIO(lt.join(lines), newline='')
         check(reader(fp, delimiter='\t'))
-    check(reader(FIXTURES.joinpath('csv.txt')))
+    check(reader(FIXTURES / 'csv.txt'))
 
-    res = list(reader(FIXTURES.joinpath('tsv.txt'), namedtuples=True, delimiter='\t'))
+    res = list(reader(FIXTURES / 'tsv.txt', namedtuples=True, delimiter='\t'))
     assert res[0].a_name == 'b'
     # Missing column values should be set to None:
     assert res[2].a_name is None

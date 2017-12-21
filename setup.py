@@ -18,8 +18,10 @@ setup(
     python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*',
     install_requires=[
         'attrs>=17.1.0',
-        'clldutils>=1.14.0',
-        'six>=1.11.0',
+        'isodate',
+        'pathlib2; python_version < "3.5"',
+        'python-dateutil',
+        'rfc3986',
         'uritemplate>=3.0.0',
     ],
     extras_require={
@@ -28,8 +30,9 @@ setup(
     },
     long_description=open('README.rst').read(),
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
+        'Intended Audience :: Science/Research',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 2',

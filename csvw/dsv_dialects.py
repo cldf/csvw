@@ -9,10 +9,12 @@ from . import utils
 __all__ = ['Dialect']
 
 
-non_negative_int = [
-    attr.validators.instance_of(int),
-    utils.attr_valid_range(0, None),
-]
+def _non_negative(instance, attribute, value):
+    if value < 0:
+        ValueError('{0} is not a valid {1}'.format(value, attribute.name))
+
+
+non_negative_int = [attr.validators.instance_of(int), _non_negative]
 
 
 @attr.s
