@@ -3,11 +3,18 @@
 from .metadata import (TableGroup, Table, Column, ForeignKey,
     Link, NaturalLanguage, Datatype)
 
+from .dsv import (UnicodeWriter,
+    UnicodeReader, UnicodeReaderWithLineNumber, UnicodeDictReader, NamedTupleReader,
+    iterrows, rewrite)
+
 __all__ = [
     'TableGroup',
     'Table', 'Column', 'ForeignKey',
     'Link', 'NaturalLanguage',
     'Datatype',
+    'UnicodeWriter',
+    'UnicodeReader', 'UnicodeReaderWithLineNumber', 'UnicodeDictReader', 'NamedTupleReader',
+    'iterrows', 'rewrite',
 ]
 
 __title__ = 'csvw'
