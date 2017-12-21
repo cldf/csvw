@@ -63,3 +63,9 @@ This package is distributed under the `Apache 2.0 license`_.
 .. |Travis| image:: https://img.shields.io/travis/cldf/csvw.svg
    :target: https://travis-ci.org/cldf/csvw
    :alt: Travis
+.. |requires.io| image:: https://requires.io/github/cldf/csvw/requirements.svg?branch=master
+    :target: https://requires.io/github/cldf/csvw/requirements/?branch=master
+    :alt: Requirements Status
+.. |codecov| image:: https://codecov.io/gh/cldf/csvw/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/cldf/csvw
+
