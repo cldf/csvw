@@ -58,20 +58,18 @@ def test_reader():
     assert list(r) == [{'a': '1', 'b': '2', 'x': ['3', '4']}, {'a': '1', 'b': 'y'}]
 
 
-def test_writer(tmpdir):
-    row = [None, 0, 1.2, '\u00e4\u00f6\u00fc']
-    as_csv = ',0,1.2,\u00e4\u00f6\u00fc'
-
+@pytest.mark.parametrize('row, expected', [
+    ([None, 0, 1.2, '\u00e4\u00f6\u00fc'], b',0,1.2,\xc3\xa4\xc3\xb6\xc3\xbc\r\n'),
+])
+def test_writer(tmpdir, row, expected):
     with UnicodeWriter() as writer:
         writer.writerows([row])
-    assert writer.read().splitlines()[0].decode('utf-8') == as_csv
+    assert writer.read() == expected
 
     tmp = tmpdir / 'test'
     with UnicodeWriter(str(tmp)) as writer:
         writer.writerow(row)
-    with tmp.open(encoding='utf-8') as fp:
-        res = fp.read().splitlines()[0]
-    assert res == as_csv
+    assert tmp.read_binary() == expected
 
 
 def test_rewrite(tmpdir):
