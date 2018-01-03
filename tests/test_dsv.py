@@ -2,156 +2,150 @@ from __future__ import unicode_literals
 
 import csv
 import shutil
+from collections import OrderedDict
 
-from csvw._compat import PY2, pathlib, BytesIO, StringIO, to_binary
+from csvw._compat import pathlib, BytesIO, StringIO, to_binary
 
 import pytest
 
-from csvw.dsv import (reader, UnicodeReader, UnicodeWriter, rewrite,
+from csvw.dsv import (iterrows, UnicodeReader, UnicodeWriter, rewrite,
     Dialect, add_rows, filter_rows_as_dict)
 
-FIXTURES = pathlib.Path(__file__).parent
+TESTDIR = pathlib.Path(__file__).parent
 
 QUOTING = ['QUOTE_ALL', 'QUOTE_MINIMAL', 'QUOTE_NONNUMERIC', 'QUOTE_NONE']
 
 
-def test_reader():
+def test_iterrows_invalid():
     with pytest.raises(ValueError, match=r'either namedtuples or dicts'):
-        next(reader([], namedtuples=True, dicts=True))
+        next(iterrows([], namedtuples=True, dicts=True))
 
-    lines = ['first\tline', 's\u00fccond\tl\u00e4ne\u00df']
-    encoded_lines = [l.encode('utf-8') for l in lines]
-    csv_lines = [l.replace('\t', ',') for l in lines]
 
-    def check(r):
-        res = list(r)
-        assert len(res) == 2
-        assert res[1][1] == 'l\u00e4ne\u00df'
+def test_iterrows(py2, rows=[['first', 'line'], ['s\u00fccond', 'l\u00e4ne\u00df']]):
+    assert list(iterrows(TESTDIR / 'csv.txt')) == rows
 
-    check(reader(lines, delimiter='\t'))
+    lines = ['\t'.join(r) for r in rows]
+    assert list(iterrows(lines, delimiter='\t')) == rows
+
     for lt in ['\n', '\r\n', '\r']:
-        if PY2:  # pragma: no cover
+        if py2:  # pragma: no cover
             # Simulate file opened in binary mode:
-            fp = BytesIO(to_binary(lt).join(encoded_lines))
+            fp = BytesIO(to_binary(lt).join(l.encode('utf-8') for l in lines))
         else:
             # Simulate file opened in text mode:
             fp = StringIO(lt.join(lines), newline='')
-        check(reader(fp, delimiter='\t'))
-    check(reader(FIXTURES / 'csv.txt'))
+        assert list(iterrows(fp, delimiter='\t')) == rows
 
-    res = list(reader(FIXTURES / 'tsv.txt', namedtuples=True, delimiter='\t'))
+    assert list(iterrows(lines, dicts=True, delimiter='\t')) == [OrderedDict(zip(*rows))]
+
+    r = list(iterrows(lines, namedtuples=True, delimiter='\t'))
+    assert len(r) == 1 and r[0].first == 's\u00fccond'
+
+    r = list(iterrows([l.replace('\t', ',') for l in lines], namedtuples=True))
+    assert len(r) == 1 and r[0].first == 's\u00fccond'
+
+
+def test_iterrows_empty():
+    assert list(iterrows([], dicts=True, delimiter='\t')) == []
+    assert list(iterrows([''], dicts=True, fieldnames=['a', 'b'], delimiter='\t')) == \
+           []
+    assert list(iterrows(['a,b', ''], dicts=True, delimiter='\t')) == []
+
+
+def test_iterrows_tsv(filename=str(TESTDIR / 'tsv.txt')):
+    res = list(iterrows(filename, namedtuples=True, delimiter='\t'))
     assert res[0].a_name == 'b'
     # Missing column values should be set to None:
     assert res[2].a_name is None
 
-    r = list(reader(lines, dicts=True, delimiter='\t'))
-    assert len(r) == 1 and r[0]['first'] == 's\u00fccond'
-    r = list(reader(lines, namedtuples=True, delimiter='\t'))
-    assert len(r) == 1 and r[0].first == 's\u00fccond'
-    r = list(reader(csv_lines, namedtuples=True))
-    assert len(r) == 1 and r[0].first == 's\u00fccond'
-    
-    assert list(reader([], dicts=True, delimiter='\t')) == []
-    assert list(reader([''], dicts=True, fieldnames=['a', 'b'], delimiter='\t')) == \
-           []
-    assert list(reader(['a,b', ''], dicts=True, delimiter='\t')) == []
 
-    r = reader(
-        ['a,b', '1,2,3,4', '1'], dicts=True, restkey='x', restval='y', delimiter=',')
-    assert list(r) == [{'a': '1', 'b': '2', 'x': ['3', '4']}, {'a': '1', 'b': 'y'}]
+def test_iterrows_restkey(lines=['a,b', '1,2,3,4', '1']):
+    result = iterrows(lines, dicts=True, restkey='x', restval='y', delimiter=',')
+    assert list(result) == [{'a': '1', 'b': '2', 'x': ['3', '4']}, {'a': '1', 'b': 'y'}]
 
 
 @pytest.mark.parametrize('row, expected', [
     ([None, 0, 1.2, '\u00e4\u00f6\u00fc'], b',0,1.2,\xc3\xa4\xc3\xb6\xc3\xbc\r\n'),
 ])
-def test_writer(tmpdir, row, expected):
+def test_UnicodeWriter(tmpdir, row, expected):
     with UnicodeWriter() as writer:
         writer.writerows([row])
     assert writer.read() == expected
 
-    tmp = tmpdir / 'test'
-    with UnicodeWriter(str(tmp)) as writer:
+    filepath = tmpdir / 'test.csv'
+    with UnicodeWriter(str(filepath)) as writer:
         writer.writerow(row)
-    assert tmp.read_binary() == expected
+    assert filepath.read_binary() == expected
 
 
 @pytest.mark.parametrize('quoting', [getattr(csv, q) for q in QUOTING], ids=QUOTING)
-def test_roundtrip_escapechar(quoting, escapechar='\\', row=['\\spam', 'eggs']):
+def test_roundtrip_escapechar(tmpdir, quoting, escapechar='\\', row=['\\spam', 'eggs']):
+    filename = str(tmpdir / 'spam.csv')
     kwargs = {'escapechar': escapechar, 'quoting': quoting}
-    with UnicodeWriter(**kwargs) as writer:
+    with UnicodeWriter(filename, **kwargs) as writer:
         writer.writerow(row)
-    writer.f.seek(0)
-    with UnicodeReader(writer.f, **kwargs) as reader:
+    with UnicodeReader(filename, **kwargs) as reader:
         result = next(reader)
     assert result == row
 
 
-def test_rewrite(tmpdir):
-    tmp = tmpdir / 'test'
-    shutil.copy(str(FIXTURES / 'tsv.txt'), str(tmp))
-    rewrite(str(tmp), lambda i, row: [len(row)], delimiter='\t')
-    assert list(reader(str(tmp)))[0] ==  ['2']
+def test_rewrite(tmpdir, tsvname=str(TESTDIR / 'tsv.txt'), csvname=str(TESTDIR / 'csv.txt')):
+    filename = str(tmpdir / 'test.txt')
+    shutil.copy(tsvname, filename)
+    rewrite(filename, lambda i, row: [len(row)], delimiter='\t')
+    assert next(iterrows(filename)) == ['2']
 
-    shutil.copy(str(FIXTURES / 'csv.txt'), str(tmp))
-    rewrite(str(tmp), lambda i, row: row)
-    assert list(reader(str(tmp))) == list(reader(str(FIXTURES / 'csv.txt')))
+    shutil.copy(csvname, filename)
+    rewrite(filename, lambda i, row: row)
+    assert list(iterrows(filename)) == list(iterrows(csvname))
 
 
 def test_add_delete_rows(tmpdir):
-    csv_path = tmpdir / 'test.csv'
-    add_rows(str(csv_path), ['a', 'b'], [1, 2], [3, 4])
-    assert len(list(reader(str(csv_path), dicts=True))) == 2
+    filename = str(tmpdir / 'test.csv')
+    add_rows(filename, ['a', 'b'], [1, 2], [3, 4])
+    assert len(list(iterrows(filename, dicts=True))) == 2
 
-    filter_rows_as_dict(str(csv_path), lambda item: item['a'] == '1')
-    assert len(list(reader(str(csv_path), dicts=True))) == 1
+    filter_rows_as_dict(filename, lambda item: item['a'] == '1')
+    assert len(list(iterrows(filename, dicts=True))) == 1
 
-    add_rows(str(csv_path), [2, 2], [2, 4])
-    assert len(list(reader(str(csv_path), dicts=True))) == 3
+    add_rows(filename, [2, 2], [2, 4])
+    assert len(list(iterrows(filename, dicts=True))) == 3
 
-    res = filter_rows_as_dict(str(csv_path), lambda item: item['a'] == '1')
-    assert res == 2
-
-
-def test_reader_with_keyword_dialect(tmpdir):
-    data = [['1', 'y'], ['  "1 ', '3\t4']]
-    with UnicodeWriter(str(tmpdir / 'test'), dialect='excel') as w:
-        w.writerows(data)
-    assert list(reader(str(tmpdir / 'test'), dialect='excel')) == data
+    nremoved = filter_rows_as_dict(filename, lambda item: item['a'] == '1')
+    assert nremoved == 2
 
 
-def test_reader_with_comments():
-    d = Dialect(commentPrefix='*', header=False, trim=True)
-    with UnicodeReader(['1,x,y', ' *1,a,b', 'a,b,c', '*1,1,2'], dialect=d) as r:
-        # Comment markers must appear at the very start of a row, without any trimming
-        assert len(list(r)) == 3
-        assert r.comments[0] == (3, '1,1,2')
+def test_roundtrip_with_keyword_dialect(tmpdir, rows=[['1', 'y'], ['  "1 ', '3\t4']], dialect='excel'):
+    filename = str(tmpdir / 'test.csv')
+    with UnicodeWriter(filename, dialect=dialect) as w:
+        w.writerows(rows)
+    assert list(iterrows(filename, dialect=dialect)) == rows
 
 
-def test_reader_with_dialect():
-    d = Dialect(trim=True, skipRows=1, skipColumns=1, skipBlankRows=True)
-    r = list(reader(['1,x,y', ' #1,a,b', '#1,1,2', ',,', '1,3, 4\t '], dialect=d))
+def test_UnicodeReader_comments(lines=['1,x,y', ' *1,a,b', 'a,b,c', '*1,1,2']):
+    dialect = Dialect(commentPrefix='*', header=False, trim=True)
+    # Comment markers must appear at the very start of a row, without any trimming
+    with UnicodeReader(lines, dialect=dialect) as reader:
+        assert len(list(reader)) == 3
+    assert reader.comments[0] == (3, '1,1,2')
 
+
+def test_iterrows_dialect(lines=['1,x,y', ' #1,a,b', '#1,1,2', ',,', '1,3, 4\t ']):
+    dialect = Dialect(trim=True, skipRows=1, skipColumns=1, skipBlankRows=True)
+    r = list(iterrows(lines, dialect=dialect))
     # make sure comment lines are stripped:
     assert len(r) == 2
-
     # make sure cells are trimmmed:
     assert r[1][1] == '4'
 
-    r = list(reader(
-        ['1,x,y', ' #1,a,b', '#1,1,2', ',,', '1,3, 4\t '],
-        dialect=d.updated(skipRows=0, skipColumns=0)))
-
+    r = list(iterrows(lines, dialect=dialect.updated(skipRows=0, skipColumns=0)))
     assert r[2][2] == '4'
 
-    d = Dialect(doubleQuote=False, quoteChar=None)
-    r = list(reader(['1,"x""y",x'], dialect=d))
-    assert r[0][1] == '"x""y"'
 
-    d = Dialect(doubleQuote=True)
-    r = list(reader(['1,"x""y",y\\,x'], dialect=d))
-    assert r[0][1] == 'x"y'
-    assert r[0][2] == 'y,x'
-
-    d = Dialect(commentPrefix=None)
-    r = list(reader(['#x,y'], dialect=d))
-    assert r[0][0] == '#x'
+@pytest.mark.parametrize('dialect, lines, expected', [
+    (Dialect(doubleQuote=False, quoteChar=None), ['1,"x""y",x'], [['1', '"x""y"', 'x']]),
+    (Dialect(doubleQuote=True), ['1,"x""y",y\\,x'], [['1', 'x"y', 'y,x']]),
+    (Dialect(commentPrefix=None), ['#x,y'], [['#x', 'y']]),
+])
+def test_iterrows_quote_comment(dialect, lines, expected):
+    assert list(iterrows(lines, dialect=dialect)) == expected
