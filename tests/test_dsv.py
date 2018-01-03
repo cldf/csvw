@@ -12,6 +12,8 @@ from csvw.dsv import (reader, UnicodeReader, UnicodeWriter, rewrite,
 
 FIXTURES = pathlib.Path(__file__).parent
 
+QUOTING = ['QUOTE_ALL', 'QUOTE_MINIMAL', 'QUOTE_NONNUMERIC', 'QUOTE_NONE']
+
 
 def test_reader():
     with pytest.raises(ValueError, match=r'either namedtuples or dicts'):
@@ -73,9 +75,8 @@ def test_writer(tmpdir, row, expected):
     assert tmp.read_binary() == expected
 
 
-@pytest.mark.parametrize('quoting',
-    [csv.QUOTE_ALL, csv.QUOTE_MINIMAL, csv.QUOTE_NONNUMERIC, pytest.param(csv.QUOTE_NONE, marks=pytest.mark.xfail(reason='FIXME: #4'))])
-def test_roundtrip_escapechar(quoting, escapechar='\\', row=['\\spam']):
+@pytest.mark.parametrize('quoting', [getattr(csv, q) for q in QUOTING], ids=QUOTING)
+def test_roundtrip_escapechar(quoting, escapechar='\\', row=['\\spam', 'eggs']):
     kwargs = {'escapechar': escapechar, 'quoting': quoting}
     with UnicodeWriter(**kwargs) as writer:
         writer.writerow(row)

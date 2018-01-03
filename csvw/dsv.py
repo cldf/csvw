@@ -64,6 +64,15 @@ class UnicodeWriter(object):
                 self.kw['dialect'] = dialect
         self.kw = fix_kw(self.kw)
         self.escapechar = self.kw.get('escapechar')
+        if self.escapechar and self.kw.get('quoting') != csv.QUOTE_NONE:
+            # work around https://bugs.python.org/issue12178
+            # (csv.writer doesn't escape escapechar while csv.reader expects it)
+            def _escapedoubled(row, _type=string_types, _old=self.escapechar, _new=2 * self.escapechar):
+                return [s.replace(_old, _new) if isinstance(s, _type) else s for s in row]
+        else:
+            def _escapedoubled(row):
+                return row
+        self._escapedoubled = _escapedoubled
         self._close = False
 
     def __enter__(self):
@@ -95,20 +104,8 @@ class UnicodeWriter(object):
         if self._close:
             self.f.close()
 
-    def _escapedoubled(self, s):
-        #
-        # As per https://docs.python.org/3/library/csv.html#csv.Dialect.escapechar:
-        # > On reading, the escapechar removes any special meaning from the following
-        # > character.
-        # Thus, to make roundtripping work, we must escape any literal occurrence of
-        # escapechar in the data to be written.
-        #
-        if self.escapechar and isinstance(s, string_types):
-            return s.replace(self.escapechar, 2 * self.escapechar)
-        return s
-
     def writerow(self, row):
-        row = [self._escapedoubled(s) for s in row]
+        row = self._escapedoubled(row)
         if PY2:
             row = [('%s' % s).encode(self.encoding) if s is not None else s for s in row]
         self.writer.writerow(row)
