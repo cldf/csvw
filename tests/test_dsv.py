@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import csv
 import shutil
 
 from csvw._compat import PY2, pathlib, BytesIO, StringIO, to_binary
@@ -70,6 +71,18 @@ def test_writer(tmpdir, row, expected):
     with UnicodeWriter(str(tmp)) as writer:
         writer.writerow(row)
     assert tmp.read_binary() == expected
+
+
+@pytest.mark.parametrize('quoting',
+    [csv.QUOTE_ALL, csv.QUOTE_MINIMAL, csv.QUOTE_NONNUMERIC, pytest.param(csv.QUOTE_NONE, marks=pytest.mark.xfail(reason='FIXME: #4'))])
+def test_roundtrip_escapechar(quoting, escapechar='\\', row=['\\spam']):
+    kwargs = {'escapechar': escapechar, 'quoting': quoting}
+    with UnicodeWriter(**kwargs) as writer:
+        writer.writerow(row)
+    writer.f.seek(0)
+    with UnicodeReader(writer.f, **kwargs) as reader:
+        result = next(reader)
+    assert result == row
 
 
 def test_rewrite(tmpdir):
