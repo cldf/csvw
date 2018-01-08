@@ -2,6 +2,23 @@ Changelog
 =========
 
 
+Version 1.1 (in development)
+----------------------------
+
+- Fix doubling of backslashes  with csv.QUOTE_NONE.
+- Change Table.check_primary_key() and TableGroup.check_referential_integrity()
+  to not load all data into memory but only iterate over it (if needed multiple
+  times).
+- Ignore and deprecate the items argument of Table.check_primary_key.
+- Ignore and deprecate the data argument of TableGroup.check_referential_integrity.
+
+
+Version 1.0
+-----------
+
+- Integrate cllutils.dsv functionality, drop clldutils and six dependencies.
+
+
 Version 0.1.1
 -------------
 
