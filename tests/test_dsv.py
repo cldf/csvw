@@ -144,7 +144,8 @@ def test_iterrows_dialect(lines=['1,x,y', ' #1,a,b', '#1,1,2', ',,', '1,3, 4\t '
 
 @pytest.mark.parametrize('dialect, lines, expected', [
     (Dialect(doubleQuote=False, quoteChar=None), ['1,"x""y",x'], [['1', '"x""y"', 'x']]),
-    (Dialect(doubleQuote=True), ['1,"x""y",y\\,x'], [['1', 'x"y', 'y,x']]),
+    (Dialect(doubleQuote=True), ['1,"x""y",y\\,x'], [['1', 'x"y', 'y\\', 'x']]),
+    (Dialect(doubleQuote=False), ['1,x\\"y,y\\,x'], [['1', 'x"y', 'y,x']]),
     (Dialect(commentPrefix=None), ['#x,y'], [['#x', 'y']]),
 ])
 def test_iterrows_quote_comment(dialect, lines, expected):
