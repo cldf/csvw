@@ -109,7 +109,7 @@ class Dialect(object):
             'doublequote': self.doubleQuote,
             # We have to hack around incompatible ways escape char is interpreted in csvw
             # and python's csv lib:
-            'escapechar': self.escape_character if self.escape_character is None else '\\',
+            'escapechar': self.escape_character if not self.doubleQuote else None,
             'lineterminator': self.line_terminators[0],
             'quotechar': self.quoteChar,
             'skipinitialspace': self.skipInitialSpace,
