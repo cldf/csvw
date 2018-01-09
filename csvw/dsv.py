@@ -82,7 +82,7 @@ class UnicodeWriter(object):
 
             if PY2:
                 self.f = open(self.f, 'wb')
-            else:  # pragma: no cover
+            else:
                 self.f = open(self.f, 'wt', encoding=self.encoding, newline='')
             self._close = True
         elif self.f is None:
@@ -96,7 +96,7 @@ class UnicodeWriter(object):
             self.f.seek(0)
         if hasattr(self.f, 'read'):
             res = self.f.read()
-            if not PY2:  # pragma: no cover
+            if not PY2:
                 res = res.encode('utf-8')
             return res
 
@@ -142,7 +142,7 @@ class UnicodeReader(Iterator):
 
             if PY2:
                 self.f = open(self.f, mode='rU')
-            else:  # pragma: no cover
+            else:
                 self.f = open(
                     self.f, mode='rt', encoding=self.encoding, newline=self.newline or '')
             self._close = True
@@ -154,7 +154,7 @@ class UnicodeReader(Iterator):
             for line in self.f:
                 if PY2 and isinstance(line, text_type):
                     line = line.encode(self.encoding)
-                elif not PY2 and isinstance(line, binary_type):  # pragma: no cover
+                elif not PY2 and isinstance(line, binary_type):
                     line = line.decode(self.encoding)
                 lines.append(line)
             self.f = lines
