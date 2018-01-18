@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import csv
+import sys
 import shutil
 from collections import OrderedDict
 
@@ -87,6 +88,23 @@ def test_roundtrip_escapechar(tmpdir, quoting, escapechar='\\', row=['\\spam', '
     with UnicodeReader(filename, **kwargs) as reader:
         result = next(reader)
     assert result == row
+
+
+@pytest.mark.parametrize('encoding', [
+    pytest.param('utf-16', marks=pytest.mark.xfail(sys.version_info.major == 2, reason='FIXME: #5',
+                                                   raises=UnicodeDecodeError)),
+    pytest.param('utf-8-sig', marks=pytest.mark.xfail(sys.version_info.major == 2, reason='FIXME: #5')),
+    'utf-8',
+])
+def test_roundtrip_multibyte(tmpdir, encoding, row=['spam', 'eggs'], expected='spam,eggs\r\n', n=2):
+    filepath = tmpdir / 'spam.csv'
+    kwargs = {'encoding': encoding}
+    with UnicodeWriter(str(filepath), **kwargs) as writer:
+        writer.writerows([row] * n)
+    with UnicodeReader(str(filepath), **kwargs) as reader:
+        result = next(reader)
+    assert result == row
+    assert filepath.read_binary() == (expected * n).encode(encoding)
 
 
 def test_rewrite(tmpdir, tsvname=str(TESTDIR / 'tsv.txt'), csvname=str(TESTDIR / 'csv.txt')):
