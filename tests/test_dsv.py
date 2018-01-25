@@ -90,12 +90,7 @@ def test_roundtrip_escapechar(tmpdir, quoting, escapechar='\\', row=['\\spam', '
     assert result == row
 
 
-@pytest.mark.parametrize('encoding', [
-    pytest.param('utf-16', marks=pytest.mark.xfail(sys.version_info.major == 2, reason='FIXME: #5',
-                                                   raises=UnicodeDecodeError)),
-    pytest.param('utf-8-sig', marks=pytest.mark.xfail(sys.version_info.major == 2, reason='FIXME: #5')),
-    'utf-8',
-])
+@pytest.mark.parametrize('encoding', ['utf-16', 'utf-8-sig', 'utf-8'])
 def test_roundtrip_multibyte(tmpdir, encoding, row=['spam', 'eggs'], expected='spam,eggs\r\n', n=2):
     filepath = tmpdir / 'spam.csv'
     kwargs = {'encoding': encoding}
