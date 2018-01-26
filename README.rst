@@ -55,6 +55,8 @@ See also
 - https://github.com/CLARIAH/COW
 - https://github.com/CLARIAH/ruminator
 - https://github.com/bloomberg/pycsvw
+- https://github.com/frictionlessdata/goodtables-py
+- https://github.com/frictionlessdata/tableschema-py
 - https://github.com/theodi/csvlint.rb
 - https://github.com/ruby-rdf/rdf-tabular
 - https://github.com/rdf-ext/rdf-parser-csvw
