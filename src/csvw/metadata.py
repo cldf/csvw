@@ -542,6 +542,7 @@ class Table(TableLike):
                 return writer.read()
 
     def check_primary_key(self, log=None, items=None):
+        success = True
         if self.tableSchema.primaryKey:
             get_pk = operator.itemgetter(*self.tableSchema.primaryKey)
             seen = set()
@@ -553,8 +554,10 @@ class Table(TableLike):
                     log_or_raise(
                         '{0}:{1} duplicate primary key: {2}'.format(fname, lineno, pk),
                         log=log)
+                    success = False
                 else:
                     seen.add(pk)
+        return success
 
     def __iter__(self):
         return self.iterdicts()
@@ -672,6 +675,7 @@ class TableGroup(TableLike):
         return self._fname.parent
 
     def check_referential_integrity(self, data=None, log=None):
+        success = True
         if data is None:
             data = {}
             for n, table in iteritems(self.tabledict):
@@ -710,6 +714,8 @@ class TableGroup(TableLike):
                                     colref,
                                     fk.reference.resource.string),
                                 log=log)
+                            success = False
+        return success
 
     #
     # FIXME: to_sqlite()!

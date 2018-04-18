@@ -1,3 +1,2 @@
-include README.rst LICENSE CHANGES
-include requirements.txt
-recursive-include tests *.py *.txt *.json
+graft src
+global-exclude *.py[co]

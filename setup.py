@@ -3,16 +3,23 @@
 from setuptools import setup, find_packages
 
 
+def read(fname):
+    with open(fname) as fp:
+        return fp.read()
+
+
 setup(
     name='csvw',
-    version='1.0',
+    version='1.1.0.dev0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
+    long_description=read('README.rst'),
     keywords='csv w3c',
     license='Apache 2.0',
     url='https://github.com/cldf/csvw',
-    packages=find_packages(),
+    packages=find_packages(where='src'),
+    package_dir={'': 'src'},
     zip_safe=False,
     platforms='any',
     python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*',
@@ -28,7 +35,6 @@ setup(
         'dev': ['flake8', 'wheel', 'twine'],
         'test': ['mock', 'pytest>=3.3', 'pytest-mock', 'pytest-cov'],
     },
-    long_description=open('README.rst').read(),
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',

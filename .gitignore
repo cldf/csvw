@@ -5,7 +5,7 @@ __pycache__/
 /build/
 /dist/
 /docs/_build/
-/*.egg-info/
+*.egg-info
 /*.egg
 /.eggs/
 

@@ -409,7 +409,7 @@ GID,On Street,Species,Trim Cycle,Inventory Date
                 }
             })
 
-    def test_foreignkeys(self, tmpdir):
+    def test_foreignkeys(self, tmpdir, mocker):
         data = {
             "countries.csv": """\
 countryCode,latitude,longitude,name
@@ -476,12 +476,13 @@ AF,1962,9989846"""}
   }]
 }"""
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
-        tg.tabledict['countries.csv'].check_primary_key()
-        tg.check_referential_integrity()
+        assert tg.tabledict['countries.csv'].check_primary_key()
+        assert tg.check_referential_integrity()
         (tmpdir / 'country_slice.csv').write_text(
             data['country_slice.csv'].replace('AF', 'AX'), encoding='utf-8')
         with pytest.raises(ValueError):
             tg.check_referential_integrity()
+        assert not tg.check_referential_integrity(log=mocker.Mock())
 
         data['countries.csv'] = data['countries.csv'].replace('AF', 'AD')
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
