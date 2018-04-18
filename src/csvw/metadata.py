@@ -13,6 +13,8 @@ from __future__ import unicode_literals
 import re
 import json
 import operator
+import warnings
+import itertools
 import collections
 
 from ._compat import (pathlib, text_type, iteritems, itervalues, zip,
@@ -543,12 +545,13 @@ class Table(TableLike):
 
     def check_primary_key(self, log=None, items=None):
         success = True
+        if items is not None:
+            warnings.warn('the items argument of check_primary_key '
+                          'is deprecated (its content will be ignored)')
         if self.tableSchema.primaryKey:
             get_pk = operator.itemgetter(*self.tableSchema.primaryKey)
             seen = set()
-            if items is None:
-                items = self.iterdicts(log=log, with_metadata=True)
-            for fname, lineno, row in items:
+            for fname, lineno, row in self.iterdicts(log=log, with_metadata=True):
                 pk = get_pk(row)
                 if pk in seen:
                     log_or_raise(
@@ -676,45 +679,49 @@ class TableGroup(TableLike):
 
     def check_referential_integrity(self, data=None, log=None):
         success = True
-        if data is None:
-            data = {}
-            for n, table in iteritems(self.tabledict):
-                data[n] = list(table.iterdicts(log=log, with_metadata=True))
-
-        for n, table in iteritems(self.tabledict):
-            for fk in table.tableSchema.foreignKeys:
-                if fk.reference.schemaReference:
-                    # FIXME: We only support Foreign Key references between tables!
-                    continue
-
-                single_column = (len(fk.columnReference) == 1)
-                get_ref = operator.itemgetter(*fk.columnReference)
-                get_key = operator.itemgetter(*fk.reference.columnReference)
-                keys = {get_key(ref) for _, _, ref in data[fk.reference.resource.string]}
-                for fname, lineno, item in data[n]:
-                    colref = get_ref(item)
-                    if colref is None:
-                        continue
-                    elif single_column and isinstance(colref, list):
-                        # We allow list-valued columns as foreign key columns in case
-                        # it's not a composite key. If a foreign key is list-valued, we
-                        # check for a matching row for each of the values in the list.
-                        colrefs = colref
-                    else:
-                        colrefs = [colref]
-                    for colref in colrefs:
-                        if not single_column and None in colref:  # pragma: no cover
-                            # TODO: raise if any(c is not None for c in colref)?
+        if data is not None:
+            warnings.warn('the data argument of check_referential_integrity '
+                          'is deprecated (its content will be ignored)')
+        fkeys = [
+            (self.tabledict[fk.reference.resource.string], fk.reference.columnReference, t, fk.columnReference)
+            for t in self.tables for fk in t.tableSchema.foreignKeys
+            if not fk.reference.schemaReference]  # FIXME: We only support Foreign Key references between tables!
+        fkeys = sorted(fkeys, key=lambda x: (x[0].local_name, x[1], x[2].local_name))
+        for table, grp in itertools.groupby(fkeys, lambda x: x[0]):
+            t_fkeys = [(key, [(child, ref) for _, _, child, ref in kgrp])
+                       for key, kgrp in itertools.groupby(grp, lambda x: x[1])]
+            get_seen = [(operator.itemgetter(*key), set()) for key, _ in t_fkeys]
+            for row in table.iterdicts(log=log):
+                for get, seen in get_seen:
+                    seen.add(get(row))
+            for (key, children), (_, seen) in zip(t_fkeys, get_seen):
+                single_column = (len(key) == 1)
+                for child, ref in children:
+                    get_ref = operator.itemgetter(*ref)
+                    for fname, lineno, item in child.iterdicts(log=log, with_metadata=True):
+                        colref = get_ref(item)
+                        if colref is None:
                             continue
-                        elif colref not in keys:
-                            log_or_raise(
-                                '{0}:{1} Key {2} not found in table {3}'.format(
-                                    fname,
-                                    lineno,
-                                    colref,
-                                    fk.reference.resource.string),
-                                log=log)
-                            success = False
+                        elif single_column and isinstance(colref, list):
+                            # We allow list-valued columns as foreign key columns in case
+                            # it's not a composite key. If a foreign key is list-valued, we
+                            # check for a matching row for each of the values in the list.
+                            colrefs = colref
+                        else:
+                            colrefs = [colref]
+                        for colref in colrefs:
+                            if not single_column and None in colref:  # pragma: no cover
+                                # TODO: raise if any(c is not None for c in colref)?
+                                continue
+                            elif colref not in seen:
+                                log_or_raise(
+                                    '{0}:{1} Key {2} not found in table {3}'.format(
+                                        fname,
+                                        lineno,
+                                        colref,
+                                        table.url.string),
+                                    log=log)
+                                success = False
         return success
 
     #

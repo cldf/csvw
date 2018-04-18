@@ -60,7 +60,7 @@ class TestDialect(object):
         })
         value = r'"a\\b\c\"d'
         c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
-        assert r'""a\\\\b\\c\\""d' in c
+        assert r'""a\\b\c\""d' in c
         assert res[0]['col2'] == value
 
         t.dialect.doubleQuote = False

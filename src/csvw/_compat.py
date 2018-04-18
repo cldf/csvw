@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover
 PY2 = sys.version_info < (3,)
 
 
-if PY2:  # pragma: no cover
+if PY2:
     string_types = basestring
     binary_type = str
     text_type = unicode
@@ -48,7 +48,7 @@ if PY2:  # pragma: no cover
         return {k: str(v) if isinstance(v, unicode) else v for k, v in iteritems(kw)}
 
 
-else:  # pragma: no cover
+else:
     string_types = text_type = str
     binary_type = bytes
 

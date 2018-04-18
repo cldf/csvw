@@ -2,6 +2,26 @@ Changelog
 =========
 
 
+Version 2.0 (in development)
+----------------------------
+
+- Fix CSVW spec compatibility: Stop doing blackslash escaping/doubling with
+  (default) Dialect(doubleQuote=True) (https://github.com/cldf/csvw/issues/7).
+- Fix doubling of backslashes  with csv.QUOTE_NONE
+  (https://github.com/cldf/csvw/issues/4).
+- Change Table.check_primary_key() and TableGroup.check_referential_integrity()
+  to not load all data into memory but only iterate over it (if needed multiple
+  times).
+- Ignore and deprecate the items argument of Table.check_primary_key.
+- Ignore and deprecate the data argument of TableGroup.check_referential_integrity.
+
+
+Version 1.0
+-----------
+
+- Integrate cllutils.dsv functionality, drop clldutils and six dependencies.
+
+
 Version 0.1.1
 -------------
 

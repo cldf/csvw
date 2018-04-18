@@ -27,11 +27,39 @@ This package runs under Python 2.7, and 3.4+, use pip_ to install:
     $ pip install csvw
 
 
+Example
+-------
+
+.. code:: python
+
+    >>> import csvw
+    >>> tg = csvw.TableGroup.from_file('tests/csv.txt-metadata.json')
+
+    >>> tg.check_referential_integrity()
+    >>> assert len(tg.tables) == 1
+
+    >>> assert tg.tables[0] is tg.tabledict['csv.txt']
+    >>> tg.tables[0].check_primary_key()
+
+    >>> from collections import OrderedDict
+    >>> row = next(tg.tables[0].iterdicts())
+    >>> assert row == OrderedDict([('ID', 'first'), ('_col.2', 'line')])
+
+    >>> assert len(list(tg.tables[0].iterdicts())) == 2
+
+
 See also
 --------
 
 - https://www.w3.org/2013/csvw/wiki/Main_Page
+- https://github.com/CLARIAH/COW
+- https://github.com/CLARIAH/ruminator
+- https://github.com/bloomberg/pycsvw
+- https://github.com/frictionlessdata/goodtables-py
+- https://github.com/frictionlessdata/tableschema-py
+- https://github.com/theodi/csvlint.rb
 - https://github.com/ruby-rdf/rdf-tabular
+- https://github.com/rdf-ext/rdf-parser-csvw
 
 
 License
