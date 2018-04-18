@@ -683,9 +683,14 @@ class TableGroup(TableLike):
             warnings.warn('the data argument of check_referential_integrity '
                           'is deprecated (its content will be ignored)')
         fkeys = [
-            (self.tabledict[fk.reference.resource.string], fk.reference.columnReference, t, fk.columnReference)
+            (
+                self.tabledict[fk.reference.resource.string],
+                fk.reference.columnReference,
+                t,
+                fk.columnReference)
             for t in self.tables for fk in t.tableSchema.foreignKeys
-            if not fk.reference.schemaReference]  # FIXME: We only support Foreign Key references between tables!
+            if not fk.reference.schemaReference]
+        # FIXME: We only support Foreign Key references between tables!
         fkeys = sorted(fkeys, key=lambda x: (x[0].local_name, x[1], x[2].local_name))
         for table, grp in itertools.groupby(fkeys, lambda x: x[0]):
             t_fkeys = [(key, [(child, ref) for _, _, child, ref in kgrp])

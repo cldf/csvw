@@ -54,7 +54,6 @@ if PY2:
         def next(self):
             return self.reader.next().encode('utf-8')
 
-
     class UTF8Encoder(object):
 
         def __init__(self, f):
@@ -90,7 +89,10 @@ class UnicodeWriter(object):
         if self.escapechar and self.kw.get('quoting') != csv.QUOTE_NONE:
             # work around https://bugs.python.org/issue12178
             # (csv.writer doesn't escape escapechar while csv.reader expects it)
-            def _escapedoubled(row, _type=string_types, _old=self.escapechar, _new=2 * self.escapechar):
+            def _escapedoubled(row,
+                               _type=string_types,
+                               _old=self.escapechar,
+                               _new=2 * self.escapechar):
                 return [s.replace(_old, _new) if isinstance(s, _type) else s for s in row]
         else:
             def _escapedoubled(row):

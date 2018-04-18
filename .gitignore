@@ -15,5 +15,6 @@ __pycache__/
 /htmlcov/
 /.cache/
 /.tox/
+/cover
 
 /.idea/
