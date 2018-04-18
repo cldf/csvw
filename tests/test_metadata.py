@@ -14,6 +14,12 @@ from csvw.dsv import Dialect
 FIXTURES = pathlib.Path(__file__).parent
 
 
+def test_column_init():
+    with pytest.raises(ValueError):
+        # column names mustn't start with a -!
+        csvw.Column(name='-abd')
+
+
 class TestColumnAccess(object):
 
     def test_get_column(self):
@@ -488,6 +494,7 @@ AF,1962,9989846"""}
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
         with pytest.raises(ValueError):
             tg.tabledict['countries.csv'].check_primary_key()
+        assert not tg.tabledict['countries.csv'].check_primary_key(log=mocker.Mock())
         tg.to_file(tg._fname)
 
     def test_foreignkeys_2(self, tmpdir):
