@@ -528,6 +528,7 @@ class Table(TableLike):
         if fname is DEFAULT:
             fname = self.url.resolve(self._parent.base)
 
+        rowcount = 0
         with UnicodeWriter(fname, dialect=dialect) as writer:
             if dialect.header:
                 writer.writerow([c.header for c in non_virtual_cols])
@@ -539,9 +540,11 @@ class Table(TableLike):
                         col.write(item.get(
                             col.header, item.get('{0}'.format(col))))
                         for col in non_virtual_cols]
+                rowcount += 1
                 writer.writerow(row)
             if fname is None:
                 return writer.read()
+        return rowcount
 
     def check_primary_key(self, log=None, items=None):
         success = True

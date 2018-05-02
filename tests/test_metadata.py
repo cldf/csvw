@@ -327,7 +327,7 @@ GID,On Street,Species,Trim Cycle,Inventory Date
 }"""
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
         items = list(tg.tables[0])
-        tg.tables[0].write(items)
+        assert tg.tables[0].write(items) == len(items)
         items_roundtrip = list(tg.tables[0])
         assert items == items_roundtrip
         tg.dialect = Dialect(delimiter='\t')
