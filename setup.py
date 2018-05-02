@@ -10,7 +10,7 @@ def read(fname):
 
 setup(
     name='csvw',
-    version='1.2.0',
+    version='1.2.1.dev0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
