@@ -4,10 +4,9 @@ Releasing csvw
 
 - Do platform test via tox:
 ```
-tox -r --skip-missing-interpreters
+tox -r
 ```
 
-- Make sure statement coverage is at 100%
 - Make sure flake8 passes:
 ```
 flake8 src
