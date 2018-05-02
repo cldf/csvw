@@ -14,6 +14,13 @@ from csvw.dsv import Dialect
 FIXTURES = pathlib.Path(__file__).parent
 
 
+def test_URITemplate():
+    ut = csvw.URITemplate('http://example.org')
+    assert ut == csvw.URITemplate('http://example.org')
+    assert ut != csvw.URITemplate('https://example.org')
+    assert ut != 1
+
+
 def test_column_init():
     with pytest.raises(ValueError):
         # column names mustn't start with a -!

@@ -54,7 +54,7 @@ class URITemplate(uritemplate.URITemplate):
     def __eq__(self, other):
         if not hasattr(other, 'uri'):
             return False
-        return super(URITemplate, self).__eq__(self, other)  # pragma: no cover
+        return super(URITemplate, self).__eq__(other)
 
     def asdict(self, **kw):
         return '{}'.format(self)
