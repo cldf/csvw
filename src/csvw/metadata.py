@@ -49,6 +49,17 @@ def log_or_raise(msg, log=None, level='warn', exception_cls=ValueError):
         raise exception_cls(msg)
 
 
+def nolog(level='warn'):
+    from types import MethodType
+
+    class Log(object):
+        pass
+
+    log = Log()
+    setattr(log, level, MethodType(lambda *args, **kw: None, log))
+    return log
+
+
 class URITemplate(uritemplate.URITemplate):
 
     def __eq__(self, other):
@@ -554,7 +565,8 @@ class Table(TableLike):
         if self.tableSchema.primaryKey:
             get_pk = operator.itemgetter(*self.tableSchema.primaryKey)
             seen = set()
-            for fname, lineno, row in self.iterdicts(log=log, with_metadata=True):
+            # Read all rows in the table, ignoring errors:
+            for fname, lineno, row in self.iterdicts(log=nolog(), with_metadata=True):
                 pk = get_pk(row)
                 if pk in seen:
                     log_or_raise(
@@ -570,10 +582,12 @@ class Table(TableLike):
 
     def iterdicts(self, log=None, with_metadata=False, fname=None, _Row=collections.OrderedDict):
         """Iterate over the rows of the table
+
         Create an iterator that maps the information in each row to a `dict` whose keys are
         the column names of the table and whose values are the values in the corresponding
         table cells, or for virtual columns (which have no values) the valueUrl for that
         column. This includes columns not specified in the table specification.
+
         :param log: Logger object (default None) The object that reports parsing errors.\
         If none is given, parsing errors raise ValueError instead.
         :param bool with_metadata: (default False) Also yield fname and lineno
@@ -583,13 +597,15 @@ class Table(TableLike):
         """
         dialect = self._get_dialect()
         fname = fname or self.url.resolve(self._parent.base)
-        colnames, virtualcols = [], []
+        colnames, virtualcols, requiredcols = [], [], set()
         for col in self.tableSchema.columns:
             if col.virtual:
                 if col.valueUrl:
                     virtualcols.append((col.header, col.valueUrl))
             else:
                 colnames.append(col.header)
+            if col.required:
+                requiredcols.add(col.header)
 
         with UnicodeReaderWithLineNumber(fname, dialect=dialect) as reader:
             reader = iter(reader)
@@ -611,13 +627,19 @@ class Table(TableLike):
             else:
                 header_cols = [(h, self.tableSchema.get_column(h)) for h in header]
             header_cols = [(j, h, c) for j, (h, c) in enumerate(header_cols)]
+            missing = requiredcols - set(c.header for j, h, c in header_cols if c)
+            if missing:
+                raise ValueError('{0} is missing required columns {1}'.format(fname, missing))
 
             for lineno, row in reader:
+                required = {h: j for j, h, c in header_cols if c and c.required}
                 res = _Row()
                 error = False
                 for (j, k, col), v in zip(header_cols, row):
                     # see http://w3c.github.io/csvw/syntax/#parsing-cells
                     if col:
+                        if k in required:
+                            del required[k]
                         try:
                             res[col.header] = col.read(v)
                         except ValueError as e:
@@ -627,6 +649,14 @@ class Table(TableLike):
                             error = True
                     else:
                         res[k] = v
+
+                for k, j in required.items():
+                    if k not in res:
+                        log_or_raise(
+                            '{0}:{1}:{2} {3}: {4}'.format(
+                                fname, lineno, j + 1, k, 'required column value is missing'),
+                            log=log)
+                        error = True
 
                 # Augment result with virtual columns:
                 for key, valueUrl in virtualcols:

@@ -41,7 +41,7 @@ def normalize_encoding(encoding):
     return codecs.lookup(encoding).name
 
 
-if PY2:
+if PY2:  # pragma: no cover
     class UTF8Recoder(object):
         """Iterator that reads an encoded stream and reencodes the input to UTF-8."""
 
@@ -109,7 +109,7 @@ class UnicodeWriter(object):
             if isinstance(self.f, pathlib.Path):
                 self.f = self.f.as_posix()
 
-            if PY2:
+            if PY2:  # pragma: no cover
                 self.f = open(self.f, 'wb')
             else:
                 self.f = io.open(self.f, 'wt', encoding=self.encoding, newline='')
@@ -117,7 +117,7 @@ class UnicodeWriter(object):
         elif self.f is None:
             self.f = BytesIO() if PY2 else StringIO(newline='')
 
-        if PY2 and self.encoding not in EIGHT_BIT_CLEAN:
+        if PY2 and self.encoding not in EIGHT_BIT_CLEAN:  # pragma: no cover
             self._buffer = io.BytesIO()
             self.writer = csv.writer(self._buffer, **self.kw)
             self._writer_encoding = 'utf-8'
@@ -142,11 +142,11 @@ class UnicodeWriter(object):
 
     def writerow(self, row):
         row = self._escapedoubled(row)
-        if PY2:
+        if PY2:  # pragma: no cover
             row = [('%s' % s).encode(self._writer_encoding) if s is not None else s for s in row]
             self.writer.writerow(row)
             if self._buffer is not None:
-                line = unicode(self._buffer.getvalue(), 'utf-8')
+                line = unicode(self._buffer.getvalue(), 'utf-8')  # noqa: F821
                 self._buffer.seek(0)
                 self._buffer.truncate()  # truncate(0) would prepend zero-bytes
                 self.f.write(self._encoder.encode(line))
@@ -187,7 +187,7 @@ class UnicodeReader(Iterator):
             if isinstance(self.f, pathlib.Path):
                 self.f = self.f.as_posix()
 
-            if PY2:
+            if PY2:  # pragma: no cover
                 if self.encoding in EIGHT_BIT_CLEAN:
                     self.f = open(self.f, mode='rU')
                 else:
@@ -199,7 +199,7 @@ class UnicodeReader(Iterator):
                     self.f, mode='rt', encoding=self.encoding, newline=self.newline or '')
             self._close = True
         elif hasattr(self.f, 'read'):
-            if PY2:
+            if PY2:  # pragma: no cover
                 # NOTE: this also affects newline handling
                 # (otherwise this could be omitted for 8bit-clean encodings)
                 self.f = UTF8Recoder(self.f, self.encoding)
@@ -207,7 +207,7 @@ class UnicodeReader(Iterator):
         else:
             lines = []
             for line in self.f:
-                if PY2 and isinstance(line, text_type):
+                if PY2 and isinstance(line, text_type):  # pragma: no cover
                     line = line.encode(self.encoding)
                 elif not PY2 and isinstance(line, binary_type):
                     line = line.decode(self.encoding)

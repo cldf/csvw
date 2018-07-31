@@ -87,6 +87,21 @@ class TestDialect(object):
         c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
         assert res[0]['col2'] == value
 
+    @pytest.mark.xfail(reason='commentPrefix is checked only after csv.reader has parsed the line')
+    def test_commentPrefix(self, tmpdir):
+        fpath = tmpdir / 'test'
+        t = csvw.TableGroup.fromvalue({
+            "dialect": {"commentPrefix": "$"},
+            "tables": [
+                {
+                    "url": str(fpath),
+                    "tableSchema": {"columns": [{"name": "col1", "datatype": "string"}]}}]
+        })
+        t._fname = pathlib.Path(str(fpath))
+        fpath.write_text("""col1\n"$val"\n""", encoding='utf8')
+        res = list(t.tables[0])
+        assert res[0]['col1'] == '$val'
+
 
 class TestNaturalLanguage(object):
 
@@ -285,6 +300,22 @@ class TestTableGroup(object):
         tg = self._make_tablegroup(tmpdir, data='GID\n123', metadata=metadata)
         item = list(tg.tables[0])[0]
         assert item['copy'] == '#123'
+
+    def test_required_column1(self, tmpdir, mocker):
+        metadata = """\
+{
+  "@context": ["http://www.w3.org/ns/csvw", {"@language": "en"}],
+  "tables": [{"url": "csv.txt", "tableSchema": {"columns": [{"name": "GID", "required": true}]}}]
+}"""
+        tg = self._make_tablegroup(tmpdir, data='x\n123', metadata=metadata)
+        with pytest.raises(ValueError):
+            list(tg.tables[0])
+
+        tg = self._make_tablegroup(tmpdir, data='x,GID\n123', metadata=metadata)
+        log = mocker.Mock()
+        res = list(tg.tables[0].iterdicts(log=log))
+        assert log.warn.called
+        assert len(res) == 0
 
     def test_write(self, tmpdir):
         data = """\

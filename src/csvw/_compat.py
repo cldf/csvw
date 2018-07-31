@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover
 PY2 = sys.version_info < (3,)
 
 
-if PY2:
+if PY2:  # pragma: no cover
     string_types = basestring
     binary_type = str
     text_type = unicode
