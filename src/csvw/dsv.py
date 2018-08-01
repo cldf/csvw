@@ -163,7 +163,7 @@ class UnicodeReader(Iterator):
 
     def __init__(self, f, dialect=None, **kw):
         self.f = f
-        self.encoding = normalize_encoding(kw.pop('encoding', 'utf-8'))
+        self.encoding = normalize_encoding(kw.pop('encoding', 'utf-8-sig'))
         self.newline = kw.pop('lineterminator', None)
         self.dialect = dialect if isinstance(dialect, Dialect) else None
         if self.dialect:
@@ -177,8 +177,16 @@ class UnicodeReader(Iterator):
         self.kw = fix_kw(self.kw)
         self._close = False
         self.comments = []
+
+        # We potentially screw people with valid CSV files where the content - presumably the
+        # header - starts with 0xfeff. But the chance of irritating people trying to read Excel
+        # exported CSV with the defaults seems way bigger - and anyone with CSV column names
+        # starting with 0xfeff will run into more trouble down the line anyway ...
+        if self.encoding == 'utf-8':
+            self.encoding = 'utf-8-sig'
+
         # encoding of self.reader rows: differs from source encoding
-        # where we need to reocde from non-8bit clean source encoding
+        # where we need to recode from non-8bit clean source encoding
         # to utf-8 first to feed into the (byte-based) PY2 csv.reader
         self._reader_encoding = self.encoding
 
@@ -208,7 +216,7 @@ class UnicodeReader(Iterator):
             lines = []
             for line in self.f:
                 if PY2 and isinstance(line, text_type):  # pragma: no cover
-                    line = line.encode(self.encoding)
+                    line = line.encode('utf-8' if self.encoding == 'utf-8-sig' else self.encoding)
                 elif not PY2 and isinstance(line, binary_type):
                     line = line.decode(self.encoding)
                 lines.append(line)

@@ -1,11 +1,10 @@
 from __future__ import unicode_literals
 
 import csv
-import sys
 import shutil
 from collections import OrderedDict
 
-from csvw._compat import pathlib, BytesIO, StringIO, to_binary
+from csvw._compat import pathlib, BytesIO, StringIO, to_binary, PY2
 
 import pytest
 
@@ -100,6 +99,14 @@ def test_roundtrip_multibyte(tmpdir, encoding, row=['spam', 'eggs'], expected='s
         result = next(reader)
     assert result == row
     assert filepath.read_binary() == (expected * n).encode(encoding)
+
+
+def test_iterrows_with_bom(tmpdir):
+    filepath = tmpdir / 'spam.csv'
+    filepath.write_text('\ufeffcol1,col2\nval1,val2', encoding='utf8')
+    rows = list(iterrows(str(filepath)))
+    if not PY2:
+        assert rows[0] == ['col1', 'col2']
 
 
 def test_rewrite(tmpdir, tsvname=str(TESTDIR / 'tsv.txt'), csvname=str(TESTDIR / 'csv.txt')):
