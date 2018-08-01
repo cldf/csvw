@@ -16,6 +16,12 @@ Version 2.0 (in development)
 - Ignore and deprecate the data argument of TableGroup.check_referential_integrity.
 
 
+Version 1.4
+-----------
+
+- Read all data with encoding specified as UTF-8 using utf-8-sig encoding.
+
+
 Version 1.0
 -----------
 

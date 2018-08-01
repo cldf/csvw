@@ -29,7 +29,10 @@ git tag -a v<VERSION> -m"<VERSION> release"
 - Release to PyPI:
 ```shell
 rm dist/*
-python setup.py sdist bdist_wheel
+python setup.py sdist
+twine upload dist/*
+rm dist/*
+python setup.py bdist_wheel
 twine upload dist/*
 ```
 

@@ -3,18 +3,14 @@
 from setuptools import setup, find_packages
 
 
-def read(fname):
-    with open(fname) as fp:
-        return fp.read()
-
-
 setup(
     name='csvw',
-    version='1.3.1.dev0',
+    version='1.4.0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
-    long_description=read('README.rst'),
+    long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
     keywords='csv w3c',
     license='Apache 2.0',
     url='https://github.com/cldf/csvw',
