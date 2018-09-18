@@ -82,7 +82,7 @@ def uri_template_property():
     return attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.instance_of(URITemplate)),
-        convert=lambda v: v if v is None else URITemplate(v))
+        converter=lambda v: v if v is None else URITemplate(v))
 
 
 @py3_unicode_to_str
@@ -119,7 +119,7 @@ def link_property():
     return attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.instance_of(Link)),
-        convert=lambda v: v if v is None else Link(v))
+        converter=lambda v: v if v is None else Link(v))
 
 
 @py3_unicode_to_str
@@ -220,7 +220,7 @@ def optional_int():
     return attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.instance_of(int)),
-        convert=lambda v: v if v is None else int(v))
+        converter=lambda v: v if v is None else int(v))
 
 
 @attr.s
@@ -334,12 +334,12 @@ class Description(DescriptionBase):
     aboutUrl = uri_template_property()
     datatype = attr.ib(
         default=None,
-        convert=lambda v: v if not v else Datatype.fromvalue(v))
+        converter=lambda v: v if not v else Datatype.fromvalue(v))
     default = attr.ib(default="")
     lang = attr.ib(default="und")
     null = attr.ib(
         default=attr.Factory(lambda: [""]),
-        convert=lambda v: [] if v is None else (v if isinstance(v, list) else [v]))
+        converter=lambda v: [] if v is None else (v if isinstance(v, list) else [v]))
     ordered = attr.ib(default=None)
     propertyUrl = uri_template_property()
     required = attr.ib(default=None)
@@ -365,7 +365,7 @@ class Column(Description):
     titles = attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.instance_of(NaturalLanguage)),
-        convert=lambda v: v if v is None else NaturalLanguage(v))
+        converter=lambda v: v if v is None else NaturalLanguage(v))
     virtual = attr.ib(default=False)
     _number = attr.ib(default=None, repr=False)
 
@@ -429,7 +429,7 @@ def column_reference():
     return attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.instance_of(list)),
-        convert=lambda v: v if isinstance(v, list) or v is None else [v])
+        converter=lambda v: v if isinstance(v, list) or v is None else [v])
 
 
 @attr.s
@@ -466,10 +466,10 @@ class Schema(Description):
 
     columns = attr.ib(
         default=attr.Factory(list),
-        convert=lambda v: [Column.fromvalue(c) for c in v])
+        converter=lambda v: [Column.fromvalue(c) for c in v])
     foreignKeys = attr.ib(
         default=attr.Factory(list),
-        convert=lambda v: [] if v is None else [ForeignKey.fromdict(d) for d in v])
+        converter=lambda v: [] if v is None else [ForeignKey.fromdict(d) for d in v])
     primaryKey = column_reference()
     rowTitles = attr.ib(default=attr.Factory(list))
 
@@ -502,14 +502,14 @@ class Schema(Description):
 class TableLike(Description):
 
     dialect = attr.ib(
-        default=None, convert=lambda v: Dialect(**v) if isinstance(v, dict) else v)
+        default=None, converter=lambda v: Dialect(**v) if isinstance(v, dict) else v)
     notes = attr.ib(default=attr.Factory(list))
     tableDirection = attr.ib(
         default='auto',
         validator=attr.validators.in_(['rtl', 'ltr', 'auto']))
     tableSchema = attr.ib(
         default=None,
-        convert=lambda v: Schema.fromvalue(v))
+        converter=lambda v: Schema.fromvalue(v))
     transformations = attr.ib(default=attr.Factory(list))
 
     def __attrs_post_init__(self):
@@ -677,7 +677,7 @@ class TableGroup(TableLike):
     tables = attr.ib(
         repr=False,
         default=attr.Factory(list),
-        convert=lambda v: [Table.fromvalue(vv) for vv in v])
+        converter=lambda v: [Table.fromvalue(vv) for vv in v])
 
     @classmethod
     def from_file(cls, fname):

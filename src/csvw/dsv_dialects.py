@@ -74,7 +74,7 @@ class Dialect(object):
     trim = attr.ib(
         default='false',
         validator=attr.validators.in_(['true', 'false', 'start', 'end']),
-        convert=lambda v: '{0}'.format(v).lower() if isinstance(v, bool) else v)
+        converter=lambda v: '{0}'.format(v).lower() if isinstance(v, bool) else v)
 
     def updated(self, **kw):
         res = self.__class__(**attr.asdict(self))

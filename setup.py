@@ -20,7 +20,7 @@ setup(
     platforms='any',
     python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*',
     install_requires=[
-        'attrs>=17.1.0',
+        'attrs>=17.3',
         'isodate',
         'pathlib2; python_version < "3.5"',
         'python-dateutil',
