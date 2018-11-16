@@ -371,6 +371,12 @@ class number(_float):
 
 
 @register
+class double(_float):
+
+    name = 'double'
+
+
+@register
 class QName(string):
 
     name = 'QName'

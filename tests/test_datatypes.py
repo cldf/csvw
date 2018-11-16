@@ -8,6 +8,13 @@ import pytest
 from csvw import Datatype
 
 
+def test_double():
+    t = Datatype.fromvalue({'base': 'double', 'minimum': 10})
+    v = t.parse('3.1')
+    with pytest.raises(ValueError):
+        t.validate(v)
+
+
 def test_string():
     t = Datatype.fromvalue({'base': 'string', 'format': '[0-9]+[a-z]+'})
     assert t.read('1a') == '1a'
