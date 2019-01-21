@@ -159,6 +159,11 @@ class TestColumn(object):
         col = csvw.Column.fromvalue({'required': True, 'null': None})
         assert col.read('') == ''
 
+    def test_reuse_datatype(self):
+        col1 = csvw.Column(name='col1', datatype={'base': 'string', 'format': '[0-9]+[a-z]+'})
+        col2 = csvw.Column(name='col2', datatype=col1.datatype)
+        assert col2.datatype.format
+
 
 class TestLink(object):
 

@@ -247,14 +247,19 @@ class Datatype(DescriptionBase):
     @classmethod
     def fromvalue(cls, v):
         """
-        either a single string that is the main datatype of the values of the cell or a
-        datatype description object.
+        :param v: Initialization data for `cls`; either a single string that is the main datatype \
+        of the values of the cell or a datatype description object, i.e. a `dict` or a `cls`
+        instance.
+        :return: An instance of `cls`
         """
         if isinstance(v, text_type):
             return cls(base=v)
 
         if isinstance(v, dict):
             return cls(**DescriptionBase.partition_properties(v))
+
+        if isinstance(v, cls):
+            return v
 
         raise ValueError(v)
 
