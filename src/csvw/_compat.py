@@ -4,9 +4,9 @@
 import io
 import sys
 
-try:  # pragma: no cover
+if sys.version_info < (3, 5):  # pragma: no cover
     import pathlib2 as pathlib
-except ImportError:  # pragma: no cover
+else:  # pragma: no cover
     import pathlib
 
 PY2 = sys.version_info < (3,)

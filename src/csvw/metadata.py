@@ -108,7 +108,7 @@ class Link(object):
     def resolve(self, base):
         if not base:
             return self.string
-        if isinstance(base, pathlib.Path):
+        if hasattr(base, 'joinpath'):
             return base / self.string
         if not base.endswith('/'):
             base += '/'
