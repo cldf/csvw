@@ -3,6 +3,7 @@
 
 import io
 import sys
+import base64
 
 if sys.version_info < (3, 5):  # pragma: no cover
     import pathlib2 as pathlib
@@ -16,6 +17,7 @@ if PY2:  # pragma: no cover
     string_types = basestring
     binary_type = str
     text_type = unicode
+    base64_decodebytes = base64.decodestring
 
     from cStringIO import StringIO
     BytesIO = StringIO
@@ -51,13 +53,14 @@ if PY2:  # pragma: no cover
 else:
     string_types = text_type = str
     binary_type = bytes
+    base64_decodebytes = base64.decodebytes
 
     StringIO, BytesIO = io.StringIO, io.BytesIO
 
     def to_binary(s, encoding='utf-8'):
         if not isinstance(s, bytes):
             return bytes(s, encoding=encoding)
-        return s
+        return s  # pragma: no cover
 
     iteritems = lambda x: iter(x.items())
     itervalues = lambda x: iter(x.values())

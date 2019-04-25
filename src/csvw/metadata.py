@@ -538,11 +538,11 @@ class Table(TableLike):
     def _get_dialect(self):
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()
 
-    def write(self, items, fname=DEFAULT):
+    def write(self, items, fname=DEFAULT, base=None):
         dialect = self._get_dialect()
         non_virtual_cols = [c for c in self.tableSchema.columns if not c.virtual]
         if fname is DEFAULT:
-            fname = self.url.resolve(self._parent.base)
+            fname = self.url.resolve(base or self._parent.base)
 
         rowcount = 0
         with UnicodeWriter(fname, dialect=dialect) as writer:
@@ -566,7 +566,7 @@ class Table(TableLike):
         success = True
         if items is not None:
             warnings.warn('the items argument of check_primary_key '
-                          'is deprecated (its content will be ignored)')
+                          'is deprecated (its content will be ignored)')  # pragma: no cover
         if self.tableSchema.primaryKey:
             get_pk = operator.itemgetter(*self.tableSchema.primaryKey)
             seen = set()
@@ -707,6 +707,25 @@ class TableGroup(TableLike):
             json.dump(data, f, indent=4, separators=(',', ': '))
         return fname
 
+    def read(self):
+        """
+        Read all data of a TableGroup
+        """
+        return {tname: list(t.iterdicts()) for tname, t in self.tabledict.items()}
+
+    def write(self, fname, **items):
+        """
+        Write a TableGroup's data and metadata to files.
+
+        :param fname:
+        :param items:
+        :return:
+        """
+        fname = pathlib.Path(fname)
+        for tname, rows in items.items():
+            self.tabledict[tname].write(rows, base=fname.parent)
+        self.to_file(fname)
+
     @property
     def tabledict(self):
         return {t.local_name: t for t in self.tables}
@@ -719,7 +738,7 @@ class TableGroup(TableLike):
         success = True
         if data is not None:
             warnings.warn('the data argument of check_referential_integrity '
-                          'is deprecated (its content will be ignored)')
+                          'is deprecated (its content will be ignored)')  # pragma: no cover
         fkeys = [
             (
                 self.tabledict[fk.reference.resource.string],

@@ -16,7 +16,7 @@ import decimal as _decimal
 import binascii
 import datetime
 
-from ._compat import to_binary, iteritems, py3_unicode_to_str
+from ._compat import to_binary, iteritems, py3_unicode_to_str, base64_decodebytes
 
 import isodate
 import rfc3986
@@ -38,6 +38,7 @@ class anyAtomicType(object):
 
     name = 'any'
     minmax = False
+    example = 'x'
 
     @classmethod
     def value_error(cls, v):
@@ -66,7 +67,7 @@ class string(anyAtomicType):
 
     @staticmethod
     def derived_description(datatype):
-        # We wrap a regex soecified as `format` property into a group and add `$` to
+        # We wrap a regex specified as `format` property into a group and add `$` to
         # make sure the whole string is matched when validating.
         return {'regex': re.compile(
             '({})$'.format(datatype.format)) if datatype.format else None}
@@ -97,6 +98,7 @@ class anyURI(string):
 class base64Binary(anyAtomicType):
 
     name = 'binary'
+    example = 'YWJj'
 
     @staticmethod
     def to_python(v, **kw):
@@ -105,7 +107,7 @@ class base64Binary(anyAtomicType):
         except UnicodeEncodeError:
             base64Binary.value_error(v[:10])
         try:
-            base64.decodestring(res)
+            base64_decodebytes(res)
         except Exception:
             raise ValueError('invalid base64 encoding')
         return res
@@ -119,6 +121,7 @@ class base64Binary(anyAtomicType):
 class hexBinary(anyAtomicType):
 
     name = 'hexBinary'
+    example = 'ab'
 
     @staticmethod
     def to_python(v, **kw):
@@ -142,6 +145,7 @@ class boolean(anyAtomicType):
     """http://w3c.github.io/csvw/syntax/#formats-for-booleans"""
 
     name = 'boolean'
+    example = 'false'
 
     @staticmethod
     def derived_description(datatype):
@@ -171,6 +175,7 @@ class dateTime(anyAtomicType):
 
     name = 'datetime'
     minmax = True
+    example = '2018-12-10T20:20:20'
 
     @staticmethod
     def derived_description(datatype):
@@ -225,6 +230,7 @@ class dateTime(anyAtomicType):
 class date(dateTime):
 
     name = 'date'
+    example = '2018-12-10'
 
     @staticmethod
     def derived_description(datatype):
@@ -239,6 +245,7 @@ class date(dateTime):
 class dateTimeStamp(dateTime):
 
     name = 'dateTimeStamp'
+    example = '2018-12-10T20:20:20'
 
     @staticmethod
     def derived_description(datatype):
@@ -252,6 +259,7 @@ class dateTimeStamp(dateTime):
 class _time(dateTime):
 
     name = 'time'
+    example = '2018-12-10T20:20:20'
 
     @staticmethod
     def derived_description(datatype):
@@ -267,6 +275,7 @@ class _time(dateTime):
 class duration(anyAtomicType):
 
     name = 'duration'
+    example = 'P3Y6M4DT12H30M5S'
 
     @staticmethod
     def derived_description(datatype):
@@ -288,6 +297,7 @@ class decimal(anyAtomicType):
 
     name = 'decimal'
     minmax = True
+    example = '5'
 
     _special = {
         'INF': 'Infinity',
@@ -351,6 +361,7 @@ class _float(anyAtomicType):
 
     name = 'float'
     minmax = True
+    example = '5.3'
 
     @staticmethod
     def to_python(v, **kw):
@@ -428,6 +439,7 @@ class html(string):
 class json(string):
 
     name = 'json'
+    example = '{"a": [1,2]}'
 
     # FIXME: ignored **kw?
     # why not just to_python = staticmethod(_json.loads)?

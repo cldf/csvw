@@ -209,6 +209,15 @@ class TestTableGroup(object):
         assert self._load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
                self._load_json(FIXTURES / 'csv.txt-metadata.json')
 
+    def test_write_all(self, tmpdir):
+        t = self._make_tablegroup(tmpdir)
+        nmd = str(tmpdir.mkdir('x').join('cldf-metadata.json'))
+        t.write(nmd, **t.read())
+        t2 = csvw.TableGroup.from_file(nmd)
+        for tname in t.tabledict:
+            for r1, r2 in zip(t.tabledict[tname].__iter__(), t2.tabledict[tname].__iter__()):
+                assert r1 == r2
+
     def test_all(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
         assert len(list(t.tables[0])) == 2
