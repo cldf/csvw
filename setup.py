@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='1.5.1.dev0',
+    version='1.5.1',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
