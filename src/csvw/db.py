@@ -76,16 +76,6 @@ def select(db, table):
     return cols, list(cu.fetchall())
 
 
-def select_many_to_many(db, table, context):
-    cu = db.execute(
-        "SELECT {0}, group_concat({1}, ' ') FROM {2} WHERE context = '{3}' GROUP BY {0}".format(
-            quoted(table.columns[0].name),
-            quoted(table.columns[1].name),
-            quoted(table.name),
-            context))
-    return {r[0]: r[1].split() for r in cu.fetchall()}
-
-
 @attr.s
 class ColSpec(object):
     """
@@ -311,6 +301,15 @@ class Database(object):
             self._connection = sqlite3.connect(':memory:')
         return self._connection
 
+    def select_many_to_many(self, db, table, context):
+        cu = db.execute(
+            "SELECT {0}, group_concat({1}, ' ') FROM {2} WHERE context = '{3}' GROUP BY {0}".format(
+                quoted(table.columns[0].name),
+                quoted(table.columns[1].name),
+                quoted(self.translate(table.name)),
+                context))
+        return {r[0]: r[1].split() for r in cu.fetchall()}
+
     def read(self):
         res = defaultdict(list)
         with self.connection() as conn:
@@ -335,8 +334,8 @@ class Database(object):
 
                 # Retrieve the many-to-many relations:
                 for col, at in table.many_to_many.items():
-                    for pk, v in select_many_to_many(conn, at, col).items():
-                        refs[pk][col] = v
+                    for pk, v in self.select_many_to_many(conn, at, col).items():
+                        refs[pk][self.translate(tname, col)] = v
 
                 cols, rows = select(conn, self.translate(tname))
                 for row in rows:
@@ -355,6 +354,18 @@ class Database(object):
                     d.update(refs.get(pk, {}))
                     res[self.translate(tname)].append(d)
         return res
+
+    def association_table_context(self, table, column, fkey):
+        """
+        Context for association tables is created calling this method.
+
+        :param table:
+        :param column:
+        :param fkey:
+        :return: a pair (foreign key, context)
+        """
+        # The default implementation takes the column name as context:
+        return fkey, column
 
     def write_from_tg(self, _force=False, _exists_ok=False):
         return self.write(_force=_force, _exists_ok=_exists_ok, **self.tg.read())
@@ -391,7 +402,8 @@ class Database(object):
                             at = t.many_to_many[k]
                             atkey = tuple([at.name] + [c.name for c in at.columns])
                             for vv in v:
-                                refs[atkey].append((pk, vv, k))
+                                fkey, context = self.association_table_context(t, k, vv)
+                                refs[atkey].append((pk, fkey, context))
                         else:
                             col = cols[k]
                             if isinstance(v, list):
