@@ -175,6 +175,6 @@ def test_integration():
     tg = TableGroup.from_file(pathlib.Path(__file__).parent / 'csv.txt-metadata.json')
     orig = tg.read()
     db = Database(tg)
-    db.write(**orig)
+    db.write_from_tg()
     for table, items in db.read().items():
         assert items == orig[table]

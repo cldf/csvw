@@ -60,7 +60,7 @@ def insert(db, translate, table, keys, *rows, **kw):
             ','.join(['?' for _ in keys]))
         try:
             db.executemany(sql, rows)
-        except:
+        except:  # noqa: E722 - this is purely for debugging.
             if 'single' not in kw:
                 for row in rows:
                     insert(db, translate, table, keys, row, single=True)
@@ -119,7 +119,7 @@ class ColSpec(object):
         """
         if not self.csvw:
             return
-        c = self.csvw
+        c, cname = self.csvw, translate(self.name)
         constraints = []
         if (c.minimum is not None) or (c.maximum is not None):
             func = {
@@ -128,21 +128,21 @@ class ColSpec(object):
             }.get(self.csvw_type)
             if c.minimum is not None:
                 if func:
-                    constraints.append("{2}(`{0}`) >= {2}('{1}')".format(translate(self.name), c.minimum, func))
+                    constraints.append("{2}(`{0}`) >= {2}('{1}')".format(cname, c.minimum, func))
                 else:
-                    constraints.append('`{0}` >= {1}'.format(translate(self.name), c.minimum))
+                    constraints.append('`{0}` >= {1}'.format(cname, c.minimum))
             if c.maximum is not None:
                 if func:
-                    constraints.append("{2}(`{0}`) <= {2}('{1}')".format(translate(self.name), c.maximum, func))
+                    constraints.append("{2}(`{0}`) <= {2}('{1}')".format(cname, c.maximum, func))
                 else:
-                    constraints.append('`{0}` <= {1}'.format(translate(self.name), c.maximum))
+                    constraints.append('`{0}` <= {1}'.format(cname, c.maximum))
         elif any(cc is not None for cc in [c.length, c.minLength, c.maxLength]):
             if c.length:
-                constraints.append('length(`{0}`) = {1}'.format(translate(self.name), c.length))
+                constraints.append('length(`{0}`) = {1}'.format(cname, c.length))
             if c.minLength:
-                constraints.append('length(`{0}`) >= {1}'.format(translate(self.name), c.minLength))
+                constraints.append('length(`{0}`) >= {1}'.format(cname, c.minLength))
             if c.maxLength:
-                constraints.append('length(`{0}`) <= {1}'.format(translate(self.name), c.maxLength))
+                constraints.append('length(`{0}`) <= {1}'.format(cname, c.maxLength))
         return ' AND '.join(constraints)
 
     def sql(self, translate):
@@ -328,7 +328,8 @@ class Database(object):
                     if col.csvw_type in TYPE_MAP:
                         convert[self.translate(tname, col.name)][1] = TYPE_MAP[col.csvw_type][2]
                     else:
-                        convert[self.translate(tname, col.name)][1] = DATATYPES[col.csvw_type].to_python
+                        convert[self.translate(tname, col.name)][1] = \
+                            DATATYPES[col.csvw_type].to_python
                     if col.separator:
                         seps[self.translate(tname, col.name)] = col.separator
 
@@ -347,13 +348,16 @@ class Database(object):
                             else:
                                 d[k] = [convert[k][1](v_) for v_ in (v or '').split(seps[k])]
                         else:
-                            d[k] = convert[k][1](v) if  v is not None else None
+                            d[k] = convert[k][1](v) if v is not None else None
                     pk = d[self.translate(tname, table.primary_key[0])] \
                         if table.primary_key and len(table.primary_key) == 1 else None
                     d.update({k: [] for k in table.many_to_many})
                     d.update(refs.get(pk, {}))
                     res[self.translate(tname)].append(d)
         return res
+
+    def write_from_tg(self, _force=False, _exists_ok=False):
+        return self.write(_force=_force, _exists_ok=_exists_ok, **self.tg.read())
 
     def write(self, _force=False, _exists_ok=False, **items):
         """

@@ -11,7 +11,6 @@ from __future__ import unicode_literals
 
 import re
 import json as _json
-import base64
 import decimal as _decimal
 import binascii
 import datetime
