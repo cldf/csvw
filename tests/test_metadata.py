@@ -21,6 +21,14 @@ def test_URITemplate():
     assert ut != 1
 
 
+
+def test_Link():
+    li = csvw.Link('abc.csv')
+    assert li.resolve(None) == 'abc.csv'
+    assert li.resolve('http://example.com') == 'http://example.com/abc.csv'
+    assert li.resolve(pathlib.Path('.')) == pathlib.Path('abc.csv')
+
+
 def test_column_init():
     with pytest.raises(ValueError):
         # column names mustn't start with a -!
@@ -208,6 +216,18 @@ class TestTableGroup(object):
                self._load_json(FIXTURES / 'csv.txt-metadata.json')
         assert self._load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
                self._load_json(FIXTURES / 'csv.txt-metadata.json')
+
+    def test_copy(self, tmpdir):
+        t = csvw.TableGroup.from_file(pathlib.Path(__file__).parent / 'csv.txt-metadata.json')
+        l = len(list(t.tabledict['csv.txt']))
+        assert not tmpdir.join('csv.txt-metadata.json').check()
+        t.copy(str(tmpdir))
+        assert tmpdir.join('csv.txt-metadata.json').check()
+        assert tmpdir.join('csv.txt').check()
+        # Make sure the copied TableGroup reads from the new files:
+        tmpdir.join('csv.txt').write_text(
+            tmpdir.join('csv.txt').read_text('utf8') + '\nabc,b', 'utf8')
+        assert len(list(t.tabledict['csv.txt'])) == l + 1
 
     def test_write_all(self, tmpdir):
         t = self._make_tablegroup(tmpdir)

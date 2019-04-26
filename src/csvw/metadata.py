@@ -12,13 +12,14 @@ from __future__ import unicode_literals
 
 import re
 import json
+import shutil
 import operator
 import warnings
 import itertools
 import collections
 
 from ._compat import (pathlib, text_type, iteritems, itervalues, zip,
-    py3_unicode_to_str, json_open)
+    py3_unicode_to_str, json_open, urljoin)
 
 import attr
 import uritemplate
@@ -106,13 +107,16 @@ class Link(object):
         return self.string == other.string if isinstance(other, Link) else False
 
     def resolve(self, base):
-        if not base:
-            return self.string
+        """
+        Resolve a `Link` relative to `base`.
+
+        :param base:
+        :return: Either a string, representing a URL, or a `pathlib.Path` object, representing \
+        a local file.
+        """
         if hasattr(base, 'joinpath'):
             return base / self.string
-        if not base.endswith('/'):
-            base += '/'
-        return base + self.string
+        return urljoin(base, self.string)
 
 
 def link_property():
@@ -542,7 +546,7 @@ class Table(TableLike):
         dialect = self._get_dialect()
         non_virtual_cols = [c for c in self.tableSchema.columns if not c.virtual]
         if fname is DEFAULT:
-            fname = self.url.resolve(base or self._parent.base)
+            fname = self.url.resolve(pathlib.Path(base) if base else self._parent.base)
 
         rowcount = 0
         with UnicodeWriter(fname, dialect=dialect) as writer:
@@ -677,7 +681,7 @@ class Table(TableLike):
 @attr.s
 class TableGroup(TableLike):
 
-    _fname = attr.ib(default=None)
+    _fname = attr.ib(default=None)  # The path of the metadata file.
     url = attr.ib(default=None)
     tables = attr.ib(
         repr=False,
@@ -726,12 +730,29 @@ class TableGroup(TableLike):
             self.tabledict[tname].write(rows, base=fname.parent)
         self.to_file(fname)
 
+    def copy(self, dest):
+        """
+        Write a TableGroup's data and metadata to files relative to `dest`, adapting the `base`
+        attribute.
+
+        :param dest:
+        :return:
+        """
+        dest = pathlib.Path(dest)
+        for table in self.tables:
+            shutil.copy(str(table.url.resolve(self.base)), str(table.url.resolve(dest)))
+        self._fname = dest / self._fname.name
+        self.to_file(self._fname)
+
     @property
     def tabledict(self):
         return {t.local_name: t for t in self.tables}
 
     @property
     def base(self):
+        """
+        We only support data in the filesystem, thus we make sure `base` is a `pathlib.Path`.
+        """
         return self._fname.parent
 
     def check_referential_integrity(self, data=None, log=None):

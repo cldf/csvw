@@ -14,6 +14,8 @@ PY2 = sys.version_info < (3,)
 
 
 if PY2:  # pragma: no cover
+    from urlparse import urljoin
+
     string_types = basestring
     binary_type = str
     text_type = unicode
@@ -51,6 +53,8 @@ if PY2:  # pragma: no cover
 
 
 else:
+    from urllib.parse import urljoin
+
     string_types = text_type = str
     binary_type = bytes
     base64_decodebytes = base64.decodebytes
