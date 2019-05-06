@@ -287,6 +287,13 @@ class TestTableGroup(object):
         t.tables[0].tableSchema.columns[1].null = 'a'
         assert list(t.tables[0])[0]['_col.2'] is None
 
+    def test_None_value_in_common_props(self, tmpdir):
+        f = str(tmpdir.join('test.json'))
+        tg = csvw.TableGroup()
+        tg.common_props['dc:title'] = None
+        tg.to_file(f)
+        assert 'dc:title' in self._load_json(f)
+
     def test_virtual_columns1(self, tmpdir):
         metadata = """\
 {

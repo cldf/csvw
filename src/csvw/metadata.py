@@ -216,8 +216,7 @@ class DescriptionBase(object):
 
     def asdict(self, omit_defaults=True):
         return collections.OrderedDict(
-            (k, v) for k, v in
-            self._iter_dict_items(omit_defaults) if v not in (None, [], {}))
+            (k, v) for k, v in self._iter_dict_items(omit_defaults) if v not in ([], {}))
 
 
 def optional_int():
@@ -806,7 +805,3 @@ class TableGroup(TableLike):
                                     log=log)
                                 success = False
         return success
-
-    #
-    # FIXME: to_sqlite()!
-    #
