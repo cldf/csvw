@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 import json
 import shutil
 import collections
+import warnings
 
 from csvw._compat import pathlib, json_open, text_type
 
@@ -294,43 +295,46 @@ class TestTableGroup(object):
                 assert r1 == r2
 
     def test_all(self, tmpdir):
-        t = self._make_tablegroup(tmpdir)
-        assert len(list(t.tables[0])) == 2
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            t = self._make_tablegroup(tmpdir)
+            assert len(list(t.tables[0])) == 2
 
-        # Test appication of null property on columns:
-        t = self._make_tablegroup(tmpdir)
-        t.tables[0].tableSchema.columns[1].null = ['line']
-        assert list(t.tables[0])[0]['_col.2'] is None
+            # Test appication of null property on columns:
+            t = self._make_tablegroup(tmpdir)
+            t.tables[0].tableSchema.columns[1].null = ['line']
+            assert list(t.tables[0])[0]['_col.2'] is None
 
-        t = self._make_tablegroup(tmpdir)
-        t.tables[0].tableSchema.columns[1].separator = 'n'
-        assert list(t.tables[0])[0]['_col.2'] == ['li', 'e']
+            t = self._make_tablegroup(tmpdir)
+            t.tables[0].tableSchema.columns[1].separator = 'n'
+            assert list(t.tables[0])[0]['_col.2'] == ['li', 'e']
 
-        t = self._make_tablegroup(tmpdir)
-        t.tables[0].tableSchema.columns[1].titles = csvw.NaturalLanguage('colname')
-        assert 'colname' in list(t.tables[0])[0]
+            t = self._make_tablegroup(tmpdir)
+            t.tables[0].tableSchema.columns[1].titles = csvw.NaturalLanguage('colname')
+            assert 'colname' in list(t.tables[0])[0]
 
-        t = self._make_tablegroup(tmpdir)
-        t.dialect.header = True
-        assert len(list(t.tables[0])) == 1
+            t = self._make_tablegroup(tmpdir)
+            t.dialect.header = True
+            assert len(list(t.tables[0])) == 1
 
-        t = self._make_tablegroup(tmpdir, 'edferd,f\r\nabc,')
-        t.tables[0].tableSchema.columns[0].required = True
-        t.tables[0].tableSchema.columns[0].null = ['abc']
-        with pytest.raises(ValueError, match=r'csv\.txt:2:1 ID: required column value is missing'):
-            list(t.tables[0])
+            t = self._make_tablegroup(tmpdir, 'edferd,f\r\nabc,')
+            t.tables[0].tableSchema.columns[0].required = True
+            t.tables[0].tableSchema.columns[0].null = ['abc']
+            with pytest.raises(
+                    ValueError, match=r'csv\.txt:2:1 ID: required column value is missing'):
+                list(t.tables[0])
 
-        t = self._make_tablegroup(tmpdir, ',')
-        t.tables[0].tableSchema.columns[0].required = True
-        with pytest.raises(ValueError):
-            list(t.tables[0])
+            t = self._make_tablegroup(tmpdir, ',')
+            t.tables[0].tableSchema.columns[0].required = True
+            with pytest.raises(ValueError):
+                list(t.tables[0])
 
-        t = self._make_tablegroup(tmpdir, 'abc,9\r\ndef,10')
-        items = list(t.tables[0])
-        assert items[0]['_col.2'] > items[1]['_col.2']
-        t.tables[0].tableSchema.columns[1].datatype.base = 'integer'
-        items = list(t.tables[0])
-        assert items[0]['_col.2'] < items[1]['_col.2']
+            t = self._make_tablegroup(tmpdir, 'abc,9\r\ndef,10')
+            items = list(t.tables[0])
+            assert items[0]['_col.2'] > items[1]['_col.2']
+            t.tables[0].tableSchema.columns[1].datatype.base = 'integer'
+            items = list(t.tables[0])
+            assert items[0]['_col.2'] < items[1]['_col.2']
 
     def test_separator(self, tmpdir):
         t = self._make_tablegroup(tmpdir, 'abc,')
@@ -409,7 +413,10 @@ class TestTableGroup(object):
 
         tg = self._make_tablegroup(tmpdir, data='x,GID\n123', metadata=metadata)
         log = mocker.Mock()
-        res = list(tg.tables[0].iterdicts(log=log))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            res = list(tg.tables[0].iterdicts(log=log))
         assert log.warn.called
         assert len(res) == 0
 
@@ -685,8 +692,10 @@ AF,9799379"""}
   }]
 }"""
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
-        tg.check_referential_integrity()
-        (tmpdir / 'country_slice.csv').write_text(
-            data['country_slice.csv'].replace('AF;AD', 'AF;AX'), encoding='utf-8')
-        with pytest.raises(ValueError):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             tg.check_referential_integrity()
+            (tmpdir / 'country_slice.csv').write_text(
+                data['country_slice.csv'].replace('AF;AD', 'AF;AX'), encoding='utf-8')
+            with pytest.raises(ValueError):
+                tg.check_referential_integrity()
