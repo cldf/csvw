@@ -519,6 +519,8 @@ class TableLike(Description):
         default=None,
         converter=lambda v: Schema.fromvalue(v))
     transformations = attr.ib(default=attr.Factory(list))
+    url = link_property()
+    _fname = attr.ib(default=None)  # The path of the metadata file.
 
     def __attrs_post_init__(self):
         if self.tableSchema:
@@ -527,11 +529,35 @@ class TableLike(Description):
     def get_column(self, spec):
         return self.tableSchema.get_column(spec) if self.tableSchema else None
 
+    @classmethod
+    def from_file(cls, fname):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        with json_open(str(fname)) as f:
+            data = json.load(f)
+        res = cls.fromvalue(data)
+        res._fname = fname
+        return res
+
+    def to_file(self, fname, omit_defaults=True):
+        if not isinstance(fname, pathlib.Path):
+            fname = pathlib.Path(fname)
+        data = self.asdict(omit_defaults=omit_defaults)
+        with json_open(str(fname), 'w') as f:
+            json.dump(data, f, indent=4, separators=(',', ': '))
+        return fname
+
+    @property
+    def base(self):
+        """
+        We only support data in the filesystem, thus we make sure `base` is a `pathlib.Path`.
+        """
+        return self._parent._fname.parent if self._parent else self._fname.parent
+
 
 @attr.s
 class Table(TableLike):
 
-    url = link_property()
     suppressOutput = attr.ib(default=False)
 
     def add_foreign_key(self, colref, ref_resource, ref_colref):
@@ -562,7 +588,7 @@ class Table(TableLike):
         dialect = self._get_dialect()
         non_virtual_cols = [c for c in self.tableSchema.columns if not c.virtual]
         if fname is DEFAULT:
-            fname = self.url.resolve(pathlib.Path(base) if base else self._parent.base)
+            fname = self.url.resolve(pathlib.Path(base) if base else self.base)
 
         rowcount = 0
         with UnicodeWriter(fname, dialect=dialect) as writer:
@@ -621,7 +647,7 @@ class Table(TableLike):
         :return: A generator of dicts or triples (fname, lineno, dict) if with_metadata
         """
         dialect = self._get_dialect()
-        fname = fname or self.url.resolve(self._parent.base)
+        fname = fname or self.url.resolve(self.base)
         colnames, virtualcols, requiredcols = [], [], set()
         for col in self.tableSchema.columns:
             if col.virtual:
@@ -697,35 +723,15 @@ class Table(TableLike):
 @attr.s
 class TableGroup(TableLike):
 
-    _fname = attr.ib(default=None)  # The path of the metadata file.
-    url = attr.ib(default=None)
     tables = attr.ib(
         repr=False,
         default=attr.Factory(list),
         converter=lambda v: [Table.fromvalue(vv) for vv in v])
 
-    @classmethod
-    def from_file(cls, fname):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
-        with json_open(str(fname)) as f:
-            data = json.load(f)
-        res = cls.fromvalue(data)
-        res._fname = fname
-        return res
-
     def __attrs_post_init__(self):
         TableLike.__attrs_post_init__(self)
         for table in self.tables:
             table._parent = self
-
-    def to_file(self, fname, omit_defaults=True):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
-        data = self.asdict(omit_defaults=omit_defaults)
-        with json_open(str(fname), 'w') as f:
-            json.dump(data, f, indent=4, separators=(',', ': '))
-        return fname
 
     def read(self):
         """
@@ -763,13 +769,6 @@ class TableGroup(TableLike):
     @property
     def tabledict(self):
         return {t.local_name: t for t in self.tables}
-
-    @property
-    def base(self):
-        """
-        We only support data in the filesystem, thus we make sure `base` is a `pathlib.Path`.
-        """
-        return self._fname.parent
 
     def check_referential_integrity(self, data=None, log=None):
         success = True

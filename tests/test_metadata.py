@@ -21,7 +21,6 @@ def test_URITemplate():
     assert ut != 1
 
 
-
 def test_Link():
     li = csvw.Link('abc.csv')
     assert li.resolve(None) == 'abc.csv'
@@ -48,6 +47,7 @@ class TestColumnAccess(object):
                 ]
             }
         })
+        # We support 3 ways of retrieving a column: by name, by title or by propertyUrl:
         assert t.get_column('col1').name == 'col1'
         assert t.get_column('http://example.org').name == 'col2'
         assert t.get_column('xyz').name is None
@@ -183,39 +183,71 @@ class TestLink(object):
         assert base == l.resolve(base).parent
 
 
+def _make_table_like(cls, tmpdir, data=None, metadata=None, mdname=None):
+    md = tmpdir / 'md'
+    if metadata is None:
+        shutil.copy(str(FIXTURES / mdname), str(md))
+    else:
+        md.write_text(metadata, encoding='utf-8')
+    if isinstance(data, dict):
+        for fname, content in data.items():
+            (tmpdir / fname).write_text(content, encoding='utf-8')
+    else:
+        data = data or (FIXTURES / 'csv.txt').read_text(encoding='utf-8')
+        with pathlib.Path(str(tmpdir / 'csv.txt')).open('w', encoding='utf-8', newline='') as f:
+            f.write(data)
+    return cls.from_file(str(md))
+
+
+def _load_json(path):
+    with json_open(str(path)) as f:
+        return json.load(f)
+
+
+class TestTable(object):
+
+    @staticmethod
+    def _make_table(tmpdir, data=None, metadata=None):
+        return _make_table_like(
+            csvw.Table, tmpdir, data=data, metadata=metadata, mdname='csv.txt-table-metadata.json')
+
+    def test_roundtrip(self, tmpdir):
+        t = self._make_table(tmpdir)
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) == \
+               _load_json(FIXTURES / 'csv.txt-table-metadata.json')
+        t.common_props['dc:title'] = 'the title'
+        t.aboutUrl = 'http://example.org/{ID}'
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) != \
+               _load_json(FIXTURES / 'csv.txt-table-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
+               _load_json(FIXTURES / 'csv.txt-table-metadata.json')
+
+    def test_read_write(self, tmpdir):
+        t = self._make_table(tmpdir)
+        items = list(t)
+        assert len(items) == 2
+        t.write(items, fname=str(tmpdir.join('out.csv')))
+        assert tmpdir.join('out.csv').read_text('utf-8-sig').strip() == \
+               FIXTURES.joinpath('csv.txt').read_text('utf-8-sig').strip()
+
+
 class TestTableGroup(object):
 
     @staticmethod
     def _make_tablegroup(tmpdir, data=None, metadata=None):
-        md = tmpdir / 'md'
-        if metadata is None:
-            shutil.copy(str(FIXTURES / 'csv.txt-metadata.json'), str(md))
-        else:
-            md.write_text(metadata, encoding='utf-8')
-        if isinstance(data, dict):
-            for fname, content in data.items():
-                (tmpdir / fname).write_text(content, encoding='utf-8')
-        else:
-            data = data or (FIXTURES / 'csv.txt').read_text(encoding='utf-8')
-            with pathlib.Path(str(tmpdir / 'csv.txt')).open('w', encoding='utf-8', newline='') as f:
-                f.write(data)
-        return csvw.TableGroup.from_file(str(md))
-
-    @staticmethod
-    def _load_json(path):
-        with json_open(str(path)) as f:
-            return json.load(f)
+        return _make_table_like(
+            csvw.TableGroup, tmpdir, data=data, metadata=metadata, mdname='csv.txt-metadata.json')
 
     def test_roundtrip(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
-        assert self._load_json(t.to_file(str(tmpdir / 'out'))) == \
-               self._load_json(FIXTURES / 'csv.txt-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) == \
+               _load_json(FIXTURES / 'csv.txt-metadata.json')
         t.common_props['dc:title'] = 'the title'
         t.aboutUrl = 'http://example.org/{ID}'
-        assert self._load_json(t.to_file(str(tmpdir / 'out'))) != \
-               self._load_json(FIXTURES / 'csv.txt-metadata.json')
-        assert self._load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
-               self._load_json(FIXTURES / 'csv.txt-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) != \
+               _load_json(FIXTURES / 'csv.txt-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
+               _load_json(FIXTURES / 'csv.txt-metadata.json')
 
     def test_copy(self, tmpdir):
         t = csvw.TableGroup.from_file(pathlib.Path(__file__).parent / 'csv.txt-metadata.json')
@@ -292,7 +324,7 @@ class TestTableGroup(object):
         tg = csvw.TableGroup()
         tg.common_props['dc:title'] = None
         tg.to_file(f)
-        assert 'dc:title' in self._load_json(f)
+        assert 'dc:title' in _load_json(f)
 
     def test_virtual_columns1(self, tmpdir):
         metadata = """\
