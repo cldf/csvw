@@ -8,6 +8,8 @@ from csvw.metadata import DATATYPES
 from csvw.db import Database
 from csvw._compat import pathlib
 
+FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
+
 
 @pytest.fixture
 def tg():
@@ -172,7 +174,7 @@ def test_many_to_many_self_referential(tg):
 
 
 def test_integration():
-    tg = TableGroup.from_file(pathlib.Path(__file__).parent / 'csv.txt-metadata.json')
+    tg = TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
     orig = tg.read()
     db = Database(tg)
     db.write_from_tg()

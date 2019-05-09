@@ -3,15 +3,16 @@ from __future__ import unicode_literals
 import json
 import shutil
 import collections
+import warnings
 
-from csvw._compat import pathlib, json_open
+from csvw._compat import pathlib, json_open, text_type
 
 import pytest
 
 import csvw
 from csvw.dsv import Dialect
 
-FIXTURES = pathlib.Path(__file__).parent
+FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
 
 def test_URITemplate():
@@ -19,7 +20,6 @@ def test_URITemplate():
     assert ut == csvw.URITemplate('http://example.org')
     assert ut != csvw.URITemplate('https://example.org')
     assert ut != 1
-
 
 
 def test_Link():
@@ -48,6 +48,7 @@ class TestColumnAccess(object):
                 ]
             }
         })
+        # We support 3 ways of retrieving a column: by name, by title or by propertyUrl:
         assert t.get_column('col1').name == 'col1'
         assert t.get_column('http://example.org').name == 'col2'
         assert t.get_column('xyz').name is None
@@ -183,42 +184,97 @@ class TestLink(object):
         assert base == l.resolve(base).parent
 
 
+def _make_table_like(cls, tmpdir, data=None, metadata=None, mdname=None):
+    md = tmpdir / 'md'
+    if metadata is None:
+        shutil.copy(str(FIXTURES / mdname), str(md))
+    else:
+        md.write_text(text_type(metadata), encoding='utf-8')
+    if isinstance(data, dict):
+        for fname, content in data.items():
+            (tmpdir / fname).write_text(content, encoding='utf-8')
+    else:
+        data = data or (FIXTURES / 'csv.txt').read_text(encoding='utf-8')
+        with pathlib.Path(str(tmpdir / 'csv.txt')).open('w', encoding='utf-8', newline='') as f:
+            f.write(data)
+    return cls.from_file(str(md))
+
+
+def _load_json(path):
+    with json_open(str(path)) as f:
+        return json.load(f)
+
+
+class TestTable(object):
+
+    @staticmethod
+    def _make_table(tmpdir, data=None, metadata=None):
+        return _make_table_like(
+            csvw.Table, tmpdir, data=data, metadata=metadata, mdname='csv.txt-table-metadata.json')
+
+    def test_roundtrip(self, tmpdir):
+        t = self._make_table(tmpdir)
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) == \
+               _load_json(FIXTURES / 'csv.txt-table-metadata.json')
+        t.common_props['dc:title'] = 'the title'
+        t.aboutUrl = 'http://example.org/{ID}'
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) != \
+               _load_json(FIXTURES / 'csv.txt-table-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
+               _load_json(FIXTURES / 'csv.txt-table-metadata.json')
+
+    def test_read_write(self, tmpdir):
+        t = self._make_table(tmpdir)
+        items = list(t)
+        assert len(items) == 2
+        t.write(items, fname=str(tmpdir.join('out.csv')))
+        assert tmpdir.join('out.csv').read_text('utf-8-sig').strip() == \
+               FIXTURES.joinpath('csv.txt').read_text('utf-8-sig').strip()
+
+    def test_iteritems_column_renaming(self, tmpdir):
+        t = self._make_table(tmpdir)
+        items = list(t)
+        # The metadata specifies "ID" as name of the first column:
+        assert 'ID' in items[0]
+
+        md = t.asdict()
+        md['tableSchema']['columns'][0]['name'] = 'xyz'
+        t = self._make_table(tmpdir, metadata=json.dumps(md))
+        items = list(t)
+        assert 'xyz' in items[0]
+
+        del md['tableSchema']['columns'][0]['name']
+        md['tableSchema']['columns'][0]['titles'] = 'abc'
+        t = self._make_table(tmpdir, metadata=json.dumps(md))
+        items = list(t)
+        assert 'abc' in items[0]
+
+
 class TestTableGroup(object):
 
     @staticmethod
     def _make_tablegroup(tmpdir, data=None, metadata=None):
-        md = tmpdir / 'md'
-        if metadata is None:
-            shutil.copy(str(FIXTURES / 'csv.txt-metadata.json'), str(md))
-        else:
-            md.write_text(metadata, encoding='utf-8')
-        if isinstance(data, dict):
-            for fname, content in data.items():
-                (tmpdir / fname).write_text(content, encoding='utf-8')
-        else:
-            data = data or (FIXTURES / 'csv.txt').read_text(encoding='utf-8')
-            with pathlib.Path(str(tmpdir / 'csv.txt')).open('w', encoding='utf-8', newline='') as f:
-                f.write(data)
-        return csvw.TableGroup.from_file(str(md))
+        return _make_table_like(
+            csvw.TableGroup, tmpdir, data=data, metadata=metadata, mdname='csv.txt-metadata.json')
 
-    @staticmethod
-    def _load_json(path):
-        with json_open(str(path)) as f:
-            return json.load(f)
+    def test_iteritems_column_renaming(self, tmpdir):
+        t = csvw.TableGroup.from_file(FIXTURES / 'test.tsv-metadata.json')
+        items = list(t.tables[0])
+        assert items[0] == {'precinct': '1', 'province': 'Hello', 'territory': 'world'}
 
     def test_roundtrip(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
-        assert self._load_json(t.to_file(str(tmpdir / 'out'))) == \
-               self._load_json(FIXTURES / 'csv.txt-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) == \
+               _load_json(FIXTURES / 'csv.txt-metadata.json')
         t.common_props['dc:title'] = 'the title'
         t.aboutUrl = 'http://example.org/{ID}'
-        assert self._load_json(t.to_file(str(tmpdir / 'out'))) != \
-               self._load_json(FIXTURES / 'csv.txt-metadata.json')
-        assert self._load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
-               self._load_json(FIXTURES / 'csv.txt-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'))) != \
+               _load_json(FIXTURES / 'csv.txt-metadata.json')
+        assert _load_json(t.to_file(str(tmpdir / 'out'), omit_defaults=False)) != \
+               _load_json(FIXTURES / 'csv.txt-metadata.json')
 
     def test_copy(self, tmpdir):
-        t = csvw.TableGroup.from_file(pathlib.Path(__file__).parent / 'csv.txt-metadata.json')
+        t = csvw.TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
         l = len(list(t.tabledict['csv.txt']))
         assert not tmpdir.join('csv.txt-metadata.json').check()
         t.copy(str(tmpdir))
@@ -239,43 +295,46 @@ class TestTableGroup(object):
                 assert r1 == r2
 
     def test_all(self, tmpdir):
-        t = self._make_tablegroup(tmpdir)
-        assert len(list(t.tables[0])) == 2
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            t = self._make_tablegroup(tmpdir)
+            assert len(list(t.tables[0])) == 2
 
-        # Test appication of null property on columns:
-        t = self._make_tablegroup(tmpdir)
-        t.tables[0].tableSchema.columns[1].null = ['line']
-        assert list(t.tables[0])[0]['_col.2'] is None
+            # Test appication of null property on columns:
+            t = self._make_tablegroup(tmpdir)
+            t.tables[0].tableSchema.columns[1].null = ['line']
+            assert list(t.tables[0])[0]['_col.2'] is None
 
-        t = self._make_tablegroup(tmpdir)
-        t.tables[0].tableSchema.columns[1].separator = 'n'
-        assert list(t.tables[0])[0]['_col.2'] == ['li', 'e']
+            t = self._make_tablegroup(tmpdir)
+            t.tables[0].tableSchema.columns[1].separator = 'n'
+            assert list(t.tables[0])[0]['_col.2'] == ['li', 'e']
 
-        t = self._make_tablegroup(tmpdir)
-        t.tables[0].tableSchema.columns[1].titles = csvw.NaturalLanguage('colname')
-        assert 'colname' in list(t.tables[0])[0]
+            t = self._make_tablegroup(tmpdir)
+            t.tables[0].tableSchema.columns[1].titles = csvw.NaturalLanguage('colname')
+            assert 'colname' in list(t.tables[0])[0]
 
-        t = self._make_tablegroup(tmpdir)
-        t.dialect.header = True
-        assert len(list(t.tables[0])) == 1
+            t = self._make_tablegroup(tmpdir)
+            t.dialect.header = True
+            assert len(list(t.tables[0])) == 1
 
-        t = self._make_tablegroup(tmpdir, 'edferd,f\r\nabc,')
-        t.tables[0].tableSchema.columns[0].required = True
-        t.tables[0].tableSchema.columns[0].null = ['abc']
-        with pytest.raises(ValueError, match=r'csv\.txt:2:1 ID: required column value is missing'):
-            list(t.tables[0])
+            t = self._make_tablegroup(tmpdir, 'edferd,f\r\nabc,')
+            t.tables[0].tableSchema.columns[0].required = True
+            t.tables[0].tableSchema.columns[0].null = ['abc']
+            with pytest.raises(
+                    ValueError, match=r'csv\.txt:2:1 ID: required column value is missing'):
+                list(t.tables[0])
 
-        t = self._make_tablegroup(tmpdir, ',')
-        t.tables[0].tableSchema.columns[0].required = True
-        with pytest.raises(ValueError):
-            list(t.tables[0])
+            t = self._make_tablegroup(tmpdir, ',')
+            t.tables[0].tableSchema.columns[0].required = True
+            with pytest.raises(ValueError):
+                list(t.tables[0])
 
-        t = self._make_tablegroup(tmpdir, 'abc,9\r\ndef,10')
-        items = list(t.tables[0])
-        assert items[0]['_col.2'] > items[1]['_col.2']
-        t.tables[0].tableSchema.columns[1].datatype.base = 'integer'
-        items = list(t.tables[0])
-        assert items[0]['_col.2'] < items[1]['_col.2']
+            t = self._make_tablegroup(tmpdir, 'abc,9\r\ndef,10')
+            items = list(t.tables[0])
+            assert items[0]['_col.2'] > items[1]['_col.2']
+            t.tables[0].tableSchema.columns[1].datatype.base = 'integer'
+            items = list(t.tables[0])
+            assert items[0]['_col.2'] < items[1]['_col.2']
 
     def test_separator(self, tmpdir):
         t = self._make_tablegroup(tmpdir, 'abc,')
@@ -292,7 +351,7 @@ class TestTableGroup(object):
         tg = csvw.TableGroup()
         tg.common_props['dc:title'] = None
         tg.to_file(f)
-        assert 'dc:title' in self._load_json(f)
+        assert 'dc:title' in _load_json(f)
 
     def test_virtual_columns1(self, tmpdir):
         metadata = """\
@@ -354,7 +413,10 @@ class TestTableGroup(object):
 
         tg = self._make_tablegroup(tmpdir, data='x,GID\n123', metadata=metadata)
         log = mocker.Mock()
-        res = list(tg.tables[0].iterdicts(log=log))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            res = list(tg.tables[0].iterdicts(log=log))
         assert log.warn.called
         assert len(res) == 0
 
@@ -630,8 +692,10 @@ AF,9799379"""}
   }]
 }"""
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
-        tg.check_referential_integrity()
-        (tmpdir / 'country_slice.csv').write_text(
-            data['country_slice.csv'].replace('AF;AD', 'AF;AX'), encoding='utf-8')
-        with pytest.raises(ValueError):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             tg.check_referential_integrity()
+            (tmpdir / 'country_slice.csv').write_text(
+                data['country_slice.csv'].replace('AF;AD', 'AF;AX'), encoding='utf-8')
+            with pytest.raises(ValueError):
+                tg.check_referential_integrity()

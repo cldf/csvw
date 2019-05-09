@@ -11,7 +11,7 @@ import pytest
 from csvw.dsv import (iterrows, UnicodeReader, UnicodeWriter, rewrite,
     Dialect, add_rows, filter_rows_as_dict)
 
-TESTDIR = pathlib.Path(__file__).parent
+TESTDIR = pathlib.Path(__file__).parent / 'fixtures'
 
 QUOTING = ['QUOTE_ALL', 'QUOTE_MINIMAL', 'QUOTE_NONNUMERIC', 'QUOTE_NONE']
 

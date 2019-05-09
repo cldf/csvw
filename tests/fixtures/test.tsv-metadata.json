@@ -1,0 +1,20 @@
+{
+	"@context": "http://www.w3.org/ns/csvw",
+	"tables": [{
+		"url": "test.tsv",
+		"dialect": {
+			"quoteChar": null,
+			"delimiter": "\t",
+			"trim": false,
+			"header": false,
+			"skipRows": 1
+		},
+		"tableSchema": {
+			"columns": [
+				{"name": "province"},
+				{"name": "territory"},
+				{"name": "precinct"}
+			]
+		}
+	}]
+}
