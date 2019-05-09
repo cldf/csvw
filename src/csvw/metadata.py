@@ -675,6 +675,9 @@ class Table(TableLike):
             # If columns in the data are ordered as in the spec, we can match values to
             # columns by index, rather than looking up columns by name.
             if header == colnames:
+                # Note that virtual columns are only allowed to come **after** regular ones,
+                # so we can simply zip the whole columns list, and silently ignore surplus
+                # virtual columns.
                 header_cols = list(zip(header, self.tableSchema.columns))
             else:
                 header_cols = [(h, self.tableSchema.get_column(h)) for h in header]

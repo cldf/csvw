@@ -58,6 +58,20 @@ $ pip install csvw
   with `commentPrefix`, even if the value was quoted.
 
 
+### Deviations from the CSVW specificaton
+
+While we use the CSVW specification as guideline, this package does not (and 
+probably never will) implement the full extent of this spec.
+
+- When CSV files with a header are read, columns are not matched in order with
+  column descriptions in the `tableSchema`, but instead are matched based on the
+  CSV column header and the column descriptions' `name` and `titles` atributes.
+  This allows for more flexibility, because columns in the CSV file may be
+  re-ordered without invalidating the metadata. A stricter matching can be forced
+  by specifying `"header": false` and `"skipRows": 1` in the table's dialect
+  description.
+
+
 ## See also
 
 - https://www.w3.org/2013/csvw/wiki/Main_Page
