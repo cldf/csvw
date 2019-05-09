@@ -534,6 +534,23 @@ class Table(TableLike):
     url = link_property()
     suppressOutput = attr.ib(default=False)
 
+    def add_foreign_key(self, colref, ref_resource, ref_colref):
+        """
+        Add a foreign key constraint to `tableSchema.foreignKeys`.
+
+        :param colref: Column reference for the foreign key.
+        :param ref_resource: Referenced table.
+        :param ref_colref: Column reference of the key in the referenced table.
+        """
+        colref = [colref] if not isinstance(colref, (tuple, list)) else colref
+        if not all(col in [c.name for c in self.tableSchema.columns] for col in colref):
+            raise ValueError('unknown column in foreignKey {0}'.format(colref))
+
+        self.tableSchema.foreignKeys.append(ForeignKey.fromdict({
+            'columnReference': colref,
+            'reference': {'resource': ref_resource, 'columnReference': ref_colref}
+        }))
+
     @property
     def local_name(self):
         return self.url.string

@@ -569,6 +569,19 @@ AF,1962,9989846"""}
             tg.check_referential_integrity()
         assert not tg.check_referential_integrity(log=mocker.Mock())
 
+        # Now remove the foreign keys:
+        tg.tabledict['country_slice.csv'].tableSchema.foreignKeys = []
+        tg.check_referential_integrity()
+
+        # And add them back in:
+        with pytest.raises(ValueError):
+            tg.tabledict['country_slice.csv'].add_foreign_key(
+                'zcountryRef', 'countries.csv', 'countryCode')
+        tg.tabledict['country_slice.csv'].add_foreign_key(
+            'countryRef', 'countries.csv', 'countryCode')
+        with pytest.raises(ValueError):
+            tg.check_referential_integrity()
+
         data['countries.csv'] = data['countries.csv'].replace('AF', 'AD')
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
         with pytest.raises(ValueError):
