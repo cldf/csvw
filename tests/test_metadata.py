@@ -230,6 +230,24 @@ class TestTable(object):
         assert tmpdir.join('out.csv').read_text('utf-8-sig').strip() == \
                FIXTURES.joinpath('csv.txt').read_text('utf-8-sig').strip()
 
+    def test_iteritems_column_renaming(self, tmpdir):
+        t = self._make_table(tmpdir)
+        items = list(t)
+        # The metadata specifies "ID" as name of the first column:
+        assert 'ID' in items[0]
+
+        md = t.asdict()
+        md['tableSchema']['columns'][0]['name'] = 'xyz'
+        t = self._make_table(tmpdir, metadata=json.dumps(md))
+        items = list(t)
+        assert 'xyz' in items[0]
+
+        del md['tableSchema']['columns'][0]['name']
+        md['tableSchema']['columns'][0]['titles'] = 'abc'
+        t = self._make_table(tmpdir, metadata=json.dumps(md))
+        items = list(t)
+        assert 'abc' in items[0]
+
 
 class TestTableGroup(object):
 
