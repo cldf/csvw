@@ -4,14 +4,14 @@ import json
 import shutil
 import collections
 
-from csvw._compat import pathlib, json_open
+from csvw._compat import pathlib, json_open, text_type
 
 import pytest
 
 import csvw
 from csvw.dsv import Dialect
 
-FIXTURES = pathlib.Path(__file__).parent
+FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
 
 def test_URITemplate():
@@ -188,7 +188,7 @@ def _make_table_like(cls, tmpdir, data=None, metadata=None, mdname=None):
     if metadata is None:
         shutil.copy(str(FIXTURES / mdname), str(md))
     else:
-        md.write_text(metadata, encoding='utf-8')
+        md.write_text(text_type(metadata), encoding='utf-8')
     if isinstance(data, dict):
         for fname, content in data.items():
             (tmpdir / fname).write_text(content, encoding='utf-8')
@@ -256,6 +256,11 @@ class TestTableGroup(object):
         return _make_table_like(
             csvw.TableGroup, tmpdir, data=data, metadata=metadata, mdname='csv.txt-metadata.json')
 
+    def test_iteritems_column_renaming(self, tmpdir):
+        t = csvw.TableGroup.from_file(FIXTURES / 'test.tsv-metadata.json')
+        items = list(t.tables[0])
+        assert items[0] == {'precinct': '1', 'province': 'Hello', 'territory': 'world'}
+
     def test_roundtrip(self, tmpdir):
         t = self._make_tablegroup(tmpdir)
         assert _load_json(t.to_file(str(tmpdir / 'out'))) == \
@@ -268,7 +273,7 @@ class TestTableGroup(object):
                _load_json(FIXTURES / 'csv.txt-metadata.json')
 
     def test_copy(self, tmpdir):
-        t = csvw.TableGroup.from_file(pathlib.Path(__file__).parent / 'csv.txt-metadata.json')
+        t = csvw.TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
         l = len(list(t.tabledict['csv.txt']))
         assert not tmpdir.join('csv.txt-metadata.json').check()
         t.copy(str(tmpdir))
