@@ -1,6 +1,20 @@
 """
 SQLite as alternative storage backend for a TableGroup's data.
 
+For the most part, translation of a TableGroup's tableSchema to SQL works as expected:
+- each table is converted to a "CREATE TABLE" statement
+- each column specifies a column in the corresponding "CREATE TABLE" statement
+- foreignKey constraints are added according to the corresponding tableSchema property.
+
+List-valued foreignKeys are supported as follows: For each pair of tables related through a
+list-valued foreign key, an association table is created. To make it possible to distinguish
+multiple list-valued foreign keys between the same two tables, the association table has
+a column `context`, which stores the name of the foreign key column from which a row in the
+assocation table was created.
+
+SQL table and column names can be customized by passing a translator callable when instantiating
+a `Database`.
+
 SQLite support has the following limitations:
 - lists as values (as specified via the separator attribute of a Column) are only supported for
   string types.
@@ -302,13 +316,21 @@ class Database(object):
         return self._connection
 
     def select_many_to_many(self, db, table, context):
-        cu = db.execute(
-            "SELECT {0}, group_concat({1}, ' ') FROM {2} WHERE context = '{3}' GROUP BY {0}".format(
-                quoted(table.columns[0].name),
-                quoted(table.columns[1].name),
+        if context is not None:
+            context_sql = "WHERE context = '{0}'".format(context)
+        else:
+            context_sql = ''
+        sql = """\
+SELECT {0}, group_concat({1}, ' '), group_concat(COALESCE(context, ''), '||')
+FROM {2} {3} GROUP BY {0}""".format(
+                quoted(self.translate(table.name, table.columns[0].name)),
+                quoted(self.translate(table.name, table.columns[1].name)),
                 quoted(self.translate(table.name)),
-                context))
-        return {r[0]: r[1].split() for r in cu.fetchall()}
+                context_sql)
+        cu = db.execute(sql)
+        return {
+            r[0]: [(k, v) if context is None else k
+                   for k, v in zip(r[1].split(), r[2].split('||'))] for r in cu.fetchall()}
 
     def read(self):
         res = defaultdict(list)
@@ -358,6 +380,10 @@ class Database(object):
     def association_table_context(self, table, column, fkey):
         """
         Context for association tables is created calling this method.
+
+        Note: If a custom value for the `context` column is created by overwriting this method,
+        `select_many_to_many` must be adapted accordingly, to make sure the custom
+        context is retrieved when reading the data from the db.
 
         :param table:
         :param column:

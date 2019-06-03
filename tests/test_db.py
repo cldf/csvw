@@ -129,16 +129,29 @@ def test_foreign_keys(tg, translate):
     assert 'vv' in db.read()['data'][0]
 
 
-def test_many_to_many(tg):
+@pytest.fixture
+def tg_with_foreign_keys(tg):
     tg.tables[0].tableSchema.columns.append(Column.fromvalue({'name': 'v'}))
     tg.tables[0].tableSchema.primaryKey = ['v']
     tg.tables.append(Table.fromvalue({
         'url': 'ref',
         'tableSchema': {
-            'columns': [{'name': 'pk'}, {'name': 'ref', 'separator': ';'}],
+            # Define two list-valued foreign key:
+            'columns': [
+                {'name': 'pk'},
+                {'name': 'ref1', 'separator': ';'},
+                {'name': 'ref2', 'separator': ';'},
+            ],
             'foreignKeys': [
                 {
-                    'columnReference': 'ref',
+                    'columnReference': 'ref1',
+                    'reference': {
+                        'resource': 'data',
+                        'columnReference': 'v',
+                    }
+                },
+                {
+                    'columnReference': 'ref2',
                     'reference': {
                         'resource': 'data',
                         'columnReference': 'v',
@@ -148,11 +161,37 @@ def test_many_to_many(tg):
             'primaryKey': ['pk']
         }
     }))
-    db = Database(tg)
+    return tg
+
+
+def test_many_to_many(tg_with_foreign_keys):
+    db = Database(tg_with_foreign_keys)
     with pytest.raises(sqlite3.IntegrityError):
-        db.write(ref=[{'pk': '1', 'ref': ['y']}], data=[{'v': 'x'}])
-    db.write(ref=[{'pk': '1', 'ref': ['y', 'x']}], data=[{'v': 'x'}, {'v': 'y'}])
-    assert db.read()['ref'][0]['ref'] == ['y', 'x']
+        # Foreign key violates referential integrity:
+        db.write(ref=[{'pk': '1', 'ref1': ['y']}], data=[{'v': 'x'}])
+
+    db.write(ref=[{'pk': '1', 'ref1': ['y', 'x']}], data=[{'v': 'x'}, {'v': 'y'}])
+    res = db.read()['ref'][0]
+    # Associations between the same pair of tables are grouped by foreign key column:
+    assert res['ref1'] == ['y', 'x']
+    assert res['ref2'] == []
+
+
+def test_many_to_many_no_context(tg_with_foreign_keys):
+    class DatabaseWithoutContext(Database):
+        def association_table_context(self, table, column, fkey):
+            return fkey, '1234'
+
+        def select_many_to_many(self, db, table, context):
+            # Tables with at most one foreign key to another table can use the context
+            # to store something else.
+            return Database.select_many_to_many(self, db, table, None)
+
+    db = DatabaseWithoutContext(tg_with_foreign_keys)
+    db.write(ref=[{'pk': '1', 'ref1': ['y', 'x']}], data=[{'v': 'x'}, {'v': 'y'}])
+    res = db.read()['ref'][0]
+    # The context will then be returned for **each** foreign key column!
+    assert res['ref2'] == [('y', '1234'), ('x', '1234')]
 
 
 def test_many_to_many_self_referential(tg):

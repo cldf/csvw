@@ -17,7 +17,6 @@ import operator
 import warnings
 import itertools
 import collections
-import warnings
 
 from ._compat import (pathlib, text_type, iteritems, itervalues, zip,
     py3_unicode_to_str, json_open, urljoin)
