@@ -579,7 +579,7 @@ class Table(TableLike):
 
     @property
     def local_name(self):
-        return self.url.string
+        return self.url.string if self.url else None
 
     def _get_dialect(self):
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()

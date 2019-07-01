@@ -249,6 +249,21 @@ class TestTable(object):
         items = list(t)
         assert 'abc' in items[0]
 
+    def test_unspecified_column_in_table_without_url(self, tmpdir):
+        t = csvw.Table.fromvalue({
+            "@context": ["http://www.w3.org/ns/csvw", {"@language": "en"}],
+            "tableSchema": {
+                "columns": [
+                    {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
+                    {"datatype": "string"}
+                ]
+            }
+        })
+        data = tmpdir.join('test.csv')
+        data.write_text('ID,b,c\nabc,2,3', encoding='utf8')
+        with pytest.warns(UserWarning):
+            list(t.iterdicts(fname=str(data)))
+
 
 class TestTableGroup(object):
 
