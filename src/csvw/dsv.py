@@ -11,9 +11,6 @@ The original implementations were largely copied from
 
 .. seealso:: http://en.wikipedia.org/wiki/Delimiter-separated_values
 """
-
-from __future__ import unicode_literals
-
 import io
 import csv
 import codecs
@@ -21,8 +18,7 @@ import shutil
 import tempfile
 import collections
 
-from ._compat import (pathlib, PY2, string_types, binary_type, text_type,
-    BytesIO, StringIO, iteritems, Iterator, map, zip, fix_kw)
+from ._compat import pathlib
 
 from . import utils
 from .dsv_dialects import Dialect
@@ -34,39 +30,9 @@ __all__ = [
     'rewrite', 'add_rows', 'filter_rows_as_dict',
 ]
 
-EIGHT_BIT_CLEAN = {'utf-8', 'ascii'}
-
 
 def normalize_encoding(encoding):
     return codecs.lookup(encoding).name
-
-
-if PY2:  # pragma: no cover
-    class UTF8Recoder(object):
-        """Iterator that reads an encoded stream and reencodes the input to UTF-8."""
-
-        def __init__(self, f, encoding):
-            self.reader = codecs.getreader(encoding)(f)
-
-        def __iter__(self):
-            return self
-
-        def next(self):
-            return self.reader.next().encode('utf-8')
-
-    class UTF8Encoder(object):
-
-        def __init__(self, f):
-            self.f = f
-
-        def __iter__(self):
-            return self
-
-        def next(self):
-            return next(self.f).encode('utf-8')
-
-        def close(self):
-            self.f.close()
 
 
 class UnicodeWriter(object):
@@ -83,14 +49,13 @@ class UnicodeWriter(object):
             self.kw = kw
             if dialect:
                 self.kw['dialect'] = dialect
-        self.kw = fix_kw(self.kw)
         self.encoding = normalize_encoding(self.encoding)
         self.escapechar = self.kw.get('escapechar')
         if self.escapechar and self.kw.get('quoting') != csv.QUOTE_NONE:
             # work around https://bugs.python.org/issue12178
             # (csv.writer doesn't escape escapechar while csv.reader expects it)
             def _escapedoubled(row,
-                               _type=string_types,
+                               _type=str,
                                _old=self.escapechar,
                                _new=2 * self.escapechar):
                 return [s.replace(_old, _new) if isinstance(s, _type) else s for s in row]
@@ -99,66 +64,39 @@ class UnicodeWriter(object):
                 return row
         self._escapedoubled = _escapedoubled
         self._close = False
-        # encoding for self.writer.writerow: differs from target encoding
-        # where we need to encode to utf-8 first to feed into the (byte-based)
-        # PY2 csv.writer to recode into a non-8bit clean target encoding
-        self._writer_encoding = self.encoding
 
     def __enter__(self):
-        if isinstance(self.f, (string_types, pathlib.Path)):
+        if isinstance(self.f, (str, pathlib.Path)):
             if isinstance(self.f, pathlib.Path):
-                self.f = self.f.as_posix()
+                self.f = str(self.f)
 
-            if PY2:  # pragma: no cover
-                self.f = open(self.f, 'wb')
-            else:
-                self.f = io.open(self.f, 'wt', encoding=self.encoding, newline='')
+            self.f = io.open(self.f, 'wt', encoding=self.encoding, newline='')
             self._close = True
         elif self.f is None:
-            self.f = BytesIO() if PY2 else StringIO(newline='')
+            self.f = io.StringIO(newline='')
 
-        if PY2 and self.encoding not in EIGHT_BIT_CLEAN:  # pragma: no cover
-            self._buffer = io.BytesIO()
-            self.writer = csv.writer(self._buffer, **self.kw)
-            self._writer_encoding = 'utf-8'
-            self._encoder = codecs.getincrementalencoder(self.encoding)()
-        else:
-            self._buffer = None
-            self.writer = csv.writer(self.f, **self.kw)
+        self.writer = csv.writer(self.f, **self.kw)
         return self
 
     def read(self):
         if hasattr(self.f, 'seek'):
             self.f.seek(0)
         if hasattr(self.f, 'read'):
-            res = self.f.read()
-            if not PY2:
-                res = res.encode('utf-8')
-            return res
+            return self.f.read().encode('utf-8')
 
     def __exit__(self, type, value, traceback):
         if self._close:
             self.f.close()
 
     def writerow(self, row):
-        row = self._escapedoubled(row)
-        if PY2:  # pragma: no cover
-            row = [('%s' % s).encode(self._writer_encoding) if s is not None else s for s in row]
-            self.writer.writerow(row)
-            if self._buffer is not None:
-                line = unicode(self._buffer.getvalue(), 'utf-8')  # noqa: F821
-                self._buffer.seek(0)
-                self._buffer.truncate()  # truncate(0) would prepend zero-bytes
-                self.f.write(self._encoder.encode(line))
-        else:
-            self.writer.writerow(row)
+        self.writer.writerow(self._escapedoubled(row))
 
     def writerows(self, rows):
         for row in rows:
             self.writerow(row)
 
 
-class UnicodeReader(Iterator):
+class UnicodeReader(object):
     """Read Unicode data from a csv file."""
 
     def __init__(self, f, dialect=None, **kw):
@@ -174,7 +112,6 @@ class UnicodeReader(Iterator):
             self.kw = kw
             if dialect:
                 self.kw['dialect'] = dialect
-        self.kw = fix_kw(self.kw)
         self._close = False
         self.comments = []
 
@@ -191,33 +128,16 @@ class UnicodeReader(Iterator):
         self._reader_encoding = self.encoding
 
     def __enter__(self):
-        if isinstance(self.f, (string_types, pathlib.Path)):
+        if isinstance(self.f, (str, pathlib.Path)):
             if isinstance(self.f, pathlib.Path):
-                self.f = self.f.as_posix()
+                self.f = str(self.f)
 
-            if PY2:  # pragma: no cover
-                if self.encoding in EIGHT_BIT_CLEAN:
-                    self.f = open(self.f, mode='rU')
-                else:
-                    f = io.open(self.f, encoding=self.encoding, newline=self.newline or '')
-                    self.f = UTF8Encoder(f)
-                    self._reader_encoding = 'utf-8'
-            else:
-                self.f = io.open(
-                    self.f, mode='rt', encoding=self.encoding, newline=self.newline or '')
+            self.f = io.open(self.f, mode='rt', encoding=self.encoding, newline=self.newline or '')
             self._close = True
-        elif hasattr(self.f, 'read'):
-            if PY2:  # pragma: no cover
-                # NOTE: this also affects newline handling
-                # (otherwise this could be omitted for 8bit-clean encodings)
-                self.f = UTF8Recoder(self.f, self.encoding)
-                self._reader_encoding = 'utf-8'
-        else:
+        elif not hasattr(self.f, 'read'):
             lines = []
             for line in self.f:
-                if PY2 and isinstance(line, text_type):  # pragma: no cover
-                    line = line.encode('utf-8' if self.encoding == 'utf-8-sig' else self.encoding)
-                elif not PY2 and isinstance(line, binary_type):
+                if isinstance(line, bytes):
                     line = line.decode(self.encoding)
                 lines.append(line)
             self.f = lines
@@ -228,7 +148,7 @@ class UnicodeReader(Iterator):
     def _next_row(self):
         self.lineno += 1
         return [
-            s if isinstance(s, text_type) else s.decode(self._reader_encoding)
+            s if isinstance(s, str) else s.decode(self._reader_encoding)
             for s in next(self.reader)]
 
     def __next__(self):
@@ -327,7 +247,7 @@ class NamedTupleReader(UnicodeDictReader):
         for name in self.fieldnames:
             d.setdefault(name, None)
         return self.cls(
-            **{self._normalize_fieldname(k): v for k, v in iteritems(d) if k in self.fieldnames})
+            **{self._normalize_fieldname(k): v for k, v in d.items() if k in self.fieldnames})
 
 
 def iterrows(lines_or_file, namedtuples=False, dicts=False, encoding='utf-8', **kw):
@@ -350,7 +270,7 @@ def iterrows(lines_or_file, namedtuples=False, dicts=False, encoding='utf-8', **
     else:
         _reader = UnicodeReader
 
-    with _reader(lines_or_file, encoding=encoding, **fix_kw(kw)) as r:
+    with _reader(lines_or_file, encoding=encoding, **kw) as r:
         for item in r:
             yield item
 
@@ -367,7 +287,7 @@ def rewrite(fname, visitor, **kw):
     :param kw: Keyword parameters are passed through to csv.reader/csv.writer.
     """
     if not isinstance(fname, pathlib.Path):
-        assert isinstance(fname, string_types)
+        assert isinstance(fname, str)
         fname = pathlib.Path(fname)
 
     assert fname.is_file()
@@ -388,7 +308,7 @@ def add_rows(fname, *rows):
         tmp = pathlib.Path(fp.name)
 
     if not isinstance(fname, pathlib.Path):
-        assert isinstance(fname, string_types)
+        assert isinstance(fname, str)
         fname = pathlib.Path(fname)
     with UnicodeWriter(tmp) as writer:
         if fname.exists():

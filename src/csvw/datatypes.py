@@ -1,21 +1,17 @@
-# datatypes.py
-
 """Datatypes
 
 We model the hierarchy of basic datatypes using derived classes.
 
 .. seealso:: http://w3c.github.io/csvw/metadata/#datatypes
 """
-
-from __future__ import unicode_literals
-
 import re
 import json as _json
 import decimal as _decimal
 import binascii
 import datetime
+import base64
 
-from ._compat import to_binary, iteritems, py3_unicode_to_str, base64_decodebytes
+from ._compat import to_binary, py3_unicode_to_str
 
 import isodate
 import rfc3986
@@ -106,7 +102,7 @@ class base64Binary(anyAtomicType):
         except UnicodeEncodeError:
             base64Binary.value_error(v[:10])
         try:
-            base64_decodebytes(res)
+            base64.decodebytes(res)
         except Exception:
             raise ValueError('invalid base64 encoding')
         return res
@@ -192,7 +188,7 @@ class dateTime(anyAtomicType):
             # then (in case we got less precision) right-padding with 0 to get a
             # 6-digit number.
             comps['microsecond'] = comps['microsecond'][:6].ljust(6, '0')
-        res = cls(**{k: int(v) for k, v in iteritems(comps)})
+        res = cls(**{k: int(v) for k, v in comps.items()})
         if tz_marker:
             # Let dateutils take care of parsing the timezone info:
             res = res.replace(tzinfo=dateutil.parser.parse(v).tzinfo)
@@ -303,7 +299,7 @@ class decimal(anyAtomicType):
         '-INF': '-Infinity',
         'NaN': 'NaN',
     }
-    _reverse_special = {v: k for k, v in iteritems(_special)}
+    _reverse_special = {v: k for k, v in _special.items()}
 
     # TODO:
     # - use babel.numbers.NumberPattern.apply to format a value!

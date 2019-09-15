@@ -1,5 +1,3 @@
-# setup.py
-
 from setuptools import setup, find_packages
 
 
@@ -18,7 +16,7 @@ setup(
     package_dir={'': 'src'},
     zip_safe=False,
     platforms='any',
-    python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*',
+    python_requires='>=3.4',
     install_requires=[
         'attrs>=18.1',
         'isodate',
@@ -37,8 +35,6 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',

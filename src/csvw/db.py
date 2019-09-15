@@ -21,7 +21,6 @@ SQLite support has the following limitations:
 - regex constraints on strings (as specified via a Datatype's format attribute) are not enforced
   by the database.
 """
-from __future__ import unicode_literals
 import sqlite3
 from contextlib import closing
 from collections import OrderedDict, defaultdict

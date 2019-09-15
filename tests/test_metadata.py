@@ -1,11 +1,9 @@
-from __future__ import unicode_literals
-
 import json
 import shutil
 import collections
 import warnings
 
-from csvw._compat import pathlib, json_open, text_type
+from csvw._compat import pathlib, json_open
 
 import pytest
 
@@ -189,7 +187,7 @@ def _make_table_like(cls, tmpdir, data=None, metadata=None, mdname=None):
     if metadata is None:
         shutil.copy(str(FIXTURES / mdname), str(md))
     else:
-        md.write_text(text_type(metadata), encoding='utf-8')
+        md.write_text(str(metadata), encoding='utf-8')
     if isinstance(data, dict):
         for fname, content in data.items():
             (tmpdir / fname).write_text(content, encoding='utf-8')

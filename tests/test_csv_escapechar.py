@@ -2,17 +2,12 @@
 
 import io
 import csv
-import sys
 
 import pytest
 
 
-if sys.version_info < (3,):
-    def make_io():
-        return io.BytesIO()
-else:
-    def make_io():
-        return io.StringIO(newline='')
+def make_io():
+    return io.StringIO(newline='')
 
 
 def roundtrip(value, dialect):

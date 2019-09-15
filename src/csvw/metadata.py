@@ -8,8 +8,6 @@ This module implements (partially) the W3C recommendation
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
 
-from __future__ import unicode_literals
-
 import re
 import json
 import shutil
@@ -17,9 +15,9 @@ import operator
 import warnings
 import itertools
 import collections
+from urllib.parse import urljoin
 
-from ._compat import (pathlib, text_type, iteritems, itervalues, zip,
-    py3_unicode_to_str, json_open, urljoin)
+from ._compat import pathlib, py3_unicode_to_str, json_open
 
 import attr
 import uritemplate
@@ -136,12 +134,12 @@ class NaturalLanguage(collections.OrderedDict):
     def __init__(self, value):
         super(NaturalLanguage, self).__init__()
         self.value = value
-        if isinstance(self.value, text_type):
+        if isinstance(self.value, str):
             self[None] = [self.value]
         elif isinstance(self.value, (list, tuple)):
             self[None] = list(self.value)
         elif isinstance(self.value, dict):
-            for k, v in iteritems(self.value):
+            for k, v in self.value.items():
                 if not isinstance(v, (list, tuple)):
                     v = [v]
                 self[k] = v
@@ -155,7 +153,7 @@ class NaturalLanguage(collections.OrderedDict):
             return self[None]
         return collections.OrderedDict(
             ('und' if k is None else k, v[0] if len(v) == 1 else v)
-            for k, v in iteritems(self))
+            for k, v in self.items())
 
     def add(self, string, lang=None):
         if lang not in self:
@@ -163,7 +161,7 @@ class NaturalLanguage(collections.OrderedDict):
         self[lang].append(string)
 
     def __unicode__(self):
-        return self.getfirst() or next(itervalues(self))[0]
+        return self.getfirst() or next(iter(self.values()))[0]
 
     def getfirst(self, lang=None):
         return self.get(lang, [None])[0]
@@ -182,7 +180,7 @@ class DescriptionBase(object):
     @staticmethod
     def partition_properties(d):
         c, a, dd = {}, {}, {}
-        for k, v in iteritems(d or {}):
+        for k, v in (d or {}).items():
             if k.startswith('@'):
                 a[k[1:]] = v
             elif ':' in k:
@@ -204,13 +202,13 @@ class DescriptionBase(object):
                 return [_asdict_single(vv) for vv in v]
             return _asdict_single(v)
 
-        for k, v in sorted(iteritems(self.at_props)):
+        for k, v in sorted(self.at_props.items()):
             yield '@' + k, _asdict_multiple(v)
 
-        for k, v in sorted(iteritems(self.common_props)):
+        for k, v in sorted(self.common_props.items()):
             yield k, _asdict_multiple(v)
 
-        for k, v in iteritems(utils.attr_asdict(self, omit_defaults=omit_defaults)):
+        for k, v in utils.attr_asdict(self, omit_defaults=omit_defaults).items():
             if k not in ('common_props', 'at_props'):
                 yield k, _asdict_multiple(v)
 
@@ -255,7 +253,7 @@ class Datatype(DescriptionBase):
         instance.
         :return: An instance of `cls`
         """
-        if isinstance(v, text_type):
+        if isinstance(v, str):
             return cls(base=v)
 
         if isinstance(v, dict):

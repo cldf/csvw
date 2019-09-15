@@ -1,7 +1,3 @@
-from __future__ import unicode_literals
-
-from ._compat import text_type, iteritems
-
 import attr
 
 from . import utils
@@ -26,7 +22,7 @@ class Dialect(object):
 
     encoding = attr.ib(
         default='utf-8',
-        validator=attr.validators.instance_of(text_type))
+        validator=attr.validators.instance_of(str))
 
     lineTerminators = attr.ib(
         default=attr.Factory(lambda: ['\r\n', '\n']))
@@ -45,7 +41,7 @@ class Dialect(object):
 
     commentPrefix = attr.ib(
         default='#',
-        validator=attr.validators.optional(attr.validators.instance_of(text_type)))
+        validator=attr.validators.optional(attr.validators.instance_of(str)))
 
     header = attr.ib(
         default=True,
@@ -57,7 +53,7 @@ class Dialect(object):
 
     delimiter = attr.ib(
         default=',',
-        validator=attr.validators.instance_of(text_type))
+        validator=attr.validators.instance_of(str))
 
     skipColumns = attr.ib(
         default=0,
@@ -78,7 +74,7 @@ class Dialect(object):
 
     def updated(self, **kw):
         res = self.__class__(**attr.asdict(self))
-        for k, v in iteritems(kw):
+        for k, v in kw.items():
             setattr(res, k, v)
         return res
 
@@ -89,7 +85,7 @@ class Dialect(object):
     @utils.lazyproperty
     def line_terminators(self):
         return [self.lineTerminators] \
-            if isinstance(self.lineTerminators, text_type) else self.lineTerminators
+            if isinstance(self.lineTerminators, str) else self.lineTerminators
 
     @utils.lazyproperty
     def trimmer(self):

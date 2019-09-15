@@ -1,10 +1,9 @@
-from __future__ import unicode_literals
-
+import io
 import csv
 import shutil
 from collections import OrderedDict
 
-from csvw._compat import pathlib, BytesIO, StringIO, to_binary, PY2
+from csvw._compat import pathlib
 
 import pytest
 
@@ -21,19 +20,15 @@ def test_iterrows_invalid():
         next(iterrows([], namedtuples=True, dicts=True))
 
 
-def test_iterrows(py2, rows=[['first', 'line'], ['s\u00fccond', 'l\u00e4ne\u00df']]):
+def test_iterrows(rows=[['first', 'line'], ['s\u00fccond', 'l\u00e4ne\u00df']]):
     assert list(iterrows(TESTDIR / 'csv.txt')) == rows
 
     lines = ['\t'.join(r) for r in rows]
     assert list(iterrows(lines, delimiter='\t')) == rows
 
     for lt in ['\n', '\r\n', '\r']:
-        if py2:  # pragma: no cover
-            # Simulate file opened in binary mode:
-            fp = BytesIO(to_binary(lt).join(l.encode('utf-8') for l in lines))
-        else:
-            # Simulate file opened in text mode:
-            fp = StringIO(lt.join(lines), newline='')
+        # Simulate file opened in text mode:
+        fp = io.StringIO(lt.join(lines), newline='')
         assert list(iterrows(fp, delimiter='\t')) == rows
 
     assert list(iterrows(lines, dicts=True, delimiter='\t')) == [OrderedDict(zip(*rows))]
@@ -105,8 +100,7 @@ def test_iterrows_with_bom(tmpdir):
     filepath = tmpdir / 'spam.csv'
     filepath.write_text('\ufeffcol1,col2\nval1,val2', encoding='utf8')
     rows = list(iterrows(str(filepath)))
-    if not PY2:
-        assert rows[0] == ['col1', 'col2']
+    assert rows[0] == ['col1', 'col2']
 
 
 def test_rewrite(tmpdir, tsvname=str(TESTDIR / 'tsv.txt'), csvname=str(TESTDIR / 'csv.txt')):
