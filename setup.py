@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='1.5.7.dev0',
+    version='1.6.0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
@@ -39,5 +39,6 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ],
 )
