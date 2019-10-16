@@ -816,7 +816,7 @@ class TableGroup(TableLike):
                                 continue
                             elif colref not in seen:
                                 log_or_raise(
-                                    '{0}:{1} Key {2} not found in table {3}'.format(
+                                    '{0}:{1} Key `{2}` not found in table {3}'.format(
                                         fname,
                                         lineno,
                                         colref,
