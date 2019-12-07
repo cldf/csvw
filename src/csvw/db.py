@@ -395,13 +395,13 @@ FROM {2} {3} GROUP BY {0}""".format(
     def write_from_tg(self, _force=False, _exists_ok=False):
         return self.write(_force=_force, _exists_ok=_exists_ok, **self.tg.read())
 
-    def write(self, _force=False, _exists_ok=False, **items):
+    def write(self, *, force=False, _exists_ok=False, **items):
         """
         Creates a db file with the core schema.
 
         :param force: If `True` an existing db file will be overwritten.
         """
-        if self.fname and self.fname.exists():
+        if self.fname and self.fname.exists() and not force:
             raise ValueError('db file already exists, use force=True to overwrite')
 
         with self.connection() as db:

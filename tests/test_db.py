@@ -219,3 +219,15 @@ def test_integration():
     db.write_from_tg()
     for table, items in db.read().items():
         assert items == orig[table]
+
+
+def test_write_file_exists(tmpdir):
+    target = pathlib.Path(str(tmpdir / 'db.sqlite3'))
+    target.touch(exist_ok=False)
+    mtime = target.stat().st_mtime
+    tg = TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
+    db = Database(tg, fname=target)
+    with pytest.raises(ValueError, match=r'already exists'):
+        db.write()
+    db.write(force=True)
+    assert target.stat().st_mtime > mtime
