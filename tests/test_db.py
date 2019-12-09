@@ -1,3 +1,4 @@
+import time
 import sqlite3
 from datetime import date
 
@@ -229,5 +230,7 @@ def test_write_file_exists(tmpdir):
     db = Database(tg, fname=target)
     with pytest.raises(ValueError, match=r'already exists'):
         db.write()
+    time.sleep(0.1)
     db.write(force=True)
     assert target.stat().st_mtime > mtime
+
