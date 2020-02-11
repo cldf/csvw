@@ -177,6 +177,12 @@ class TableSpec(object):
 
     @classmethod
     def from_table_metadata(cls, table):
+        """
+        Create a `TableSpec` from the schema description of a `csvw.metadata.Table`.
+
+        :param table: `csvw.metadata.Table` instance.
+        :return: `TableSpec` instance.
+        """
         spec = cls(name=table.local_name, primary_key=table.tableSchema.primaryKey)
         list_valued = {c.header for c in table.tableSchema.columns if c.separator}
         for fk in table.tableSchema.foreignKeys:
@@ -184,8 +190,13 @@ class TableSpec(object):
             if not fk.reference.schemaReference:
                 if len(fk.columnReference) == 1 and fk.columnReference[0] in list_valued:
                     # List-valued foreign keys are turned into a many-to-many relation!
-                    assert len(fk.reference.columnReference) == 1
-                    assert spec.primary_key and len(spec.primary_key) == 1
+                    assert len(fk.reference.columnReference) == 1, \
+                        'Composite key {0} in table {1} referenced'.format(
+                            fk.reference.columnReference,
+                            fk.reference.resource)
+                    assert spec.primary_key and len(spec.primary_key) == 1, \
+                        'Table {0} with list-valued foreign must have non-composite ' \
+                        'primary key'.format(spec.name)
                     spec.many_to_many[fk.columnReference[0]] = TableSpec.association_table(
                         spec.name,
                         spec.primary_key[0],
