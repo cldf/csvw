@@ -1,5 +1,6 @@
 import time
 import sqlite3
+import warnings
 from datetime import date
 
 import pytest
@@ -102,6 +103,27 @@ def test_file(tmpdir, tg):
     assert fname.check()
     with pytest.raises(ValueError):
         db.write()
+
+
+def test_extra_columns(tmpdir):
+    tmpdir.join('md.json').write_text("""{
+    "@context": ["http://www.w3.org/ns/csvw",{"@language": "en"}],
+    "dialect": {"header": true,"encoding": "utf-8-sig"},
+    "tables": [
+        {"url": "csv.txt","tableSchema": {"columns": [{"name": "ID", "datatype": "string"}]}}
+    ]
+}
+""", encoding='utf8')
+    tmpdir.join('csv.txt').write_text('ID,extra\n1,ex', encoding='utf8')
+    tg = TableGroup.from_file(str(tmpdir.join('md.json')))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+
+        db = Database(tg, fname=str(tmpdir.join('test.sqlite')))
+        with pytest.raises(ValueError):
+            db.write_from_tg()
+        db.write_from_tg(_force=True, _skip_extra=True)
 
 
 def test_foreign_keys(tg, translate):
