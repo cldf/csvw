@@ -19,7 +19,7 @@ CSV on the Web
 
 ## Installation
 
-This package runs under Python 2.7, and 3.4+, use pip to install:
+This package runs under Python >=3.4, use pip to install:
 
 ```bash
 $ pip install csvw
