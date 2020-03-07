@@ -41,14 +41,14 @@ _varchar = '([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
 _varname = re.compile('(' + _varchar + '([.]?' + _varchar + ')*)$')
 
 
-def log_or_raise(msg, log=None, level='warn', exception_cls=ValueError):
+def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
     if log:
         getattr(log, level)(msg)
     else:
         raise exception_cls(msg)
 
 
-def nolog(level='warn'):
+def nolog(level='warning'):
     from types import MethodType
 
     class Log(object):

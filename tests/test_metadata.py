@@ -430,7 +430,7 @@ class TestTableGroup(object):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             res = list(tg.tables[0].iterdicts(log=log))
-        assert log.warn.called
+        assert log.warning.called
         assert len(res) == 0
 
     def test_write(self, tmpdir):
@@ -553,7 +553,7 @@ GID,On Street,Species,Trim Cycle,Inventory Date
         log = mocker.Mock()
         l = list(tg.tables[0].iterdicts(log=log))
         assert len(l) == 1
-        assert log.warn.call_count == 1
+        assert log.warning.call_count == 1
         for fname, lineno, row in tg.tables[0].iterdicts(log=log, with_metadata=True):
             assert lineno == 3
             break
