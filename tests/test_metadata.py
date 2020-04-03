@@ -1,3 +1,4 @@
+import io
 import json
 import shutil
 import collections
@@ -712,3 +713,30 @@ AF,9799379"""}
                 data['country_slice.csv'].replace('AF;AD', 'AF;AX'), encoding='utf-8')
             with pytest.raises(ValueError):
                 tg.check_referential_integrity()
+
+    def test_remote_schema(self, mocker, tmpdir):
+        schema = """
+        {
+            "columns": [
+                {"name": "countryCode", "datatype": "string"},
+                {"name": "name", "datatype": "string"}
+            ]
+        }
+        """
+        mocker.patch(
+            'csvw.metadata.urlopen', mocker.Mock(return_value=io.BytesIO(schema.encode('utf8'))))
+        tg = self._make_tablegroup(
+            tmpdir,
+            metadata="""{
+  "@context": "http://www.w3.org/ns/csvw",
+  "tables": [{
+    "url": "countries.csv",
+    "tableSchema": "url"
+  }]
+}""")
+        assert len(tg.tables[0].tableSchema.columns) == 2
+
+        # The remote content has been inlined:
+        out = pathlib.Path(str(tmpdir)) / 'md.json'
+        tg.to_file(out)
+        assert 'countryCode' in out.read_text(encoding='utf8')

@@ -16,6 +16,7 @@ import warnings
 import itertools
 import collections
 from urllib.parse import urljoin
+from urllib.request import urlopen
 
 from ._compat import pathlib, py3_unicode_to_str, json_open
 
@@ -488,6 +489,13 @@ class Schema(Description):
                 raise ValueError('no non-virtual column allowed after virtual columns')
             col._parent = self
             col._number = i + 1
+
+    @classmethod
+    def fromvalue(cls, v):
+        if isinstance(v, str):
+            # The schema is referenced with a URL
+            v = json.loads(urlopen(v).read().decode('utf8'))
+        return cls(**cls.partition_properties(v))
 
     @property
     def columndict(self):
