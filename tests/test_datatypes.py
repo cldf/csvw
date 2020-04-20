@@ -43,8 +43,8 @@ def test_number():
         t.validate(12)
     
     t = Datatype.fromvalue({'base': 'nonNegativeInteger'})
-    v = t.parse('-3')
     with pytest.raises(ValueError):
+        v = t.parse('-3')
         t.validate(v)
 
 
