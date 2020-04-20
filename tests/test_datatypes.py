@@ -41,6 +41,12 @@ def test_number():
     assert t.formatted(v) == '3'
     with pytest.raises(ValueError):
         t.validate(12)
+    
+    t = Datatype.fromvalue({'base': 'nonNegativeInteger'})
+    v = t.parse('-3')
+    with pytest.raises(ValueError):
+        t.validate(v)
+
 
     t = Datatype.fromvalue(
         {'base': 'decimal', 'format': {'groupChar': '.', 'decimalChar': ','}})
@@ -54,6 +60,7 @@ def test_number():
     t = Datatype.fromvalue('float')
     with pytest.raises(ValueError):
         t.parse(' ')
+    
 
 
 def test_object():
