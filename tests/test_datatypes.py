@@ -45,8 +45,6 @@ def test_number():
     t = Datatype.fromvalue({'base': 'nonNegativeInteger'})
     with pytest.raises(ValueError):
         v = t.parse('-3')
-        t.validate(v)
-
 
     t = Datatype.fromvalue(
         {'base': 'decimal', 'format': {'groupChar': '.', 'decimalChar': ','}})
