@@ -352,6 +352,18 @@ class integer(decimal):
 
 
 @register
+class nonNegativeInteger(integer):
+
+    name = 'nonNegativeInteger'
+
+    @staticmethod
+    def to_python(v, **kw):
+        ret = int(integer.to_python(v, **kw))
+        if ret < 0:
+            raise ValueError("nonNegativeIntegers can't be negative, but got ", v)
+
+
+@register
 class _float(anyAtomicType):
 
     name = 'float'
