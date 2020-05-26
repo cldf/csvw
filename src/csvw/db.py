@@ -234,6 +234,9 @@ class TableSpec(object):
             foreign_keys=[
                 ([afk.name], atable, [apk]),
                 ([bfk.name], btable, [bpk]),
+            ],
+            primary_key=[
+                afk.name, bfk.name
             ]
         )
 
