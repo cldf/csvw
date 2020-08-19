@@ -173,6 +173,13 @@ class TestColumn(object):
         assert col2.datatype.format
 
 
+def test_Schema():
+    from csvw.metadata import Schema
+
+    with pytest.warns(UserWarning, match='uplicate'):
+        Schema.fromvalue({'columns': [{'name': 'a'}, {'name': 'a'}]})
+
+
 class TestLink(object):
 
     def test_link(self):

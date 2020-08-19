@@ -16,6 +16,7 @@ import csv
 import codecs
 import shutil
 import tempfile
+import warnings
 import collections
 
 from ._compat import pathlib
@@ -204,6 +205,9 @@ class UnicodeDictReader(UnicodeReader):
             except StopIteration:
                 pass
         self.line_num = self.reader.line_num
+        if self._fieldnames:
+            if len(set(self._fieldnames)) != len(self._fieldnames):
+                warnings.warn('Duplicate column names!')
         return self._fieldnames
 
     def __next__(self):

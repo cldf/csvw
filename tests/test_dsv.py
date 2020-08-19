@@ -7,7 +7,7 @@ from csvw._compat import pathlib
 
 import pytest
 
-from csvw.dsv import (iterrows, UnicodeReader, UnicodeWriter, rewrite,
+from csvw.dsv import (iterrows, UnicodeReader, UnicodeDictReader, UnicodeWriter, rewrite,
     Dialect, add_rows, filter_rows_as_dict)
 
 TESTDIR = pathlib.Path(__file__).parent / 'fixtures'
@@ -164,3 +164,9 @@ def test_iterrows_dialect(lines=['1,x,y', ' #1,a,b', '#1,1,2', ',,', '1,3, 4\t '
 ])
 def test_iterrows_quote_comment(dialect, lines, expected):
     assert list(iterrows(lines, dialect=dialect)) == expected
+
+
+def test_UnicodeDictReader_duplicate_columns():
+    with pytest.warns(UserWarning, match='uplicate'):
+        with UnicodeDictReader(['a,a,b', '1,2,3']) as r:
+            assert list(r)[0]['a'] == '2'  # last value wins

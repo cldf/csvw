@@ -481,12 +481,16 @@ class Schema(Description):
     rowTitles = attr.ib(default=attr.Factory(list))
 
     def __attrs_post_init__(self):
-        virtual = False
+        virtual, seen = False, set()
         for i, col in enumerate(self.columns):
             if col.virtual:  # first virtual column sets the flag
                 virtual = True
             elif virtual:  # non-virtual column after virtual column!
                 raise ValueError('no non-virtual column allowed after virtual columns')
+            if not virtual:
+                if col.header in seen:
+                    warnings.warn('Duplicate column name!')
+                seen.add(col.header)
             col._parent = self
             col._number = i + 1
 
