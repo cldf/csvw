@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='1.8.0',
+    version='1.8.1.dev0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
@@ -27,7 +27,7 @@ setup(
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
-        'test': ['mock', 'pytest>=4.3', 'pytest-mock', 'pytest-cov'],
+        'test': ['mock', 'pytest>=5', 'pytest-mock', 'pytest-cov'],
     },
     classifiers=[
         'Development Status :: 4 - Beta',
