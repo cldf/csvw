@@ -676,8 +676,7 @@ AF,Afghanistan""",
 countryRef,year,population
 AF;AD,9616353
 AF,9799379"""}
-        metadata = """\
-{
+        metadata = """{
   "@context": "http://www.w3.org/ns/csvw",
   "tables": [{
     "url": "countries.csv",
@@ -697,14 +696,8 @@ AF,9799379"""}
       ],
       "foreignKeys": [{
         "columnReference": "countryRef",
-        "reference": {
-          "resource": "countries.csv",
-          "columnReference": "countryCode"
-        }
-      }]
-    }
-  }]
-}"""
+        "reference": {"resource": "countries.csv", "columnReference": "countryCode"}
+    }]}}]}"""
         tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -716,12 +709,9 @@ AF,9799379"""}
 
     def test_remote_schema(self, mocker, tmpdir):
         schema = """
-        {
-            "columns": [
-                {"name": "countryCode", "datatype": "string"},
-                {"name": "name", "datatype": "string"}
-            ]
-        }
+        {"columns": [
+            {"name": "countryCode", "datatype": "string"},
+            {"name": "name", "datatype": "string"}]}
         """
         mocker.patch(
             'csvw.metadata.urlopen', mocker.Mock(return_value=io.BytesIO(schema.encode('utf8'))))
@@ -729,14 +719,34 @@ AF,9799379"""}
             tmpdir,
             metadata="""{
   "@context": "http://www.w3.org/ns/csvw",
-  "tables": [{
-    "url": "countries.csv",
-    "tableSchema": "url"
-  }]
-}""")
+  "tables": [{"url": "countries.csv", "tableSchema": "url"}]}""")
         assert len(tg.tables[0].tableSchema.columns) == 2
 
         # The remote content has been inlined:
         out = pathlib.Path(str(tmpdir)) / 'md.json'
         tg.to_file(out)
         assert 'countryCode' in out.read_text(encoding='utf8')
+
+    def test_missing_data(self, tmpdir):
+        data = {  # The last row is missing one column
+            "countries.csv": """\
+countryCode,name,custom
+AD,Andorra,a
+AF,Afghanistan"""
+        }
+        metadata = """{
+  "@context": "http://www.w3.org/ns/csvw",
+  "tables": [{
+    "url": "countries.csv",
+    "tableSchema": {
+      "columns": [
+        {"name": "countryCode", "datatype": "string"},
+        {"name": "name", "datatype": "string"},
+        {"name": "custom", "datatype": "string"}
+      ],
+      "primaryKey": "countryCode"
+    }}]}"""
+        tg = self._make_tablegroup(tmpdir, data=data, metadata=metadata)
+        rows = list(tg.tables[0])
+        assert 'custom' in rows[0]
+        assert 'custom' in rows[1]

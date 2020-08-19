@@ -720,6 +720,10 @@ class Table(TableLike):
                             log=log)
                         error = True
 
+                # Augment result with regular columns not provided in the data:
+                for key in colnames:
+                    res.setdefault(key, None)
+
                 # Augment result with virtual columns:
                 for key, valueUrl in virtualcols:
                     res[key] = valueUrl.expand(**res)
