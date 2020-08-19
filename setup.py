@@ -27,7 +27,13 @@ setup(
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
-        'test': ['mock', 'pytest>=5', 'pytest-mock', 'pytest-cov'],
+        'test': [
+            'mock',
+            'pytest>=5; python_version >= "3.5"',
+            'pytest>=4.6; python_version < "3.5"',
+            'pytest-mock',
+            'pytest-cov',
+        ],
     },
     classifiers=[
         'Development Status :: 4 - Beta',
