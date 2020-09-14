@@ -1,10 +1,11 @@
 import io
 import json
 import shutil
+import pathlib
 import collections
 import warnings
 
-from csvw._compat import pathlib, json_open
+from csvw.metadata import json_open
 
 import pytest
 

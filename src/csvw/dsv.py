@@ -15,11 +15,10 @@ import io
 import csv
 import codecs
 import shutil
+import pathlib
 import tempfile
 import warnings
 import collections
-
-from ._compat import pathlib
 
 from . import utils
 from .dsv_dialects import Dialect

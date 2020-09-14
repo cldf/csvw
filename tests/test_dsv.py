@@ -1,9 +1,8 @@
 import io
 import csv
 import shutil
+import pathlib
 from collections import OrderedDict
-
-from csvw._compat import pathlib
 
 import pytest
 

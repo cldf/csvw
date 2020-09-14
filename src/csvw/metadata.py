@@ -7,18 +7,17 @@ This module implements (partially) the W3C recommendation
 
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
-
+import io
 import re
 import json
 import shutil
+import pathlib
 import operator
 import warnings
 import itertools
 import collections
 from urllib.parse import urljoin
 from urllib.request import urlopen
-
-from ._compat import pathlib, py3_unicode_to_str, json_open
 
 import attr
 import uritemplate
@@ -38,7 +37,7 @@ __all__ = [
 
 
 # Level 1 variable names according to https://tools.ietf.org/html/rfc6570#section-2.3:
-_varchar = '([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
+_varchar = r'([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
 _varname = re.compile('(' + _varchar + '([.]?' + _varchar + ')*)$')
 
 
@@ -47,6 +46,11 @@ def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
         getattr(log, level)(msg)
     else:
         raise exception_cls(msg)
+
+
+def json_open(filename, mode='r', encoding='utf-8'):
+    assert encoding == 'utf-8'
+    return io.open(filename, mode, encoding=encoding)
 
 
 def nolog(level='warning'):
@@ -85,7 +89,6 @@ def uri_template_property():
         converter=lambda v: v if v is None else URITemplate(v))
 
 
-@py3_unicode_to_str
 class Link(object):
     """
 
@@ -95,7 +98,7 @@ class Link(object):
     def __init__(self, string):
         self.string = string
 
-    def __unicode__(self):
+    def __str__(self):
         return self.string
 
     def asdict(self, omit_defaults=True):
@@ -125,7 +128,6 @@ def link_property():
         converter=lambda v: v if v is None else Link(v))
 
 
-@py3_unicode_to_str
 class NaturalLanguage(collections.OrderedDict):
     """
 
@@ -161,7 +163,7 @@ class NaturalLanguage(collections.OrderedDict):
             self[lang] = []
         self[lang].append(string)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.getfirst() or next(iter(self.values()))[0]
 
     def getfirst(self, lang=None):
@@ -362,7 +364,6 @@ class Description(DescriptionBase):
 
 
 @attr.s
-@py3_unicode_to_str
 class Column(Description):
 
     name = attr.ib(
@@ -376,7 +377,7 @@ class Column(Description):
     virtual = attr.ib(default=False)
     _number = attr.ib(default=None, repr=False)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name or \
             (self.titles and self.titles.getfirst()) or \
             '_col.{}'.format(self._number)

@@ -20,7 +20,6 @@ setup(
     install_requires=[
         'attrs>=18.1',
         'isodate',
-        'pathlib2; python_version < "3.5"',
         'python-dateutil',
         'rfc3986',
         'uritemplate>=3.0.0',
@@ -28,9 +27,7 @@ setup(
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
         'test': [
-            'mock',
-            'pytest>=5; python_version >= "3.5"',
-            'pytest>=4.6; python_version < "3.5"',
+            'pytest>=5',
             'pytest-mock',
             'pytest-cov',
         ],

@@ -21,6 +21,7 @@ SQLite support has the following limitations:
 - regex constraints on strings (as specified via a Datatype's format attribute) are not enforced
   by the database.
 """
+import pathlib
 import sqlite3
 from contextlib import closing
 from collections import OrderedDict, defaultdict
@@ -30,7 +31,6 @@ from decimal import Decimal
 import attr
 
 from csvw.datatypes import DATATYPES
-from csvw._compat import pathlib
 
 
 def identity(s):
