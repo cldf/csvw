@@ -11,8 +11,6 @@ import binascii
 import datetime
 import base64
 
-from ._compat import to_binary, py3_unicode_to_str
-
 import isodate
 import rfc3986
 import dateutil.parser
@@ -27,8 +25,13 @@ def register(cls):
     return cls
 
 
+def to_binary(s, encoding='utf-8'):
+    if not isinstance(s, bytes):
+        return bytes(s, encoding=encoding)
+    return s  # pragma: no cover
+
+
 @register
-@py3_unicode_to_str
 class anyAtomicType(object):
 
     name = 'any'
@@ -39,7 +42,7 @@ class anyAtomicType(object):
     def value_error(cls, v):
         raise ValueError('invalid lexical value for {}: {}'.format(cls.name, v))
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
     @staticmethod
@@ -571,6 +574,6 @@ def dt_format_and_regex(fmt, no_date=False):
     # microseconds.
     if msecs:
         format += '.{microsecond:.%s}' % msecs
-        regex += '\.(?P<microsecond>[0-9]{1,%s})' % msecs
+        regex += r'\.(?P<microsecond>[0-9]{1,%s})' % msecs
 
     return {'regex': re.compile(regex), 'fmt': format, 'tz_marker': tz_marker}

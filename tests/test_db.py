@@ -1,4 +1,5 @@
 import time
+import pathlib
 import sqlite3
 import warnings
 from datetime import date
@@ -8,7 +9,6 @@ import pytest
 from csvw import TableGroup, Column, Table, ForeignKey
 from csvw.metadata import DATATYPES
 from csvw.db import Database
-from csvw._compat import pathlib
 
 FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
