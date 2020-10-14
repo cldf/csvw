@@ -598,6 +598,15 @@ class Table(TableLike):
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()
 
     def write(self, items, fname=DEFAULT, base=None, _zipped=False):
+        """
+        Write row items to a CSV file according to the table schema.
+
+        :param items: Iterator of `dict`s storing the data per row.
+        :param fname: Name of the file to which to write the data.
+        :param base: Base directory relative to which to interpret table urls.
+        :param _zipped: Flag signaling whether the resulting data file should be zipped.
+        :return: The CSV content if `fname==None` else the number of rows written.
+        """
         dialect = self._get_dialect()
         non_virtual_cols = [c for c in self.tableSchema.columns if not c.virtual]
         if fname is DEFAULT:
@@ -656,6 +665,9 @@ class Table(TableLike):
         the column names of the table and whose values are the values in the corresponding
         table cells, or for virtual columns (which have no values) the valueUrl for that
         column. This includes columns not specified in the table specification.
+
+        Note: If the resolved data filename does not exist - but there is a zip file of the form
+        `fname+'.zip'`, we try to read the data from this file after unzipping.
 
         :param log: Logger object (default None) The object that reports parsing errors.\
         If none is given, parsing errors raise ValueError instead.
