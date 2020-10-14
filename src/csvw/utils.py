@@ -122,7 +122,7 @@ def slug(s, remove_whitespace=True, lowercase=True):
         res = res.lower()
     for c in string.punctuation:
         res = res.replace(c, '')
-    res = re.sub('\s+', '' if remove_whitespace else ' ', res)
+    res = re.sub(r'\s+', '' if remove_whitespace else ' ', res)
     res = res.encode('ascii', 'ignore').decode('ascii')
     assert re.match('[ A-Za-z0-9]*$', res)
     return res

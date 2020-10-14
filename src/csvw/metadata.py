@@ -12,9 +12,11 @@ import re
 import json
 import shutil
 import pathlib
+import zipfile
 import operator
 import warnings
 import itertools
+import contextlib
 import collections
 from urllib.parse import urljoin
 from urllib.request import urlopen
@@ -595,7 +597,7 @@ class Table(TableLike):
     def _get_dialect(self):
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()
 
-    def write(self, items, fname=DEFAULT, base=None):
+    def write(self, items, fname=DEFAULT, base=None, _zipped=False):
         dialect = self._get_dialect()
         non_virtual_cols = [c for c in self.tableSchema.columns if not c.virtual]
         if fname is DEFAULT:
@@ -617,6 +619,11 @@ class Table(TableLike):
                 writer.writerow(row)
             if fname is None:
                 return writer.read()
+        if fname and _zipped:
+            fpath = pathlib.Path(fname)
+            with zipfile.ZipFile(str(fpath.parent.joinpath(fpath.name + '.zip')), 'w') as zipf:
+                zipf.write(str(fpath))
+            fpath.unlink()
         return rowcount
 
     def check_primary_key(self, log=None, items=None):
@@ -669,7 +676,18 @@ class Table(TableLike):
             if col.required:
                 requiredcols.add(col.header)
 
-        with UnicodeReaderWithLineNumber(fname, dialect=dialect) as reader:
+        with contextlib.ExitStack() as stack:
+            handle = fname
+            fpath = pathlib.Path(fname)
+            if not fpath.exists():
+                zipfname = fpath.parent.joinpath(fpath.name + '.zip')
+                if zipfname.exists():
+                    zipf = stack.enter_context(zipfile.ZipFile(str(zipfname)))
+                    handle = io.TextIOWrapper(
+                        zipf.open([n for n in zipf.namelist() if n.endswith(fpath.name)][0]),
+                        encoding=dialect.encoding)
+
+            reader = stack.enter_context(UnicodeReaderWithLineNumber(handle, dialect=dialect))
             reader = iter(reader)
 
             # If the data file has a header row, this row overrides the header as
@@ -759,7 +777,7 @@ class TableGroup(TableLike):
         """
         return {tname: list(t.iterdicts()) for tname, t in self.tabledict.items()}
 
-    def write(self, fname, **items):
+    def write(self, fname, _zipped=False, **items):
         """
         Write a TableGroup's data and metadata to files.
 
@@ -769,7 +787,7 @@ class TableGroup(TableLike):
         """
         fname = pathlib.Path(fname)
         for tname, rows in items.items():
-            self.tabledict[tname].write(rows, base=fname.parent)
+            self.tabledict[tname].write(rows, base=fname.parent, _zipped=_zipped)
         self.to_file(fname)
 
     def copy(self, dest):
