@@ -758,3 +758,21 @@ AF,Afghanistan"""
         rows = list(tg.tables[0])
         assert 'custom' in rows[0]
         assert 'custom' in rows[1]
+
+
+def test_zip_support(tmpdir):
+    tg = csvw.TableGroup.from_file(FIXTURES / 'zipped-metadata.json')
+    res = list(tg.tables[0])
+    assert len(res) == 2
+    assert res[0]['ID'] == 'abc'
+
+    out = pathlib.Path(str(tmpdir)) / 'zipped.csv'
+    tg.tables[0].write(res, fname=out, _zipped=True)
+    assert not out.exists() and out.parent.joinpath(out.name + '.zip').exists()
+
+    shutil.copy(str(FIXTURES / 'zipped-metadata.json'), str(out.parent))
+    tg = csvw.TableGroup.from_file(out.parent / 'zipped-metadata.json')
+    assert res == list(tg.tables[0])
+
+    tg.write(out.parent / 'md.json', _zipped=True, **{'zipped.csv': res + res})
+    assert len(list(csvw.TableGroup.from_file(out.parent / 'md.json').tables[0])) == 4

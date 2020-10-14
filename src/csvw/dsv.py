@@ -154,7 +154,7 @@ class UnicodeReader(object):
     def __next__(self):
         row = self._next_row()
         if self.dialect:
-            while (row and self.dialect.commentPrefix and
+            while (row and self.dialect.commentPrefix and  # noqa: W504
                    row[0].startswith(self.dialect.commentPrefix)) or \
                     ((not row or set(row) == {''}) and self.dialect.skipBlankRows) or \
                     (self.lineno < self.dialect.skipRows):

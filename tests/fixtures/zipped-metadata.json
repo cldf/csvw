@@ -1,0 +1,15 @@
+{
+  "@context": ["http://www.w3.org/ns/csvw", {"@language": "en"}],
+  "dialect": {"encoding": "utf-8-sig"},
+  "tables": [
+    {
+      "url": "zipped.csv",
+      "tableSchema": {
+        "columns": [
+          {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
+          {"name":  "Value", "datatype": "string"}
+        ]
+      }
+    }
+  ]
+}
