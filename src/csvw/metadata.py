@@ -835,7 +835,12 @@ class TableGroup(TableLike):
             if not fk.reference.schemaReference]
         # FIXME: We only support Foreign Key references between tables!
         fkeys = sorted(fkeys, key=lambda x: (x[0].local_name, x[1], x[2].local_name))
-        for table, grp in itertools.groupby(fkeys, lambda x: x[0]):
+        # Grouping by local_name of tables - even though we'd like to have the table objects
+        # around, too. This it to prevent going down the rabbit hole of comparing table objects
+        # for equality, when comparison of the string names is enough.
+        for _, grp in itertools.groupby(fkeys, lambda x: x[0].local_name):
+            grp = list(grp)
+            table = grp[0][0]
             t_fkeys = [(key, [(child, ref) for _, _, child, ref in kgrp])
                        for key, kgrp in itertools.groupby(grp, lambda x: x[1])]
             get_seen = [(operator.itemgetter(*key), set()) for key, _ in t_fkeys]

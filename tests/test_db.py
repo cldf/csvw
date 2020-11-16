@@ -162,7 +162,7 @@ def tg_with_foreign_keys(tg):
             # Define two list-valued foreign key:
             'columns': [
                 {'name': 'pk'},
-                {'name': 'ref1', 'separator': ';'},
+                {'name': 'ref1', 'separator': ';', 'null': ['NA']},
                 {'name': 'ref2', 'separator': ';'},
             ],
             'foreignKeys': [

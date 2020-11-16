@@ -444,7 +444,9 @@ FROM {2} {3} GROUP BY {0}""".format(
                             assert pk
                             at = t.many_to_many[k]
                             atkey = tuple([at.name] + [c.name for c in at.columns])
-                            for vv in v:
+                            # We distinguish None - meaning NULL - and [] - meaning no items - as
+                            # values of list-valued columns.
+                            for vv in (v or []):
                                 fkey, context = self.association_table_context(t, k, vv)
                                 refs[atkey].append((pk, fkey, context))
                         else:

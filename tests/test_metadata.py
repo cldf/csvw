@@ -683,6 +683,7 @@ AF,Afghanistan""",
             "country_slice.csv": """\
 countryRef,year,population
 AF;AD,9616353
+NA,12345
 AF,9799379"""}
         metadata = """{
   "@context": "http://www.w3.org/ns/csvw",
@@ -699,7 +700,7 @@ AF,9799379"""}
     "url": "country_slice.csv",
     "tableSchema": {
       "columns": [
-        {"name": "countryRef", "separator": ";"},
+        {"name": "countryRef", "separator": ";", "null": ["NA"]},
         {"name": "population", "datatype": "integer"}
       ],
       "foreignKeys": [{
