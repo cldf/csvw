@@ -1,6 +1,6 @@
 # csvw
 
-[![Build Status](https://travis-ci.org/cldf/csvw.svg?branch=master)](https://travis-ci.org/cldf/csvw)
+![Build Status](https://github.com/cldf/csvw/workflows/Python%20package/badge.svg)
 [![codecov](https://codecov.io/gh/cldf/csvw/branch/master/graph/badge.svg)](https://codecov.io/gh/cldf/csvw)
 [![Requirements Status](https://requires.io/github/cldf/csvw/requirements.svg?branch=master)](https://requires.io/github/cldf/csvw/requirements/?branch=master)
 [![PyPI](https://img.shields.io/pypi/v/csvw.svg)](https://pypi.org/project/csvw)
