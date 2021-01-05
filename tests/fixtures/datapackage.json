@@ -1,0 +1,45 @@
+{
+  "profile": "data-package",
+  "resources": [
+    {
+      "path": "frictionless-data.csv",
+      "stats": {
+        "hash": "b36e8c21563ab32645052c11510bddb7",
+        "bytes": 131,
+        "fields": 3,
+        "rows": 9
+      },
+      "control": {
+        "newline": ""
+      },
+      "encoding": "utf-8",
+      "dialect": {
+        "delimiter": "|"
+      },
+      "schema": {
+        "fields": [
+          {
+            "name": "Year",
+            "type": "integer"
+          },
+          {
+            "name": "Location",
+            "type": "string"
+          },
+          {
+            "name": "Value",
+            "type": "integer"
+          }
+        ]
+      },
+      "name": "test",
+      "profile": "tabular-data-resource",
+      "scheme": "file",
+      "format": "csv",
+      "hashing": "md5",
+      "compression": "no",
+      "compressionPath": "",
+      "query": {}
+    }
+  ]
+}
