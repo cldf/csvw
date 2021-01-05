@@ -12,6 +12,83 @@ import json
 import pathlib
 
 
+def convert_column_spec(spec):
+    """
+    https://specs.frictionlessdata.io/table-schema/#field-descriptors
+
+    :param spec:
+    :return:
+    """
+    # name, title, description, type, format
+    # type string -> format: default, email, uri, binary (base64), uuid
+    # type number -> additional props decimalChar, groupChar, bareNumber
+    # format: integer -> add. props: bareNumber
+    # format: boolean -> add. props: trueValues, falseValues
+    # format: object / arrays, JSON
+    # format: date
+    # time
+    # datetime
+    # year
+    # yearmonth
+    # duration
+    # geopoint
+    # geojson
+
+    # rdfType -> propertyUrl
+
+    # constraints: required, unique, minLength, maxLength, minimum, maximum, pattern, enum
+
+    res = dict(name=spec['name'])
+    if ('type' in spec) and spec['type'] in [
+        'string', 'number', 'integer', 'boolean', 'date', 'time'
+    ]:
+        res['datatype'] = spec['type']
+    return res
+
+
+def convert_foreignKey(rsc_name, fk, resource_map):
+    """
+    https://specs.frictionlessdata.io/table-schema/#foreign-keys
+    """
+    # Rename "fields" to "columnReference" and map resource name to url (resolving self-referential
+    # foreign keys).
+    return dict(
+        columnReference=fk['fields'],
+        reference=dict(
+            columnReference=fk['reference']['fields'],
+            resource=resource_map[fk['reference']['resource'] or rsc_name],
+        )
+    )
+
+
+def convert_table_schema(rsc_name, schema, resource_map):
+    """
+    :param rsc_name: `name` property of the resource the schema belongs to. Needed to resolve \
+    self-referential foreign keys.
+    :param schema: `dict` parsed from JSON representing a frictionless Table Schema object.
+    :param resource_map: `dict` mapping resource names to resource paths, needed to convert foreign\
+    key constraints.
+    :return: `dict` suitable for instantiating a `csvw.metadata.Schema` object.
+    """
+    res = dict(
+        columns=[convert_column_spec(f) for f in schema['fields']],
+    )
+    for prop in [
+        ('missingValues', 'null'),
+        'primaryKey',
+        'foreignKeys',
+    ]:
+        if isinstance(prop, tuple):
+            prop, toprop = prop
+        else:
+            toprop = prop
+        if prop in schema:
+            res[toprop] = schema[prop]
+            if prop == 'foreignKeys':
+                res[toprop] = [convert_foreignKey(fk, rsc_name, resource_map) for fk in res[toprop]]
+    return res
+
+
 class DataPackage:
     def __init__(self, spec, directory=None):
         if isinstance(spec, dict):
@@ -34,7 +111,9 @@ class DataPackage:
         md['dc:source'] = json.dumps(self.json)
 
         # Data Resource metadata:
-        for rsc in self.json.get('resources', []):
+        resources = [rsc for rsc in self.json.get('resources', []) if 'path' in rsc]
+        resource_map = {rsc['name']: rsc['path'] for rsc in resources}
+        for rsc in resources:
             schema = rsc.get('schema')
             if schema and \
                     rsc.get('profile') == 'tabular-data-resource' and \
@@ -44,10 +123,7 @@ class DataPackage:
                 md.setdefault('tables', [])
                 table = dict(
                     url=rsc['path'],
-                    tableSchema=dict(columns=[
-                        {"name": f['name'], "datatype": f['type']}
-                        for f in schema['fields']
-                    ]),
+                    tableSchema=convert_table_schema(rsc['name'], schema, resource_map),
                     dialect=dict(),
                 )
                 if rsc.get('dialect', {}).get('delimiter'):
