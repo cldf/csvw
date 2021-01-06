@@ -10,6 +10,7 @@ CSVW metadata to "raw" CSV tables.
 """
 import json
 import pathlib
+import urllib.parse
 
 
 def convert_column_spec(spec):
@@ -37,12 +38,27 @@ def convert_column_spec(spec):
     # rdfType -> propertyUrl
 
     # constraints: required, unique, minLength, maxLength, minimum, maximum, pattern, enum
+    from csvw import Column
 
-    res = dict(name=spec['name'])
+    name, titles = spec['name'], [spec.get('title')]
+    try:
+        Column(name=name)
+    except ValueError:
+        titles.append(name)
+        name = urllib.parse.quote(name)
+        Column(name=name)
+
+    titles = [t for t in titles if t]
+
+    res = dict(name=name)
     if ('type' in spec) and spec['type'] in [
         'string', 'number', 'integer', 'boolean', 'date', 'time'
     ]:
         res['datatype'] = spec['type']
+    if titles:
+        res['titles'] = titles
+    if 'description' in spec:
+        res['dc:description'] = [spec['description']]
     return res
 
 
