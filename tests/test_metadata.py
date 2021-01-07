@@ -29,12 +29,6 @@ def test_Link():
     assert li.resolve(pathlib.Path('.')) == pathlib.Path('abc.csv')
 
 
-def test_column_init():
-    with pytest.raises(ValueError):
-        # column names mustn't start with a -!
-        csvw.Column(name='-abd')
-
-
 class TestColumnAccess(object):
 
     def test_get_column(self):

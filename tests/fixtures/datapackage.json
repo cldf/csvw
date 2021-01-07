@@ -4,35 +4,49 @@
     {
       "path": "frictionless-data.csv",
       "stats": {
-        "hash": "b36e8c21563ab32645052c11510bddb7",
-        "bytes": 131,
-        "fields": 3,
-        "rows": 9
+        "hash": "b36e8c21563ab32645052c11510bddb7", "bytes": 131, "fields": 3, "rows": 9
       },
-      "control": {
-        "newline": ""
-      },
+      "control": {"newline": ""},
       "encoding": "utf-8",
-      "dialect": {
-        "delimiter": "|"
-      },
+      "dialect": {"delimiter": "|", "commentChar":  "#", "lineTerminator":  "+\n"},
       "schema": {
         "fields": [
-          {
-            "name": "Year",
-            "type": "integer"
-          },
-          {
-            "name": "Location name",
-            "type": "string"
-          },
-          {
-            "name": "Value",
-            "type": "integer"
-          }
+          {"name":  "FK", "type":  "string"},
+          {"name": "Year", "type": "integer", "rdfType":  "http://example.com"},
+          {"name": "Location name", "type": "string"},
+          {"name": "Value", "type": "integer", "groupChar":  "-"},
+          {"name":  "binary", "type":  "string", "format":  "binary"},
+          {"name":  "anyURI", "type":  "string", "format":  "uri"},
+          {"name":  "email", "type":  "string", "format":  "email"},
+          {"name":  "boolean", "type":  "boolean", "trueValues":  ["ja"], "falseValues":  ["nein"]},
+          {"name": "array", "type": "array", "description":  "empty"},
+          {"name": "geojson", "type": "geojson", "title":  "a point"}
+        ],
+        "foreignKeys": [
+          {"fields":  ["FK"], "reference":  {"resource": "tsv", "fields":  ["class"]}}
         ]
       },
       "name": "test",
+      "profile": "tabular-data-resource",
+      "scheme": "file",
+      "format": "csv",
+      "hashing": "md5",
+      "compression": "no",
+      "compressionPath": "",
+      "query": {}
+    },
+    {
+      "path": "tsv.txt",
+      "control": {"newline": ""},
+      "encoding": "utf-8",
+      "dialect": {"delimiter": "\t"},
+      "schema": {
+        "fields": [
+          {"name": "class", "type": "string"},
+          {"name": "a-name", "type": "string"}
+        ]
+      },
+      "name": "tsv",
       "profile": "tabular-data-resource",
       "scheme": "file",
       "format": "csv",

@@ -30,26 +30,6 @@ def attr_asdict(obj, omit_defaults=True, omit_private=True):
     return res
 
 
-def attr_valid_re(regex_or_pattern, nullable=False):
-    if hasattr(regex_or_pattern, 'match'):
-        pattern = regex_or_pattern
-    else:
-        pattern = re.compile(regex_or_pattern)
-
-    msg = '{0} is not a valid {1}'
-
-    if nullable:
-        def valid_re(instance, attribute, value):
-            if value is not None and pattern.match(value) is None:
-                raise ValueError(msg.format(value, attribute.name))
-    else:
-        def valid_re(instance, attribute, value):
-            if pattern.match(value) is None:
-                raise ValueError(msg.format(value, attribute.name))
-
-    return valid_re
-
-
 class lazyproperty(object):
     """Non-data descriptor caching the computed result as instance attribute.
     >>> import itertools

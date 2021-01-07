@@ -10,7 +10,6 @@ CSVW metadata to "raw" CSV tables.
 """
 import json
 import pathlib
-import urllib.parse
 
 
 def convert_column_spec(spec):
@@ -21,11 +20,6 @@ def convert_column_spec(spec):
     :return:
     """
     # name, title, description, type, format
-    # type string -> format: default, email, uri, binary (base64), uuid
-    # type number -> additional props decimalChar, groupChar, bareNumber
-    # format: integer -> add. props: bareNumber
-    # format: boolean -> add. props: trueValues, falseValues
-    # format: object / arrays, JSON
     # format: date
     # time
     # datetime
@@ -33,32 +27,46 @@ def convert_column_spec(spec):
     # yearmonth
     # duration
     # geopoint
-    # geojson
 
-    # rdfType -> propertyUrl
+    # FIXME: constraints: required, unique, minLength, maxLength, minimum, maximum, pattern, enum
 
-    # constraints: required, unique, minLength, maxLength, minimum, maximum, pattern, enum
-    from csvw import Column
+    titles = [t for t in [spec.get('title')] if t]
 
-    name, titles = spec['name'], [spec.get('title')]
-    try:
-        Column(name=name)
-    except ValueError:
-        titles.append(name)
-        name = urllib.parse.quote(name)
-        Column(name=name)
-
-    titles = [t for t in titles if t]
-
-    res = dict(name=name)
-    if ('type' in spec) and spec['type'] in [
-        'string', 'number', 'integer', 'boolean', 'date', 'time'
-    ]:
-        res['datatype'] = spec['type']
+    res = {'name': spec['name'], 'datatype': {'base': 'string'}}
+    if 'type' in spec:
+        if spec['type'] == 'string' and spec.get('format') == 'binary':
+            res['datatype']['base'] = 'binary'
+        elif spec['type'] == 'string' and spec.get('format') == 'uri':
+            res['datatype']['base'] = 'anyURI'
+        elif spec['type'] in ['string', 'number', 'integer', 'boolean', 'date', 'time']:
+            res['datatype']['base'] = spec['type']
+            if spec['type'] == 'string' and spec.get('format'):
+                res['datatype']['dc:format'] = spec['format']
+            if spec['type'] == 'boolean' and spec.get('trueValues') and spec.get('falseValues'):
+                res['datatype']['format'] = '{}|{}'.format(
+                    spec['trueValues'][0], spec['falseValues'][0])
+            if spec['type'] in ['number', 'integer']:
+                if spec.get('bareNumber') is True:  # pragma: no cover
+                    raise NotImplementedError(
+                        'bareNumber is not supported in CSVW. It may be possible to translate to '
+                        'a number pattern, though. See '
+                        'https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/'
+                        '#formats-for-numeric-types')
+                if any(prop in spec for prop in ['decimalChar', 'groupChar']):
+                    res['datatype']['format'] = {}
+                    for p in ['decimalChar', 'groupChar']:
+                        if spec.get(p):
+                            res['datatype']['format'][p] = spec[p]
+        elif spec['type'] in ['object', 'array']:
+            res['datatype']['dc:format'] = 'application/json'
+        elif spec['type'] == 'geojson':
+            res['datatype']['dc:format'] = 'application/geo+json'
     if titles:
         res['titles'] = titles
     if 'description' in spec:
         res['dc:description'] = [spec['description']]
+    if 'rdfType' in spec:
+        res['propertyUrl'] = spec['rdfType']
     return res
 
 
@@ -101,7 +109,33 @@ def convert_table_schema(rsc_name, schema, resource_map):
         if prop in schema:
             res[toprop] = schema[prop]
             if prop == 'foreignKeys':
-                res[toprop] = [convert_foreignKey(fk, rsc_name, resource_map) for fk in res[toprop]]
+                res[toprop] = [convert_foreignKey(rsc_name, fk, resource_map) for fk in res[toprop]]
+    return res
+
+
+def convert_dialect(rsc):
+    """
+    https://specs.frictionlessdata.io/csv-dialect/
+    """
+    d = rsc.get('dialect', {})
+    res = {}
+    if d.get('delimiter'):
+        res['delimiter'] = d['delimiter']
+    if rsc.get('encoding'):
+        res['encoding'] = rsc['encoding']
+    for prop in [
+        'delimiter',
+        'quoteChar',
+        'doubleQuote',
+        'skipInitialSpace',
+        'header',
+    ]:
+        if prop in d:
+            res[prop] = d[prop]
+    if 'lineTerminator' in d:
+        res['lineTerminators'] = [d['lineTerminator']]
+    if 'commentChar' in d:
+        res['commentPrefix'] = d['commentChar']
     return res
 
 
@@ -124,7 +158,31 @@ class DataPackage:
 
         md = {}
         # Package metadata:
-        md['dc:source'] = json.dumps(self.json)
+        md['dc:replaces'] = json.dumps(self.json)
+
+        # version,
+        # image,
+
+        for flprop, csvwprop in [
+            ('id', 'dc:identifier'),
+            ('licenses', 'dc:license'),
+            ('title', 'dc:title'),
+            ('homepage', 'dcat:accessURL'),
+            ('description', 'dc:description'),
+            ('sources', 'dc:source'),
+            ('contributors', 'dc:contributor'),
+            ('profile', 'dc:conformsTo'),
+            ('keywords', 'dc:subject'),
+            ('created', 'dc:created'),
+        ]:
+            if flprop in self.json:
+                md[csvwprop] = self.json[flprop]
+
+        if 'name' in self.json:
+            if 'id' not in self.json:
+                md['dc:identifier'] = self.json['name']
+            elif 'title' not in self.json:
+                md['dc:title'] = self.json['name']
 
         # Data Resource metadata:
         resources = [rsc for rsc in self.json.get('resources', []) if 'path' in rsc]
@@ -140,12 +198,8 @@ class DataPackage:
                 table = dict(
                     url=rsc['path'],
                     tableSchema=convert_table_schema(rsc['name'], schema, resource_map),
-                    dialect=dict(),
+                    dialect=convert_dialect(rsc),
                 )
-                if rsc.get('dialect', {}).get('delimiter'):
-                    table['dialect']['delimiter'] = rsc['dialect']['delimiter']
-                if rsc.get('encoding'):
-                    table['dialect']['encoding'] = rsc['encoding']
                 md['tables'].append(table)
 
         cls = cls or TableGroup
