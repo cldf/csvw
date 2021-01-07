@@ -151,6 +151,10 @@ def convert_dialect(rsc):
 
 class DataPackage:
     def __init__(self, spec, directory=None):
+        if isinstance(spec, DataPackage):
+            self.json = spec.json
+            self.dir = spec.dir
+            return
         if isinstance(spec, dict):
             # already a parsed JSON object
             self.dir = pathlib.Path(directory or '.')

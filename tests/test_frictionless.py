@@ -39,6 +39,7 @@ def datafactory(tmpdir):
 
 def test_DataPackage_init():
     dp = DataPackage(dict(resources=[], name='x'))
+    dp = DataPackage(dp)
     assert dp.to_tablegroup().common_props['dc:identifier'] == 'x'
     dp = DataPackage('{"resources": [], "name": "x", "id": "y"}')
     assert dp.to_tablegroup().common_props['dc:identifier'] == 'y'

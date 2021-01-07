@@ -26,6 +26,7 @@ import uritemplate
 from . import utils
 from .datatypes import DATATYPES
 from .dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
+from .frictionless import DataPackage
 
 DEFAULT = object()
 
@@ -774,6 +775,10 @@ class TableGroup(TableLike):
         TableLike.__attrs_post_init__(self)
         for table in self.tables:
             table._parent = self
+
+    @classmethod
+    def from_frictionless_datapackage(cls, dp):
+        return DataPackage(dp).to_tablegroup(cls)
 
     def read(self):
         """

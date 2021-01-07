@@ -273,6 +273,10 @@ class TestTableGroup(object):
         return _make_table_like(
             csvw.TableGroup, tmpdir, data=data, metadata=metadata, mdname='csv.txt-metadata.json')
 
+    def test_from_frictionless(self):
+        tg = csvw.TableGroup.from_frictionless_datapackage(FIXTURES / 'datapackage.json')
+        assert list(tg.tables[0])
+
     def test_iteritems_column_renaming(self, tmpdir):
         t = csvw.TableGroup.from_file(FIXTURES / 'test.tsv-metadata.json')
         items = list(t.tables[0])
