@@ -19,16 +19,10 @@ def convert_column_spec(spec):
     :param spec:
     :return:
     """
-    # name, title, description, type, format
-    # format: date
-    # time
-    # datetime
-    # year
-    # yearmonth
-    # duration
-    # geopoint
-
-    # FIXME: constraints: required, unique, minLength, maxLength, minimum, maximum, pattern, enum
+    typemap = {
+        'year': 'gYear',
+        'yearmonth': 'gYearMonth',
+    }
 
     titles = [t for t in [spec.get('title')] if t]
 
@@ -38,7 +32,11 @@ def convert_column_spec(spec):
             res['datatype']['base'] = 'binary'
         elif spec['type'] == 'string' and spec.get('format') == 'uri':
             res['datatype']['base'] = 'anyURI'
-        elif spec['type'] in ['string', 'number', 'integer', 'boolean', 'date', 'time']:
+        elif spec['type'] in typemap:
+            res['datatype']['base'] = typemap[spec['type']]
+        elif spec['type'] in [
+            'string', 'number', 'integer', 'boolean', 'date', 'time', 'datetime', 'duration',
+        ]:
             res['datatype']['base'] = spec['type']
             if spec['type'] == 'string' and spec.get('format'):
                 res['datatype']['dc:format'] = spec['format']
@@ -58,15 +56,27 @@ def convert_column_spec(spec):
                         if spec.get(p):
                             res['datatype']['format'][p] = spec[p]
         elif spec['type'] in ['object', 'array']:
+            res['datatype']['base'] = 'json'
             res['datatype']['dc:format'] = 'application/json'
         elif spec['type'] == 'geojson':
+            res['datatype']['base'] = 'json'
             res['datatype']['dc:format'] = 'application/geo+json'
+
     if titles:
         res['titles'] = titles
     if 'description' in spec:
         res['dc:description'] = [spec['description']]
     if 'rdfType' in spec:
         res['propertyUrl'] = spec['rdfType']
+
+    constraints = spec.get('constraints', {})
+    for prop in ['required', 'minLength', 'maxLength', 'minimum', 'maximum']:
+        if prop in constraints:
+            res['datatype'][prop] = constraints[prop]
+        if ('pattern' in constraints) and ('format' not in res['datatype']):
+            res['datatype']['format'] = constraints['pattern']
+        # FIXME: we could transform the "enum" constraint for string into
+        # a regular expression in the "format" property.
     return res
 
 
@@ -186,7 +196,7 @@ class DataPackage:
 
         # Data Resource metadata:
         resources = [rsc for rsc in self.json.get('resources', []) if 'path' in rsc]
-        resource_map = {rsc['name']: rsc['path'] for rsc in resources}
+        resource_map = {rsc['name']: rsc['path'] for rsc in resources if 'name' in rsc}
         for rsc in resources:
             schema = rsc.get('schema')
             if schema and \
@@ -197,7 +207,7 @@ class DataPackage:
                 md.setdefault('tables', [])
                 table = dict(
                     url=rsc['path'],
-                    tableSchema=convert_table_schema(rsc['name'], schema, resource_map),
+                    tableSchema=convert_table_schema(rsc.get('name'), schema, resource_map),
                     dialect=convert_dialect(rsc),
                 )
                 md['tables'].append(table)

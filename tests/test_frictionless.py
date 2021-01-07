@@ -1,8 +1,10 @@
+import json
 import shutil
 import pathlib
 
 import pytest
 
+from csvw.dsv import UnicodeWriter
 from csvw import TableGroup
 from csvw.frictionless import DataPackage
 
@@ -15,12 +17,47 @@ def tmpfixtures(tmpdir):
     return pathlib.Path(str(tmpdir)) / 'fixtures'
 
 
+@pytest.fixture
+def datafactory(tmpdir):
+    def make(fields, data):
+        p = pathlib.Path(str(tmpdir)) / 'datapackage.json'
+        with p.open(mode='wt') as f:
+            rsc = dict(
+                profile='tabular-data-resource',
+                scheme='file',
+                format='csv',
+                path='data.csv',
+                schema=dict(fields=fields),
+            )
+            json.dump(dict(resources=[rsc]), f)
+        with UnicodeWriter(p.parent / 'data.csv') as w:
+            w.writerow([f['name'] for f in fields])
+            w.writerows(data)
+        return p
+    return make
+
+
 def test_DataPackage_init():
     dp = DataPackage(dict(resources=[], name='x'))
     assert dp.to_tablegroup().common_props['dc:identifier'] == 'x'
     dp = DataPackage('{"resources": [], "name": "x", "id": "y"}')
     assert dp.to_tablegroup().common_props['dc:identifier'] == 'y'
     assert dp.to_tablegroup().common_props['dc:title'] == 'x'
+
+
+def test_DataPackage_constraints(datafactory):
+    dp = datafactory([{'name': 'col', 'constraints': {'maxLength': 3}}], [['abcd']])
+    with pytest.raises(ValueError):
+        _ = list(DataPackage(dp).to_tablegroup().tables[0])
+
+    dp = datafactory([{'name': 'col', 'constraints': {'pattern': '[a-z]{2}'}}], [['abcd']])
+    with pytest.raises(ValueError):
+        _ = list(DataPackage(dp).to_tablegroup().tables[0])
+
+    dp = datafactory(
+        [{'name': 'col', 'type': 'year', 'constraints': {'pattern': '[2].*'}}], [['1990']])
+    with pytest.raises(ValueError):
+        _ = list(DataPackage(dp).to_tablegroup().tables[0])
 
 
 def test_DataPackage(tmpfixtures):
