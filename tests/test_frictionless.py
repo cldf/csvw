@@ -75,7 +75,6 @@ def test_DataPackage(tmpfixtures):
         assert schema.columndict[c].datatype.base == c
     assert rows[0]['boolean'] is True and rows[1]['boolean'] is False
     assert rows[0]['Value'] == 10123
-    assert list(rows[0].values())[-1] != '+', "custom line terminator must be stripped"
 
     tg.to_file(tmpfixtures / 'metadata.json')
     tg = TableGroup.from_file(tmpfixtures / 'metadata.json')

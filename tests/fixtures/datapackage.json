@@ -8,7 +8,7 @@
       },
       "control": {"newline": ""},
       "encoding": "utf-8",
-      "dialect": {"delimiter": "|", "commentChar":  "#", "lineTerminator":  "+\n"},
+      "dialect": {"delimiter": "|", "commentChar":  "#", "lineTerminator":  "\n"},
       "schema": {
         "fields": [
           {"name":  "FK", "type":  "string"},
