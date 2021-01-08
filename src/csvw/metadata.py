@@ -8,6 +8,7 @@ This module implements (partially) the W3C recommendation
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
 import io
+import re
 import json
 import shutil
 import pathlib
@@ -17,7 +18,7 @@ import warnings
 import itertools
 import contextlib
 import collections
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.request import urlopen
 
 import attr
@@ -171,7 +172,7 @@ class NaturalLanguage(collections.OrderedDict):
 class DescriptionBase(object):
     """Container for
     - common properties (see http://w3c.github.io/csvw/metadata/#common-properties)
-    - @-properies.
+    - @-properties.
     """
 
     common_props = attr.ib(default=attr.Factory(dict))
@@ -545,6 +546,16 @@ class TableLike(Description):
         res._fname = fname
         return res
 
+    @classmethod
+    def from_url(cls, url):
+        with io.TextIOWrapper(urlopen(url), encoding='utf8') as f:
+            data = json.load(f)
+        res = cls.fromvalue(data)
+        if 'base' not in res.at_props:
+            url = urlparse(url)
+            res.at_props['base'] = urlunparse((url.scheme, url.netloc, url.path, '', '', ''))
+        return res
+
     def to_file(self, fname, omit_defaults=True):
         if not isinstance(fname, pathlib.Path):
             fname = pathlib.Path(fname)
@@ -558,6 +569,9 @@ class TableLike(Description):
         """
         We only support data in the filesystem, thus we make sure `base` is a `pathlib.Path`.
         """
+        at_props = self._parent.at_props if self._parent else self.at_props
+        if 'base' in at_props:
+            return at_props['base']
         return self._parent._fname.parent if self._parent else self._fname.parent
 
 
@@ -682,15 +696,18 @@ class Table(TableLike):
                 requiredcols.add(col.header)
 
         with contextlib.ExitStack() as stack:
-            handle = fname
-            fpath = pathlib.Path(fname)
-            if not fpath.exists():
-                zipfname = fpath.parent.joinpath(fpath.name + '.zip')
-                if zipfname.exists():
-                    zipf = stack.enter_context(zipfile.ZipFile(str(zipfname)))
-                    handle = io.TextIOWrapper(
-                        zipf.open([n for n in zipf.namelist() if n.endswith(fpath.name)][0]),
-                        encoding=dialect.encoding)
+            if re.match(r'https?://', str(fname)):
+                handle = io.TextIOWrapper(urlopen(str(fname)), encoding=dialect.encoding)
+            else:
+                handle = fname
+                fpath = pathlib.Path(fname)
+                if not fpath.exists():
+                    zipfname = fpath.parent.joinpath(fpath.name + '.zip')
+                    if zipfname.exists():
+                        zipf = stack.enter_context(zipfile.ZipFile(str(zipfname)))
+                        handle = io.TextIOWrapper(
+                            zipf.open([n for n in zipf.namelist() if n.endswith(fpath.name)][0]),
+                            encoding=dialect.encoding)
 
             reader = stack.enter_context(UnicodeReaderWithLineNumber(handle, dialect=dialect))
             reader = iter(reader)
