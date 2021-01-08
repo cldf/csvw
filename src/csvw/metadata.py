@@ -36,6 +36,7 @@ __all__ = [
     'Table', 'Column', 'ForeignKey',
     'Link', 'NaturalLanguage',
     'Datatype',
+    'is_url',
 ]
 
 
@@ -542,9 +543,9 @@ class TableLike(Description):
 
     @classmethod
     def from_file(cls, fname):
-        if is_url(fname):
-            return cls.from_url(fname)
         if not isinstance(fname, pathlib.Path):
+            if is_url(fname):
+                return cls.from_url(str(fname))
             fname = pathlib.Path(fname)
         with json_open(str(fname)) as f:
             data = json.load(f)
