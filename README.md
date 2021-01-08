@@ -72,14 +72,36 @@ probably never will) implement the full extent of this spec.
   description.
 
 
+## Compatibility with [Frictionless Data Specs](https://specs.frictionlessdata.io/)
+
+The CSVW-described dataset is basically equivalent to a [Frictionless DataPackage] where all [Data Resources](https://specs.frictionlessdata.io/data-resource/) are [Tabular Data](https://specs.frictionlessdata.io/tabular-data-resource/).
+Thus, the `csvw` package provides some conversion functionality. To
+"read CSVW data from a Data Package", there's the `csvw.TableGroup.from_frictionless_datapackage` method:
+```python
+from csvw import TableGroup
+tg = TableGroup.from_frictionless_datapackage('PATH/TO/datapackage.json')
+```
+To convert the metadata, the `TableGroup` can then be serialzed:
+```python
+tg.to_file('csvw-metadata.json')
+```
+
+Note that the CSVW metadata file must be written to the Data Package's directory
+to make sure relative paths to data resources work.
+
+This functionality - together with the schema inference capabilities
+of [`frictionless describe`](https://frictionlessdata.io/tooling/python/describing-data/#describe-functions) - provides
+a convenient way to bootstrap CSVW metadata for a set of "raw" CSV
+files.
+
+
 ## See also
 
 - https://www.w3.org/2013/csvw/wiki/Main_Page
 - https://github.com/CLARIAH/COW
 - https://github.com/CLARIAH/ruminator
 - https://github.com/bloomberg/pycsvw
-- https://github.com/frictionlessdata/goodtables-py
-- https://github.com/frictionlessdata/tableschema-py
+- https://specs.frictionlessdata.io/table-schema/
 - https://github.com/theodi/csvlint.rb
 - https://github.com/ruby-rdf/rdf-tabular
 - https://github.com/rdf-ext/rdf-parser-csvw

@@ -8,7 +8,6 @@ This module implements (partially) the W3C recommendation
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
 import io
-import re
 import json
 import shutil
 import pathlib
@@ -27,6 +26,7 @@ import uritemplate
 from . import utils
 from .datatypes import DATATYPES
 from .dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
+from .frictionless import DataPackage
 
 DEFAULT = object()
 
@@ -36,11 +36,6 @@ __all__ = [
     'Link', 'NaturalLanguage',
     'Datatype',
 ]
-
-
-# Level 1 variable names according to https://tools.ietf.org/html/rfc6570#section-2.3:
-_varchar = r'([a-zA-Z0-9_]|\%[a-fA-F0-9]{2})'
-_varname = re.compile('(' + _varchar + '([.]?' + _varchar + ')*)$')
 
 
 def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
@@ -368,9 +363,7 @@ class Description(DescriptionBase):
 @attr.s
 class Column(Description):
 
-    name = attr.ib(
-        default=None,
-        validator=utils.attr_valid_re(_varname, nullable=True))
+    name = attr.ib(default=None)
     suppressOutput = attr.ib(default=False)
     titles = attr.ib(
         default=None,
@@ -782,6 +775,10 @@ class TableGroup(TableLike):
         TableLike.__attrs_post_init__(self)
         for table in self.tables:
             table._parent = self
+
+    @classmethod
+    def from_frictionless_datapackage(cls, dp):
+        return DataPackage(dp).to_tablegroup(cls)
 
     def read(self):
         """

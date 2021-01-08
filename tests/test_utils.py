@@ -1,12 +1,4 @@
-import pytest
-
 from csvw import utils
-
-
-def test_attr_valid_re(mocker):
-    validator = utils.attr_valid_re('[0-9]+')
-    with pytest.raises(ValueError):
-        validator(None, mocker.Mock(), 'x')
 
 
 def test_lazyproperty():
