@@ -782,5 +782,5 @@ def test_from_url(mocker):
     mocker.patch(
         'csvw.metadata.urlopen',
         lambda u: BytesIO(FIXTURES.joinpath(u.split('/')[-1]).read_bytes()))
-    t = csvw.Table.from_url('http://example.com/csv.txt-table-metadata.json')
+    t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
     assert len(list(t)) == 2

@@ -39,6 +39,10 @@ __all__ = [
 ]
 
 
+def is_url(s):
+    return re.match(r'https?://', str(s))
+
+
 def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
     if log:
         getattr(log, level)(msg)
@@ -538,6 +542,8 @@ class TableLike(Description):
 
     @classmethod
     def from_file(cls, fname):
+        if is_url(fname):
+            return cls.from_url(fname)
         if not isinstance(fname, pathlib.Path):
             fname = pathlib.Path(fname)
         with json_open(str(fname)) as f:
@@ -696,7 +702,7 @@ class Table(TableLike):
                 requiredcols.add(col.header)
 
         with contextlib.ExitStack() as stack:
-            if re.match(r'https?://', str(fname)):
+            if is_url(fname):
                 handle = io.TextIOWrapper(urlopen(str(fname)), encoding=dialect.encoding)
             else:
                 handle = fname
