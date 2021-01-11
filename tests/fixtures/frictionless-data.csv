@@ -1,11 +1,11 @@
-FK|Year|Location name|Value|binary|anyURI|email|boolean|array|geojson+
-a|2010||10-123|eA==|http://example.com|x@example.com|ja|[]|{}+
-a|2011||20||||nein||+
-c|2012||30||||||+
-#+
-e|2010|Urban|12||||||+
-e|2011|Urban|22||||||+
-e|2012|Urban|32||||||+
-e|2010|Rural|14||||||+
-e|2011|Rural|24||||||+
-x|2012|Rural|34||||||+
+FK|Year|Location name|Value|binary|anyURI|email|boolean|array|geojson
+a|2010||10-123|eA==|http://example.com|x@example.com|ja|[]|{}
+a|2011||20||||nein||
+c|2012||30||||||
+#
+e|2010|Urban|12||||||
+e|2011|Urban|22||||||
+e|2012|Urban|32||||||
+e|2010|Rural|14||||||
+e|2011|Rural|24||||||
+x|2012|Rural|34||||||

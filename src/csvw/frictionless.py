@@ -125,6 +125,8 @@ def convert_table_schema(rsc_name, schema, resource_map):
 
 def convert_dialect(rsc):
     """
+    Limitations: lineTerminator is not supported.
+
     https://specs.frictionlessdata.io/csv-dialect/
     """
     d = rsc.get('dialect', {})
@@ -142,8 +144,6 @@ def convert_dialect(rsc):
     ]:
         if prop in d:
             res[prop] = d[prop]
-    if 'lineTerminator' in d:
-        res['lineTerminators'] = [d['lineTerminator']]
     if 'commentChar' in d:
         res['commentPrefix'] = d['commentChar']
     return res

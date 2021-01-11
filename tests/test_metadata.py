@@ -775,3 +775,12 @@ def test_zip_support(tmpdir):
 
     tg.write(out.parent / 'md.json', _zipped=True, **{'zipped.csv': res + res})
     assert len(list(csvw.TableGroup.from_file(out.parent / 'md.json').tables[0])) == 4
+
+
+def test_from_url(mocker):
+    from io import BytesIO
+    mocker.patch(
+        'csvw.metadata.urlopen',
+        lambda u: BytesIO(FIXTURES.joinpath(u.split('/')[-1]).read_bytes()))
+    t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
+    assert len(list(t)) == 2
