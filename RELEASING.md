@@ -16,6 +16,8 @@ flake8 src
   - `setup.py`
   - `src/csvw/__init__.py`
 
+- Edit `CHANGES`
+
 - Create the release commit:
 ```shell
 git commit -a -m "release <VERSION>"
