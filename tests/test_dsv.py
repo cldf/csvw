@@ -7,7 +7,7 @@ from collections import OrderedDict
 import pytest
 
 from csvw.dsv import (iterrows, UnicodeReader, UnicodeDictReader, UnicodeWriter, rewrite,
-    Dialect, add_rows, filter_rows_as_dict)
+    Dialect, add_rows, filter_rows_as_dict, UnicodeReaderWithLineNumber)
 
 TESTDIR = pathlib.Path(__file__).parent / 'fixtures'
 
@@ -169,3 +169,11 @@ def test_UnicodeDictReader_duplicate_columns():
     with pytest.warns(UserWarning, match='uplicate'):
         with UnicodeDictReader(['a,a,b', '1,2,3']) as r:
             assert list(r)[0]['a'] == '2'  # last value wins
+
+
+def test_UnicodeReaderWithLineNumber(tmpdir):
+    p = pathlib.Path(str(tmpdir)) / 'test.csv'
+    p.write_text('col1,col2\n"a\n\nb",c')
+    with UnicodeReaderWithLineNumber(p) as reader:
+        linenos = [item[0] for item in reader]
+        assert linenos == [1, 4]

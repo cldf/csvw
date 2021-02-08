@@ -147,9 +147,11 @@ class UnicodeReader(object):
 
     def _next_row(self):
         self.lineno += 1
-        return [
+        row = [
             s if isinstance(s, str) else s.decode(self._reader_encoding)
             for s in next(self.reader)]
+        self.lineno += sum([list(s).count('\n') for s in row])
+        return row
 
     def __next__(self):
         row = self._next_row()
