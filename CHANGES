@@ -11,6 +11,14 @@ Version 2.0 (in development)
   (https://github.com/cldf/csvw/issues/4).
 
 
+Version 1.10.1
+--------------
+
+- fixed bug where the line number was not correctly reported by
+  UnicodeReaderWithLineNumber when multi-line cell content was read.
+- extended tests to python 3.9
+
+
 Version 1.10
 ------------
 
