@@ -16,7 +16,7 @@ setup(
     package_dir={'': 'src'},
     zip_safe=False,
     platforms='any',
-    python_requires='>=3.4',
+    python_requires='>=3.5',
     install_requires=[
         'attrs>=18.1',
         'isodate',
@@ -43,5 +43,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
 )
