@@ -137,9 +137,7 @@ class UnicodeReader(object):
         elif not hasattr(self.f, 'read'):
             lines = []
             for line in self.f:
-                if isinstance(line, bytes):
-                    line = line.decode(self.encoding)
-                lines.append(line)
+                lines.append(line.decode(self.encoding) if isinstance(line, bytes) else line)
             self.f = lines
         self.reader = csv.reader(self.f, **self.kw)
         self.lineno = -1

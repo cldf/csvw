@@ -16,7 +16,7 @@ setup(
     package_dir={'': 'src'},
     zip_safe=False,
     platforms='any',
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     install_requires=[
         'attrs>=18.1',
         'isodate',
@@ -39,7 +39,6 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',

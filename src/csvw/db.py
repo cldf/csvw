@@ -21,12 +21,12 @@ SQLite support has the following limitations:
 - regex constraints on strings (as specified via a Datatype's format attribute) are not enforced
   by the database.
 """
+import decimal
 import pathlib
 import sqlite3
-from contextlib import closing
-from collections import OrderedDict, defaultdict
-from functools import partial
-from decimal import Decimal
+import functools
+import contextlib
+import collections
 
 import attr
 
@@ -53,7 +53,7 @@ TYPE_MAP = {
     'decimal': (
         'REAL',
         lambda s: s if s is None else float(s),
-        lambda s: s if s is None else Decimal(s)),
+        lambda s: s if s is None else decimal.Decimal(s)),
     'hexBinary': (
         'BLOB',
         identity,
@@ -110,7 +110,7 @@ class ColSpec(object):
             self.db_type = 'TEXT'
             self.convert = DATATYPES[self.csvw_type].to_string
             self.read = DATATYPES[self.csvw_type].to_python
-        if self.separator and self.db_type != 'TEXT':
+        if self.separator and self.db_type != 'TEXT':  # pragma: no cover
             raise ValueError('list-valued fields are only supported for string types')
 
     def check(self, translate):
@@ -172,7 +172,7 @@ class TableSpec(object):
     name = attr.ib()
     columns = attr.ib(default=attr.Factory(list))
     foreign_keys = attr.ib(default=attr.Factory(list))
-    many_to_many = attr.ib(default=attr.Factory(OrderedDict))
+    many_to_many = attr.ib(default=attr.Factory(collections.OrderedDict))
     primary_key = attr.ib(default=None)
 
     @classmethod
@@ -242,7 +242,7 @@ class TableSpec(object):
         :param translate:
         :return: The SQL statement to create the table.
         """
-        col_translate = partial(translate, self.name)
+        col_translate = functools.partial(translate, self.name)
         clauses = [col.sql(col_translate) for col in self.columns]
         if self.primary_key:
             clauses.append('PRIMARY KEY({0})'.format(quoted(
@@ -272,7 +272,7 @@ def schema(tg):
             tables[at.name] = at
 
     # We must determine the order in which tables must be created!
-    ordered = OrderedDict()
+    ordered = collections.OrderedDict()
     i = 0
 
     # We loop through the tables repeatedly, and whenever we find one, which has all
@@ -320,7 +320,7 @@ class Database(object):
 
     def connection(self):
         if self.fname:
-            return closing(sqlite3.connect(str(self.fname)))
+            return contextlib.closing(sqlite3.connect(str(self.fname)))
         if not self._connection:
             self._connection = sqlite3.connect(':memory:')
         return self._connection
@@ -343,14 +343,14 @@ FROM {2} {3} GROUP BY {0}""".format(
                    for k, v in zip(r[1].split(), r[2].split('||'))] for r in cu.fetchall()}
 
     def read(self):
-        res = defaultdict(list)
+        res = collections.defaultdict(list)
         with self.connection() as conn:
             for tname in self.tg.tabledict:
                 #
                 # FIXME: how much do we want to use DB types? Probably as much as possible!
                 # Thus we need tp convert on write **and** read!
                 #
-                convert, seps, refs = {}, {}, defaultdict(dict)
+                convert, seps, refs = {}, {}, collections.defaultdict(dict)
                 table = self.tdict[tname]  # The TableSpec object.
 
                 # Assemble the conversion dictionary:
@@ -371,7 +371,7 @@ FROM {2} {3} GROUP BY {0}""".format(
 
                 cols, rows = select(conn, self.translate(tname))
                 for row in rows:
-                    d = OrderedDict()
+                    d = collections.OrderedDict()
                     for k, v in zip(cols, row):
                         if k in seps:
                             if not v:
@@ -429,7 +429,7 @@ FROM {2} {3} GROUP BY {0}""".format(
             db.execute('PRAGMA foreign_keys = ON;')
             db.commit()
 
-            refs = defaultdict(list)  # collects rows in association tables.
+            refs = collections.defaultdict(list)  # collects rows in association tables.
             for t in self.tables:
                 if t.name not in items:
                     continue
