@@ -11,6 +11,12 @@ Version 2.0 (in development)
   (https://github.com/cldf/csvw/issues/4).
 
 
+Version 1.11.0
+--------------
+
+- Dropped py35 compat.
+
+
 Version 1.10.1
 --------------
 
