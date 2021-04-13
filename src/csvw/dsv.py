@@ -42,7 +42,7 @@ class UnicodeWriter(object):
         self.f = f
         self.encoding = kw.pop('encoding', 'utf-8')
         if isinstance(dialect, Dialect):
-            self.encoding = dialect.encoding
+            self.encoding = dialect.python_encoding
             self.kw = dialect.as_python_formatting_parameters()
             self.kw.update(kw)
         else:
@@ -105,7 +105,7 @@ class UnicodeReader(object):
         self.newline = kw.pop('lineterminator', None)
         self.dialect = dialect if isinstance(dialect, Dialect) else None
         if self.dialect:
-            self.encoding = self.dialect.encoding
+            self.encoding = self.dialect.python_encoding
             self.kw = dialect.as_python_formatting_parameters()
             self.kw.update(kw)
         else:

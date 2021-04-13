@@ -177,3 +177,19 @@ def test_UnicodeReaderWithLineNumber(tmpdir):
     with UnicodeReaderWithLineNumber(p) as reader:
         linenos = [item[0] for item in reader]
         assert linenos == [1, 4]
+
+
+def test_UnicodeReader_R_encodings(tmp_path):
+    p = tmp_path / 'test.csv'
+    p.write_bytes(b'\xef\xbb\xbfcol1,col2\nval1,val2')
+    with UnicodeDictReader(p) as r:
+        row = next(r)
+        assert 'col1' in row
+
+    with UnicodeDictReader(p, dialect=Dialect(encoding='UTF-8-BOM')) as r:
+        row = next(r)
+        assert 'col1' in row
+
+    with UnicodeWriter(p, dialect=Dialect(encoding='UTF-8-BOM')) as w:
+        w.writerows([['col1', 'col2'], ['val1', 'val2']])
+    assert p.read_bytes()[:4] == b'\xef\xbb\xbfc'

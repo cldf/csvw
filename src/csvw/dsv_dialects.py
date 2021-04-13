@@ -4,6 +4,10 @@ from . import utils
 
 __all__ = ['Dialect']
 
+ENCODING_MAP = {
+    'UTF-8-BOM': 'utf-8-sig',  # Recognize the name of this encoding in R.
+}
+
 
 def _non_negative(instance, attribute, value):
     if value < 0:
@@ -98,6 +102,10 @@ class Dialect(object):
 
     def asdict(self, omit_defaults=True):
         return utils.attr_asdict(self, omit_defaults=omit_defaults)
+
+    @property
+    def python_encoding(self):
+        return ENCODING_MAP.get(self.encoding, self.encoding)
 
     def as_python_formatting_parameters(self):
         return {
