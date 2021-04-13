@@ -12,15 +12,15 @@ FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
 
 @pytest.fixture
-def tmpfixtures(tmpdir):
-    shutil.copytree(str(pathlib.Path(__file__).parent / 'fixtures'), str(tmpdir.join('fixtures')))
-    return pathlib.Path(str(tmpdir)) / 'fixtures'
+def tmpfixtures(tmp_path):
+    shutil.copytree(pathlib.Path(__file__).parent / 'fixtures', tmp_path / 'fixtures')
+    return tmp_path / 'fixtures'
 
 
 @pytest.fixture
-def datafactory(tmpdir):
+def datafactory(tmp_path):
     def make(fields, data):
-        p = pathlib.Path(str(tmpdir)) / 'datapackage.json'
+        p = tmp_path / 'datapackage.json'
         with p.open(mode='wt') as f:
             rsc = dict(
                 profile='tabular-data-resource',

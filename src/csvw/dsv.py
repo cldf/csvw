@@ -289,10 +289,7 @@ def rewrite(fname, visitor, **kw):
     (modified) row or None to filter out the row.
     :param kw: Keyword parameters are passed through to csv.reader/csv.writer.
     """
-    if not isinstance(fname, pathlib.Path):
-        assert isinstance(fname, str)
-        fname = pathlib.Path(fname)
-
+    fname = utils.ensure_path(fname)
     assert fname.is_file()
     with tempfile.NamedTemporaryFile(delete=False) as fp:
         tmp = pathlib.Path(fp.name)
@@ -310,9 +307,7 @@ def add_rows(fname, *rows):
     with tempfile.NamedTemporaryFile(delete=False) as fp:
         tmp = pathlib.Path(fp.name)
 
-    if not isinstance(fname, pathlib.Path):
-        assert isinstance(fname, str)
-        fname = pathlib.Path(fname)
+    fname = utils.ensure_path(fname)
     with UnicodeWriter(tmp) as writer:
         if fname.exists():
             with UnicodeReader(fname) as reader_:

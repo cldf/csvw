@@ -564,8 +564,7 @@ class TableLike(Description):
         return res
 
     def to_file(self, fname, omit_defaults=True):
-        if not isinstance(fname, pathlib.Path):
-            fname = pathlib.Path(fname)
+        fname = utils.ensure_path(fname)
         data = self.asdict(omit_defaults=omit_defaults)
         with json_open(str(fname), 'w') as f:
             json.dump(data, f, indent=4, separators=(',', ': '))

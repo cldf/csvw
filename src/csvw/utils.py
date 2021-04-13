@@ -1,10 +1,18 @@
 import re
 import string
 import keyword
+import pathlib
 import collections
 import unicodedata
 
 import attr
+
+
+def ensure_path(fname):
+    if not isinstance(fname, pathlib.Path):
+        assert isinstance(fname, str)
+        return pathlib.Path(fname)
+    return fname
 
 
 def attr_defaults(cls):

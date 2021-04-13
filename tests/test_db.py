@@ -95,18 +95,18 @@ def test_constraints(tg, datatype, value, error):
         db.write(data=[{'v': value}])
 
 
-def test_file(tmpdir, tg):
-    fname = tmpdir.join('test.sqlite')
+def test_file(tmp_path, tg):
+    fname = tmp_path / 'test.sqlite'
     tg.tables[0].tableSchema.columns.append(Column.fromvalue({'name': 'v'}))
-    db = Database(tg, fname=str(fname))
+    db = Database(tg, fname=fname)
     db.write()
-    assert fname.check()
+    assert fname.exists()
     with pytest.raises(ValueError):
         db.write()
 
 
-def test_extra_columns(tmpdir):
-    tmpdir.join('md.json').write_text("""{
+def test_extra_columns(tmp_path):
+    tmp_path.joinpath('md.json').write_text("""{
     "@context": ["http://www.w3.org/ns/csvw",{"@language": "en"}],
     "dialect": {"header": true,"encoding": "utf-8-sig"},
     "tables": [
@@ -114,13 +114,13 @@ def test_extra_columns(tmpdir):
     ]
 }
 """, encoding='utf8')
-    tmpdir.join('csv.txt').write_text('ID,extra\n1,ex', encoding='utf8')
-    tg = TableGroup.from_file(str(tmpdir.join('md.json')))
+    tmp_path.joinpath('csv.txt').write_text('ID,extra\n1,ex', encoding='utf8')
+    tg = TableGroup.from_file(str(tmp_path.joinpath('md.json')))
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
 
-        db = Database(tg, fname=str(tmpdir.join('test.sqlite')))
+        db = Database(tg, fname=tmp_path / 'test.sqlite')
         with pytest.raises(ValueError):
             db.write_from_tg()
         db.write_from_tg(_force=True, _skip_extra=True)
@@ -244,8 +244,8 @@ def test_integration():
         assert items == orig[table]
 
 
-def test_write_file_exists(tmpdir):
-    target = pathlib.Path(str(tmpdir / 'db.sqlite3'))
+def test_write_file_exists(tmp_path):
+    target = tmp_path / 'db.sqlite3'
     target.touch(exist_ok=False)
     mtime = target.stat().st_mtime
     tg = TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
@@ -255,4 +255,3 @@ def test_write_file_exists(tmpdir):
     time.sleep(0.1)
     db.write(force=True)
     assert target.stat().st_mtime > mtime
-

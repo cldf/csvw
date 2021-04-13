@@ -61,20 +61,20 @@ def test_iterrows_restkey(lines=['a,b', '1,2,3,4', '1']):
 @pytest.mark.parametrize('row, expected', [
     ([None, 0, 1.2, '\u00e4\u00f6\u00fc'], b',0,1.2,\xc3\xa4\xc3\xb6\xc3\xbc\r\n'),
 ])
-def test_UnicodeWriter(tmpdir, row, expected):
+def test_UnicodeWriter(tmp_path, row, expected):
     with UnicodeWriter() as writer:
         writer.writerows([row])
     assert writer.read() == expected
 
-    filepath = tmpdir / 'test.csv'
-    with UnicodeWriter(str(filepath)) as writer:
+    filepath = tmp_path / 'test.csv'
+    with UnicodeWriter(filepath) as writer:
         writer.writerow(row)
-    assert filepath.read_binary() == expected
+    assert filepath.read_bytes() == expected
 
 
 @pytest.mark.parametrize('quoting', [getattr(csv, q) for q in QUOTING], ids=QUOTING)
-def test_roundtrip_escapechar(tmpdir, quoting, escapechar='\\', row=['\\spam', 'eggs']):
-    filename = str(tmpdir / 'spam.csv')
+def test_roundtrip_escapechar(tmp_path, quoting, escapechar='\\', row=['\\spam', 'eggs']):
+    filename = tmp_path / 'spam.csv'
     kwargs = {'escapechar': escapechar, 'quoting': quoting}
     with UnicodeWriter(filename, **kwargs) as writer:
         writer.writerow(row)
@@ -84,26 +84,26 @@ def test_roundtrip_escapechar(tmpdir, quoting, escapechar='\\', row=['\\spam', '
 
 
 @pytest.mark.parametrize('encoding', ['utf-16', 'utf-8-sig', 'utf-8'])
-def test_roundtrip_multibyte(tmpdir, encoding, row=['spam', 'eggs'], expected='spam,eggs\r\n', n=2):
-    filepath = tmpdir / 'spam.csv'
+def test_roundtrip_multibyte(tmp_path, encoding, row=['spam', 'eggs'], expected='spam,eggs\r\n', n=2):
+    filepath = tmp_path / 'spam.csv'
     kwargs = {'encoding': encoding}
-    with UnicodeWriter(str(filepath), **kwargs) as writer:
+    with UnicodeWriter(filepath, **kwargs) as writer:
         writer.writerows([row] * n)
-    with UnicodeReader(str(filepath), **kwargs) as reader:
+    with UnicodeReader(filepath, **kwargs) as reader:
         result = next(reader)
     assert result == row
-    assert filepath.read_binary() == (expected * n).encode(encoding)
+    assert filepath.read_bytes() == (expected * n).encode(encoding)
 
 
-def test_iterrows_with_bom(tmpdir):
-    filepath = tmpdir / 'spam.csv'
+def test_iterrows_with_bom(tmp_path):
+    filepath = tmp_path / 'spam.csv'
     filepath.write_text('\ufeffcol1,col2\nval1,val2', encoding='utf8')
-    rows = list(iterrows(str(filepath)))
+    rows = list(iterrows(filepath))
     assert rows[0] == ['col1', 'col2']
 
 
-def test_rewrite(tmpdir, tsvname=str(TESTDIR / 'tsv.txt'), csvname=str(TESTDIR / 'csv.txt')):
-    filename = str(tmpdir / 'test.txt')
+def test_rewrite(tmp_path, tsvname=str(TESTDIR / 'tsv.txt'), csvname=str(TESTDIR / 'csv.txt')):
+    filename = tmp_path / 'test.txt'
     shutil.copy(tsvname, filename)
     rewrite(filename, lambda i, row: [len(row)], delimiter='\t')
     assert next(iterrows(filename)) == ['2']
@@ -113,8 +113,8 @@ def test_rewrite(tmpdir, tsvname=str(TESTDIR / 'tsv.txt'), csvname=str(TESTDIR /
     assert list(iterrows(filename)) == list(iterrows(csvname))
 
 
-def test_add_delete_rows(tmpdir):
-    filename = str(tmpdir / 'test.csv')
+def test_add_delete_rows(tmp_path):
+    filename = tmp_path / 'test.csv'
     add_rows(filename, ['a', 'b'], [1, 2], [3, 4])
     assert len(list(iterrows(filename, dicts=True))) == 2
 
@@ -128,8 +128,9 @@ def test_add_delete_rows(tmpdir):
     assert nremoved == 2
 
 
-def test_roundtrip_with_keyword_dialect(tmpdir, rows=[['1', 'y'], ['  "1 ', '3\t4']], dialect='excel'):
-    filename = str(tmpdir / 'test.csv')
+def test_roundtrip_with_keyword_dialect(
+        tmp_path, rows=[['1', 'y'], ['  "1 ', '3\t4']], dialect='excel'):
+    filename = tmp_path / 'test.csv'
     with UnicodeWriter(filename, dialect=dialect) as w:
         w.writerows(rows)
     assert list(iterrows(filename, dialect=dialect)) == rows
@@ -171,8 +172,8 @@ def test_UnicodeDictReader_duplicate_columns():
             assert list(r)[0]['a'] == '2'  # last value wins
 
 
-def test_UnicodeReaderWithLineNumber(tmpdir):
-    p = pathlib.Path(str(tmpdir)) / 'test.csv'
+def test_UnicodeReaderWithLineNumber(tmp_path):
+    p = tmp_path / 'test.csv'
     p.write_text('col1,col2\n"a\n\nb",c')
     with UnicodeReaderWithLineNumber(p) as reader:
         linenos = [item[0] for item in reader]
