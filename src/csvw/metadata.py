@@ -271,6 +271,12 @@ class Datatype(DescriptionBase):
         raise ValueError(v)
 
     def __attrs_post_init__(self):
+        for attr_ in [
+            'minimum', 'maximum', 'minInclusive', 'maxInclusive', 'minExclusive', 'maxExclusive'
+        ]:
+            if getattr(self, attr_) is not None:
+                setattr(self, attr_, self.parse(getattr(self, attr_)))
+
         if self.length is not None:
             if self.minLength is not None and self.length < self.minLength:
                 raise ValueError()
@@ -288,6 +294,11 @@ class Datatype(DescriptionBase):
 
     def asdict(self, omit_defaults=True):
         res = DescriptionBase.asdict(self, omit_defaults=omit_defaults)
+        for attr_ in [
+            'minimum', 'maximum', 'minInclusive', 'maxInclusive', 'minExclusive', 'maxExclusive'
+        ]:
+            if attr_ in res:
+                res[attr_] = self.formatted(res[attr_])
         if len(res) == 1 and 'base' in res:
             return res['base']
         return res

@@ -1,7 +1,9 @@
 import io
 import json
 import shutil
+import decimal
 import pathlib
+import datetime
 import warnings
 import collections
 
@@ -784,3 +786,25 @@ def test_from_url(mocker):
         lambda u: BytesIO(FIXTURES.joinpath(u.split('/')[-1]).read_bytes()))
     t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
     assert len(list(t)) == 2
+
+
+def test_datatype_limits(tmp_path):
+    tg = csvw.Table()
+    tg.tableSchema.columns.append(
+        csvw.Column.fromvalue(dict(name='dec', datatype='decimal'))
+    )
+    tg.tableSchema.columns[0].datatype.minimum = decimal.Decimal('0.1')
+    tg.to_file(tmp_path / 'md.json')
+    tg = csvw.Table.from_file(tmp_path / 'md.json')
+    assert isinstance(tg.tableSchema.columns[0].datatype.minimum, decimal.Decimal)
+
+    tg = csvw.Table()
+    tg.tableSchema.columns.append(
+        csvw.Column.fromvalue(dict(name='date', datatype='date'))
+    )
+    tg.tableSchema.columns[0].datatype.maximum = datetime.date(1999, 12, 12)
+    tg.to_file(tmp_path / 'md.json')
+    tg = csvw.Table.from_file(tmp_path / 'md.json')
+    tg.tableSchema.columns[0].datatype.parse(datetime.date.today().isoformat())
+    with pytest.raises(ValueError):
+        tg.tableSchema.columns[0].datatype.read(datetime.date.today().isoformat())
