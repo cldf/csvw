@@ -85,11 +85,18 @@ class anyURI(string):
     @staticmethod
     def to_python(v, regex=None):
         res = string.to_python(v, regex=regex)
-        return rfc3986.uri.URIReference.from_string(res.encode('utf-8'))
+        return rfc3986.URIReference.from_string(res.encode('utf-8'))
 
     @staticmethod
     def to_string(v, **kw):
-        return v.unsplit()
+        if hasattr(v, 'geturl'):
+            # Presumably a `urllib.parse.ParseResult`.
+            return v.geturl()
+        if hasattr(v, 'unsplit'):
+            # Presumable a `rfc3986.URIReference`
+            return v.unsplit()
+        assert isinstance(v, str)
+        return rfc3986.normalize_uri(v)
 
 
 @register

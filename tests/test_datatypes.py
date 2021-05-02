@@ -23,11 +23,16 @@ def test_string():
 
 
 def test_anyURI():
+    from urllib.parse import urlparse
+
     t = Datatype.fromvalue('anyURI')
     uri = t.parse('/a/b?d=5')
     assert uri.resolve_with('http://example.org').unsplit() == \
            'http://example.org/a/b?d=5'
     assert t.formatted(uri) == '/a/b?d=5'
+
+    assert t.formatted('Http://example.org') == 'http://example.org'
+    assert t.formatted(urlparse('Http://example.org')) == 'http://example.org'
 
 
 def test_number():
