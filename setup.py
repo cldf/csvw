@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='1.10.3.dev0',
+    version='1.11.0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',

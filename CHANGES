@@ -15,6 +15,7 @@ Version 1.11.0
 --------------
 
 - Dropped py35 compat.
+- Enhanced foreign key validation.
 
 
 Version 1.10.1
