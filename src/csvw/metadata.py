@@ -851,12 +851,8 @@ class TableGroup(TableLike):
     def tabledict(self):
         return {t.local_name: t for t in self.tables}
 
-    def check_referential_integrity(self, data=None, log=None):
-        success = True
-        if data is not None:
-            warnings.warn('the data argument of check_referential_integrity '
-                          'is deprecated (its content will be ignored)')  # pragma: no cover
-        fkeys = [
+    def foreign_keys(self):
+        return [
             (
                 self.tabledict[fk.reference.resource.string],
                 fk.reference.columnReference,
@@ -864,6 +860,38 @@ class TableGroup(TableLike):
                 fk.columnReference)
             for t in self.tables for fk in t.tableSchema.foreignKeys
             if not fk.reference.schemaReference]
+
+    def validate_schema(self):
+        try:
+            for st, sc, tt, tc in self.foreign_keys():
+                if len(sc) != len(tc):
+                    raise ValueError(
+                        'Foreign key error: non-matching number of columns in source and target')
+                for scol, tcol in zip(sc, tc):
+                    scolumn = st.tableSchema.get_column(scol)
+                    tcolumn = tt.tableSchema.get_column(tcol)
+                    if not (scolumn and tcolumn):
+                        raise ValueError(
+                            'Foregin key error: missing column "{}" or "{}"'.format(scol, tcol))
+                    if scolumn.datatype and tcolumn.datatype and \
+                            scolumn.datatype.base != tcolumn.datatype.base:
+                        raise ValueError(
+                            'Foregin key error: non-matching datatype "{}:{}" or "{}:{}"'.format(
+                                scol, scolumn.datatype.base, tcol, tcolumn.datatype.base))
+        except KeyError as e:
+            raise ValueError('Foreign key error: missing table "{}" referenced'.format(e))
+
+    def check_referential_integrity(self, data=None, log=None):
+        if data is not None:
+            warnings.warn('the data argument of check_referential_integrity '
+                          'is deprecated (its content will be ignored)')  # pragma: no cover
+        try:
+            self.validate_schema()
+            success = True
+        except ValueError as e:
+            success = False
+            log_or_raise(str(e), log=log, level='error')
+        fkeys = self.foreign_keys()
         # FIXME: We only support Foreign Key references between tables!
         fkeys = sorted(fkeys, key=lambda x: (x[0].local_name, x[1], x[2].local_name))
         # Grouping by local_name of tables - even though we'd like to have the table objects

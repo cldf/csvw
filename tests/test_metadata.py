@@ -4,6 +4,7 @@ import shutil
 import decimal
 import pathlib
 import datetime
+import operator
 import warnings
 import collections
 
@@ -808,3 +809,52 @@ def test_datatype_limits(tmp_path):
     tg.tableSchema.columns[0].datatype.parse(datetime.date.today().isoformat())
     with pytest.raises(ValueError):
         tg.tableSchema.columns[0].datatype.read(datetime.date.today().isoformat())
+
+
+@pytest.fixture
+def tables():
+    return [
+        {
+            "url": "countries.csv",
+            "tableSchema": {
+                "columns": [{"name": "countryCode", "datatype": "string"}],
+                "primaryKey": "countryCode"
+            }
+        }, {
+            "url": "country_slice.csv",
+            "tableSchema": {
+                "columns": [
+                    {"name": "countryRef", "datatype": "string"},
+                ],
+                "foreignKeys": [{
+                    "columnReference": "countryRef",
+                    "reference": {"resource": "countries.csv", "columnReference": "countryCode"}
+                }]
+            }
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    'breakage,match_error',
+    [
+        (lambda t: t, None),
+        (lambda t: operator.setitem(t[1]['tableSchema']['columns'][0], 'datatype', 'integer'),
+         'datatype'),
+        (lambda t: operator.setitem(t[0], 'url', 'other'),
+         'missing table'),
+        (lambda t: operator.setitem(t[1]['tableSchema']['columns'][0], 'name', 'other'),
+         'missing column'),
+        (lambda t: operator.setitem(
+            t[1]['tableSchema']['foreignKeys'][0], 'columnReference', ['a', 'b']),
+         'non-matching number'),
+    ]
+)
+def test_fk_non_matching_datatypes(tables, breakage, match_error):
+    breakage(tables)
+    tg = csvw.TableGroup.fromvalue(dict(tables=tables))
+    if match_error:
+        with pytest.raises(ValueError, match=match_error):
+            tg.check_referential_integrity()
+    else:
+        tg.validate_schema()
