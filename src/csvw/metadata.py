@@ -70,6 +70,8 @@ def nolog(level='warning'):
 class URITemplate(uritemplate.URITemplate):
 
     def __eq__(self, other):
+        if isinstance(other, str):
+            return self.uri == other
         if not hasattr(other, 'uri'):
             return False
         return super(URITemplate, self).__eq__(other)

@@ -21,6 +21,7 @@ FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 def test_URITemplate():
     ut = csvw.URITemplate('http://example.org')
     assert ut == csvw.URITemplate('http://example.org')
+    assert ut == 'http://example.org'
     assert ut != csvw.URITemplate('https://example.org')
     assert ut != 1
 
