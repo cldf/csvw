@@ -279,15 +279,15 @@ class Datatype(DescriptionBase):
 
         if self.length is not None:
             if self.minLength is not None and self.length < self.minLength:
-                raise ValueError()
+                raise ValueError('minLength > length')
 
             if self.maxLength is not None:
                 if self.length > self.maxLength:
-                    raise ValueError()
+                    raise ValueError('maxLength < length')
 
         if self.minLength is not None and self.maxLength is not None \
                 and self.minLength > self.maxLength:
-            raise ValueError()
+            raise ValueError('minLength > maxLength')
 
         if not isinstance(self.derived_description, dict):
             raise ValueError()  # pragma: no cover
@@ -325,18 +325,18 @@ class Datatype(DescriptionBase):
         try:
             l_ = len(v or '')
             if self.length is not None and l_ != self.length:
-                raise ValueError()
+                raise ValueError('value must have length {}'.format(self.length))
             if self.minLength is not None and l_ < self.minLength:
-                raise ValueError()
+                raise ValueError('value must have at least length {}'.format(self.minLength))
             if self.maxLength is not None and l_ > self.maxLength:
-                raise ValueError()
+                raise ValueError('value must have at most length {}'.format(self.maxLength))
         except TypeError:
             pass
         if self.basetype.minmax:
             if self.minimum is not None and v < self.minimum:
-                raise ValueError()
+                raise ValueError('value must be >= {}'.format(self.minimum))
             if self.maximum is not None and v > self.maximum:
-                raise ValueError()
+                raise ValueError('value must be <= {}'.format(self.maximum))
         return v
 
     def read(self, v):
