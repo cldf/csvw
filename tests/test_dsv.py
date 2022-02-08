@@ -1,5 +1,6 @@
 import io
 import csv
+import sys
 import shutil
 import pathlib
 from collections import OrderedDict
@@ -72,6 +73,7 @@ def test_UnicodeWriter(tmp_path, row, expected):
     assert filepath.read_bytes() == expected
 
 
+@pytest.mark.xfail(sys.version_info >= (3, 10), reason="https://bugs.python.org/issue44861")
 @pytest.mark.parametrize('quoting', [getattr(csv, q) for q in QUOTING], ids=QUOTING)
 def test_roundtrip_escapechar(tmp_path, quoting, escapechar='\\', row=['\\spam', 'eggs']):
     filename = tmp_path / 'spam.csv'

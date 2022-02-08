@@ -2,6 +2,7 @@
 
 import io
 import csv
+import sys
 
 import pytest
 
@@ -63,6 +64,7 @@ def test_escapecharquotechar(dialect):
     assert cell == value
 
 
+@pytest.mark.xfail(sys.version_info >= (3, 10), reason="https://bugs.python.org/issue44861")
 def test_escapequote_escapecharquotechar_final(dialect=EscapeQuote):
     value = 'spam %s%s' % (dialect.escapechar, dialect.quotechar)
     out, cell = roundtrip(value, dialect)
