@@ -56,7 +56,8 @@ $ pip install csvw
 - Low level CSV parsing is delegated to the `csv` module in Python's standard library. Thus, if a `commentPrefix`
   is specified in a `Dialect` instance, this will lead to skipping rows where the first value starts
   with `commentPrefix`, even if the value was quoted.
-  Also, cell content containing `escapechar` may not be round-tripped as expected,
+  Also, cell content containing `escapechar` may not be round-tripped as expected (when specifying
+- `escapechar` or a `csvw.Dialect` with `quoteChar` but `doubleQuote==False`),
   when minimal quoting is specified. This is due to inconsistent `csv` behaviour
   across Python versions (see https://bugs.python.org/issue44861).
 
