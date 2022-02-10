@@ -1,4 +1,5 @@
 import io
+import sys
 import json
 import shutil
 import decimal
@@ -59,6 +60,7 @@ class TestDialect(object):
         t.write(items, fname=fpath)
         return fpath.read_text(encoding='utf-8'), list(t.iterdicts(fname=fpath))
 
+    @pytest.mark.xfail(sys.version_info >= (3, 10), reason="https://bugs.python.org/issue44861")
     def test_doubleQuote(self, tmp_path):
         fpath = tmp_path / 'test'
         t = csvw.Table.fromvalue({
