@@ -21,7 +21,7 @@ setup(
         'attrs>=18.1',
         'isodate',
         'python-dateutil',
-        'rfc3986',
+        'rfc3986<2',  # version 2.0.0 dropped python 3.6 support.
         'uritemplate>=3.0.0',
     ],
     extras_require={
