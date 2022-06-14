@@ -15,6 +15,7 @@ import io
 import csv
 import codecs
 import shutil
+import typing
 import pathlib
 import tempfile
 import warnings
@@ -36,9 +37,18 @@ def normalize_encoding(encoding):
 
 
 class UnicodeWriter(object):
-    """Write Unicode data to a csv file."""
+    """
+    Write Unicode data to a csv file.
 
-    def __init__(self, f=None, dialect=None, **kw):
+    >>> with UnicodeWriter('data.csv') as writer:
+    ...     writer.writerow(['ä', 'ö', 'ü'])
+    """
+
+    def __init__(
+            self,
+            f: typing.Optional[typing.Union[str, pathlib.Path]] = None,
+            dialect: typing.Optional[typing.Union[Dialect, str]] = None,
+            **kw):
         self.f = f
         self.encoding = kw.pop('encoding', 'utf-8')
         if isinstance(dialect, Dialect):
@@ -99,7 +109,11 @@ class UnicodeWriter(object):
 class UnicodeReader(object):
     """Read Unicode data from a csv file."""
 
-    def __init__(self, f, dialect=None, **kw):
+    def __init__(
+            self,
+            f: typing.Union[str, pathlib.Path, typing.IO, typing.List[str]],
+            dialect: typing.Optional[typing.Union[Dialect, str]] = None,
+            **kw):
         self.f = f
         self.encoding = normalize_encoding(kw.pop('encoding', 'utf-8-sig'))
         self.newline = kw.pop('lineterminator', None)
@@ -282,7 +296,7 @@ reader = iterrows
 
 
 def rewrite(fname, visitor, **kw):
-    """Utility function to rewrite rows in tsv files.
+    """Utility function to rewrite rows in dsv files.
 
     :param fname: Path of the dsv file to operate on.
     :param visitor: A callable that takes a line-number and a row as input and returns a \
