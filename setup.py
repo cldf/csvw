@@ -21,8 +21,9 @@ setup(
         'attrs>=18.1',
         'isodate',
         'python-dateutil',
-        'rfc3986',
+        'rfc3986<2',  # Pin until https://github.com/python-hyper/rfc3986/issues/86 is resolved.
         'uritemplate>=3.0.0',
+        'babel',
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],

@@ -14,6 +14,7 @@ import base64
 import isodate
 import rfc3986
 import dateutil.parser
+import babel.numbers
 
 __all__ = ['DATATYPES']
 
@@ -323,14 +324,26 @@ class decimal(anyAtomicType):
 
     @staticmethod
     def to_python(v, pattern=None, decimalChar=None, groupChar=None):
-        if v in decimal._special:
-            return _decimal.Decimal(decimal._special[v])
-        if groupChar:
-            v = v.replace(groupChar, '')
-        if decimalChar and decimalChar != '.':
-            v = v.replace(decimalChar, '.')
+        if groupChar is None and pattern and ',' in pattern:
+            groupChar = ','
+        if decimalChar is None and pattern and '.' in pattern:
+            decimalChar = '.'
+        factor = 1
+        if isinstance(v, str):
+            if v in decimal._special:
+                return _decimal.Decimal(decimal._special[v])
+            if groupChar:
+                v = v.replace(groupChar, '')
+            if decimalChar and decimalChar != '.':
+                v = v.replace(decimalChar, '.')
+            for c, factor in [('%', _decimal.Decimal('0.01')), ('‰', _decimal.Decimal('0.001'))]:
+                if c in v:
+                    v = v.replace(c, '')
+                    break
+            else:
+                factor = 1
         try:
-            return _decimal.Decimal(v)
+            return _decimal.Decimal(v) * factor
         except (TypeError, _decimal.InvalidOperation):
             decimal.value_error(v)
 
@@ -338,6 +351,15 @@ class decimal(anyAtomicType):
     def to_string(v, pattern=None, decimalChar=None, groupChar=None):
         if '{}'.format(v) in decimal._reverse_special:
             return decimal._reverse_special['{}'.format(v)]
+
+        if pattern:
+            v = babel.numbers.format_decimal(v, pattern, 'en')
+            if decimalChar:
+                v = v.replace('.', decimalChar)
+            if groupChar:
+                v = v.replace(',', groupChar)
+            return v
+
         fmt = '{}' if groupChar is None else '{:,}'
         v = fmt.format(v)
         if groupChar or decimalChar:

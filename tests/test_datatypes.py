@@ -56,9 +56,31 @@ def test_number():
     assert t.parse('INF') == decimal.Decimal('Infinity')
     assert t.formatted(decimal.Decimal('NaN')) == 'NaN'
     assert t.parse('1.234,567') == decimal.Decimal('1234.567')
+    assert t.parse('20%') == decimal.Decimal('0.2')
+    # From https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/#parsing-cells
+    # For example, the string value "-25%" must be interpreted as -0.25 and the string value "1E6"
+    # as 1000000.
+    assert t.parse('-25%') == decimal.Decimal('-0.25')
+    assert t.parse('1E6') == decimal.Decimal('1000000')
+
+    assert t.parse('20‰') == decimal.Decimal('0.02')
     assert t.formatted(decimal.Decimal('1234.567')) == '1.234,567'
     with pytest.raises(ValueError):
         t.parse(' ')
+
+    t = Datatype.fromvalue({'base': 'decimal', 'format': '0.00;0.00-'})
+    assert t.formatted(decimal.Decimal('-3.1415')) == '3.14-'
+
+    t = Datatype.fromvalue(
+        {'base': 'decimal', 'format': {'pattern': '0.00;0.00-', 'decimalChar': ','}})
+    assert t.formatted(decimal.Decimal('-3.1415')) == '3,14-'
+
+    # For some number patterns, we can do round-tripping:
+    t = Datatype.fromvalue({'base': 'decimal', 'format': '#,##0.##'})
+    assert t.formatted(t.parse('1,234.57')) == '1,234.57'
+
+    t = Datatype.fromvalue({'base': 'decimal', 'format': {'pattern': '#,##0.##', 'groupChar': ' '}})
+    assert t.formatted(t.parse('1 234.57')) == '1 234.57'
 
     t = Datatype.fromvalue('float')
     with pytest.raises(ValueError):
