@@ -591,7 +591,8 @@ class TableLike(Description):
         at_props = self._parent.at_props if self._parent else self.at_props
         if 'base' in at_props:
             return at_props['base']
-        return self._parent._fname.parent if self._parent else self._fname.parent
+        return self._parent._fname.parent if (self._parent and self._parent._fname) else \
+            (self._fname.parent if self._fname else None)
 
 
 @attr.s

@@ -50,15 +50,16 @@ def test_datatypes(tg, datatype):
     assert data[0]['v2'] is None
 
 
-def test_list_valued(tg):
+def test_list_valued(tg, translate):
     tg.tables[0].tableSchema.columns.append(Column.fromvalue({'separator': '#', 'name': 'v'}))
-    db = Database(tg)
+    db = Database(tg, translate=translate)
     with pytest.raises(TypeError):
         db.write(data=[{'v': [1, 2, 3]}])
     db.write(data=[{'v': ['a', 'b', ' c']}, {'v': []}])
+    assert db.split_value('data', 'vv', 'a#b#c') == ['a', 'b', 'c']
     data = db.read()['data']
-    assert data[0]['v'] == ['a', 'b', ' c']
-    assert data[1]['v'] == []
+    assert data[0]['vv'] == ['a', 'b', ' c']
+    assert data[1]['vv'] == []
 
 
 def test_required(tg):
