@@ -16,12 +16,12 @@ setup(
     package_dir={'': 'src'},
     zip_safe=False,
     platforms='any',
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=[
         'attrs>=18.1',
         'isodate',
         'python-dateutil',
-        'rfc3986<2',  # version 2.0.0 dropped python 3.6 support.
+        'rfc3986',
         'uritemplate>=3.0.0',
     ],
     extras_require={
@@ -39,7 +39,6 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',

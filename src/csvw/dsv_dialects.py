@@ -9,6 +9,7 @@ ENCODING_MAP = {
 }
 
 
+# FIXME: replace with attrs.validators.ge(0) from attrs 21.3.0
 def _non_negative(instance, attribute, value):
     if value < 0:
         raise ValueError('{0} is not a valid {1}'.format(value, attribute.name))

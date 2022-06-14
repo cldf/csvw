@@ -56,7 +56,7 @@ $ pip install csvw
   is specified in a `Dialect` instance, this will lead to skipping rows where the first value starts
   with `commentPrefix`, even if the value was quoted.
   Also, cell content containing `escapechar` may not be round-tripped as expected (when specifying
-- `escapechar` or a `csvw.Dialect` with `quoteChar` but `doubleQuote==False`),
+  `escapechar` or a `csvw.Dialect` with `quoteChar` but `doubleQuote==False`),
   when minimal quoting is specified. This is due to inconsistent `csv` behaviour
   across Python versions (see https://bugs.python.org/issue44861).
 
@@ -77,7 +77,7 @@ probably never will) implement the full extent of this spec.
 
 ## Compatibility with [Frictionless Data Specs](https://specs.frictionlessdata.io/)
 
-The CSVW-described dataset is basically equivalent to a [Frictionless DataPackage] where all [Data Resources](https://specs.frictionlessdata.io/data-resource/) are [Tabular Data](https://specs.frictionlessdata.io/tabular-data-resource/).
+The CSVW-described dataset is basically equivalent to a Frictionless DataPackage where all [Data Resources](https://specs.frictionlessdata.io/data-resource/) are [Tabular Data](https://specs.frictionlessdata.io/tabular-data-resource/).
 Thus, the `csvw` package provides some conversion functionality. To
 "read CSVW data from a Data Package", there's the `csvw.TableGroup.from_frictionless_datapackage` method:
 ```python
@@ -108,6 +108,7 @@ files.
 - https://github.com/theodi/csvlint.rb
 - https://github.com/ruby-rdf/rdf-tabular
 - https://github.com/rdf-ext/rdf-parser-csvw
+- https://github.com/Robsteranium/csvwr
 
 
 ## License
