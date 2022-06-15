@@ -258,6 +258,7 @@ class TestTable(object):
     def test_unspecified_column_in_table_without_url(self, tmp_path):
         t = csvw.Table.fromvalue({
             "@context": ["http://www.w3.org/ns/csvw", {"@language": "en"}],
+            "url": "x",
             "tableSchema": {
                 "columns": [
                     {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
@@ -793,7 +794,7 @@ def test_from_url(mocker):
 
 
 def test_datatype_limits(tmp_path):
-    tg = csvw.Table()
+    tg = csvw.Table(url='x')
     tg.tableSchema.columns.append(
         csvw.Column.fromvalue(dict(name='dec', datatype='decimal'))
     )
@@ -802,7 +803,7 @@ def test_datatype_limits(tmp_path):
     tg = csvw.Table.from_file(tmp_path / 'md.json')
     assert isinstance(tg.tableSchema.columns[0].datatype.minimum, decimal.Decimal)
 
-    tg = csvw.Table()
+    tg = csvw.Table(url='x')
     tg.tableSchema.columns.append(
         csvw.Column.fromvalue(dict(name='date', datatype='date'))
     )

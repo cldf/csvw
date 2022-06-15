@@ -1,4 +1,6 @@
 import attr
+import warnings
+import functools
 
 from . import utils
 
@@ -18,6 +20,16 @@ def _non_negative(instance, attribute, value):
 non_negative_int = [attr.validators.instance_of(int), _non_negative]
 
 
+def convert_encoding(s):
+    s = utils.converter(str, 'utf-8', s)
+    try:
+        _ = 'x'.encode(ENCODING_MAP.get(s, s))
+        return s
+    except LookupError:
+        warnings.warn('Invalid value for property: {}'.format(s))
+        return 'utf-8'
+
+
 @attr.s
 class Dialect(object):
     """A CSV dialect specification.
@@ -27,55 +39,68 @@ class Dialect(object):
 
     encoding = attr.ib(
         default='utf-8',
+        converter=convert_encoding,
         validator=attr.validators.instance_of(str))
 
     lineTerminators = attr.ib(
+        converter=functools.partial(utils.converter, list, ['\r\n', '\n']),
         default=attr.Factory(lambda: ['\r\n', '\n']))
 
     quoteChar = attr.ib(
+        converter=functools.partial(utils.converter, str, '"', allow_none=True),
         default='"',
     )
 
     doubleQuote = attr.ib(
         default=True,
+        converter=functools.partial(utils.converter, bool, True),
         validator=attr.validators.instance_of(bool))
 
     skipRows = attr.ib(
         default=0,
+        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >=0),
         validator=non_negative_int)
 
     commentPrefix = attr.ib(
         default='#',
+        converter=functools.partial(utils.converter, str, '#', allow_none=True),
         validator=attr.validators.optional(attr.validators.instance_of(str)))
 
     header = attr.ib(
         default=True,
+        converter=functools.partial(utils.converter, bool, True),
         validator=attr.validators.instance_of(bool))
 
     headerRowCount = attr.ib(
         default=1,
+        converter=functools.partial(utils.converter, int, 1, cond=lambda s: s >=0),
         validator=non_negative_int)
 
     delimiter = attr.ib(
         default=',',
+        converter=functools.partial(utils.converter, str, ','),
         validator=attr.validators.instance_of(str))
 
     skipColumns = attr.ib(
         default=0,
+        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >=0),
         validator=non_negative_int)
 
     skipBlankRows = attr.ib(
         default=False,
+        converter=functools.partial(utils.converter, bool, False),
         validator=attr.validators.instance_of(bool))
 
     skipInitialSpace = attr.ib(
         default=False,
+        converter=functools.partial(utils.converter, bool, False),
         validator=attr.validators.instance_of(bool))
 
     trim = attr.ib(
         default='false',
         validator=attr.validators.in_(['true', 'false', 'start', 'end']),
-        converter=lambda v: '{0}'.format(v).lower() if isinstance(v, bool) else v)
+        converter=lambda v: functools.partial(
+            utils.converter, (str, bool), 'false')('{0}'.format(v).lower() if isinstance(v, bool) else v))
 
     def updated(self, **kw):
         res = self.__class__(**attr.asdict(self))

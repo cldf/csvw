@@ -24,12 +24,14 @@ setup(
         'rfc3986<2',  # Pin until https://github.com/python-hyper/rfc3986/issues/86 is resolved.
         'uritemplate>=3.0.0',
         'babel',
+        'requests',
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
         'test': [
             'pytest>=5',
             'pytest-mock',
+            'requests-mock',
             'pytest-cov',
         ],
     },

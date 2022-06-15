@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/csvw.svg)](https://pypi.org/project/csvw)
 
 
-CSV on the Web
+[CSV on the Web](https://csvw.org/)
 
 
 

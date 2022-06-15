@@ -2,10 +2,23 @@ import re
 import string
 import keyword
 import pathlib
+import warnings
 import collections
 import unicodedata
 
 import attr
+
+
+def converter(type_, default, s, allow_none=False, cond=None):
+    if type_ != list and isinstance(s, list):
+        return [v for v in [converter(type_, None, ss, cond=cond) for ss in s] if v is not None]
+
+    if allow_none and s is None:
+        return s
+    if not isinstance(s, type_) or (type_ == int and isinstance(s, bool)) or (cond and not cond(s)):
+        warnings.warn('Invalid value for property: {}'.format(s))
+        return default
+    return s
 
 
 def ensure_path(fname):

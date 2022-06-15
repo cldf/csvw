@@ -427,6 +427,26 @@ class double(_float):
 
 
 @register
+class normalizedString(string):
+
+    name = 'normalizedString'
+
+    @staticmethod
+    def to_python(v, regex=None):
+        if v:
+            for c in '\r\n\t':
+                v = v.replace(c, ' ')
+            v = v.strip()
+        return string.to_python(v, '')
+
+
+@register
+class anySimpleType(string):
+
+    name = 'anySimpleType'
+
+
+@register
 class QName(string):
 
     name = 'QName'
