@@ -40,9 +40,18 @@ class UnicodeWriter(object):
     """
     Write Unicode data to a csv file.
 
+    :param f: The target to which to write the data; a local path specified as `str` or \
+    `pathlib.Path` or `None`, in which case the data, formatted as DSV can be retrieved \
+    via :meth:`~UnicodeWriter.read`
+    :param dialect: Either a dialect name as recognized by `csv.writer` or a \
+    :class:`~Dialect` instance for dialect customization beyond what can be done with \
+    `csv.writer`.
+    :param kw: Keyword arguments passed through to `csv.writer`.
+
     .. code-block:: python
 
-        >>> with UnicodeWriter('data.csv') as writer:
+        >>> from csvw import UnicodeWriter
+        >>> with UnicodeWriter('data.tsv', delimiter='\t') as writer:
         ...     writer.writerow(['ä', 'ö', 'ü'])
     """
 
@@ -52,10 +61,6 @@ class UnicodeWriter(object):
             dialect: typing.Optional[typing.Union[Dialect, str]] = None,
             **kw):
         """
-        :param f:
-        :param dialect: Either a dialect name as recognized by `csv.writer` or a `Dialect` \
-        instance for dialect customization not available via `csv.writer`.
-        :param kw: Keyword arguments passed through to `csv.writer`.
         """
         self.f = f
         self.encoding = kw.pop('encoding', 'utf-8')
@@ -119,8 +124,26 @@ class UnicodeWriter(object):
 
 
 class UnicodeReader(object):
-    """Read Unicode data from a csv file."""
+    """
+    Read Unicode data from a csv file.
 
+    :param f: The source from which to read the data; a local path specified as `str` or \
+    `pathlib.Path`, a file-like object or a `list` of lines.
+    :param dialect: Either a dialect name as recognized by `csv.reader` or a \
+    :class:`~Dialect` instance for dialect customization beyond what can be done with \
+    `csv.writer`.
+    :param kw: Keyword arguments passed through to `csv.reader`.
+
+    .. code-block:: python
+
+        >>> with UnicodeReader('tests/fixtures/frictionless-data.csv', delimiter='|') as reader:
+        ...     for row in reader:
+        ...         print(row)
+        ...         break
+        ...
+        ['FK', 'Year', 'Location name', 'Value', 'binary', 'anyURI', 'email', 'boolean', 'array',
+        'geojson']
+    """
     def __init__(
             self,
             f: typing.Union[str, pathlib.Path, typing.IO, typing.List[str]],
@@ -204,10 +227,12 @@ class UnicodeReader(object):
 
 
 class UnicodeReaderWithLineNumber(UnicodeReader):
-
+    """
+    A `UnicodeReader` yielding (lineno, row) pairs, where "lineno" is the 1-based number of the
+    the **text line** where the (possibly multi-line) row data starts in the DSV file.
+    """
     def __next__(self):
         """
-
         :return: a pair (1-based line number in the input, row)
         """
         # Retrieve the row, thereby incrementing the line number:
@@ -216,7 +241,27 @@ class UnicodeReaderWithLineNumber(UnicodeReader):
 
 
 class UnicodeDictReader(UnicodeReader):
-    """Read Unicode data represented as one (ordered) dictionary per row."""
+    """
+    A `UnicodeReader` yielding one `dict` per row.
+
+    :param f: As for :class:`UnicodeReader`
+    :param fieldnames:
+
+    .. code-block:: python
+
+        >>> with UnicodeDictReader(
+        ...         'tests/fixtures/frictionless-data.csv',
+        ...         dialect=Dialect(delimiter='|', header=False),
+        ...         fieldnames=[str(i) for i in range(1, 11)]) as reader:
+        ...     for row in reader:
+        ...         print(row)
+        ...         break
+        ...
+        OrderedDict([('1', 'FK'), ('2', 'Year'), ('3', 'Location name'), ('4', 'Value'),
+        ('5', 'binary'), ('6', 'anyURI'), ('7', 'email'), ('8', 'boolean'), ('9', 'array'),
+        ('10', 'geojson')])
+
+    """
 
     def __init__(self, f, fieldnames=None, restkey=None, restval=None, **kw):
         self._fieldnames = fieldnames   # list of keys for the dict
@@ -265,7 +310,14 @@ class UnicodeDictReader(UnicodeReader):
 
 
 class NamedTupleReader(UnicodeDictReader):
-    """Read namedtuple objects from a csv file."""
+    """
+    A `UnicodeReader` yielding one `namedtuple` per row.
+
+    .. note::
+
+        This reader has some limitations, notably that fieldnames must be normalized to be
+        admissible Python names, but also bad performance (compared with `UnicodeDictReader`).
+    """
 
     _normalize_fieldname = staticmethod(utils.normalize_name)
 

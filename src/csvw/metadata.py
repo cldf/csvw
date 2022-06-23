@@ -463,8 +463,12 @@ def optional_int():
 @attr.s
 class Datatype(DescriptionBase):
     """
+    A datatype description
 
-    .. seealso:: http://w3c.github.io/csvw/metadata/#datatypes
+        Cells within tables may be annotated with a datatype which indicates the type of the values
+        obtained by parsing the string value of the cell.
+
+    .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#datatypes>`_
     """
 
     base = attr.ib(
@@ -485,10 +489,10 @@ class Datatype(DescriptionBase):
     maxExclusive = attr.ib(default=None)
 
     @classmethod
-    def fromvalue(cls, v):
+    def fromvalue(cls, v: typing.Union[str, dict, 'Datatype']) -> 'Datatype':
         """
         :param v: Initialization data for `cls`; either a single string that is the main datatype \
-        of the values of the cell or a datatype description object, i.e. a `dict` or a `cls`
+        of the values of the cell or a datatype description object, i.e. a `dict` or a `cls` \
         instance.
         :return: An instance of `cls`
         """
@@ -705,7 +709,15 @@ def converter_titles(v):
 
 @attr.s
 class Column(Description):
+    """
+    A column description is an object that describes a single column.
 
+        The description provides additional human-readable documentation for a column, as well as
+        additional information that may be used to validate the cells within the column, create a
+        user interface for data entry, or inform conversion into other formats.
+
+    .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#columns>`_
+    """
     name = attr.ib(
         default=None,
         converter=functools.partial(utils.converter, str, None, allow_none=True)
@@ -847,7 +859,15 @@ def converter_foreignKeys(v):
 
 @attr.s
 class Schema(Description):
+    """
+    A schema description is an object that encodes the information about a schema, which describes
+    the structure of a table.
 
+    :ivar columns: `list` of :class:`Column` descriptions.
+    :ivar foreignKeys: `list` of :class:`ForeignKey` descriptions.
+
+    .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#schemas>`_
+    """
     columns = attr.ib(
         default=attr.Factory(list),
         converter=lambda v: [
@@ -938,7 +958,31 @@ def valid_transformations(instance, attribute, value):
 
 @attr.s
 class TableLike(Description):
+    """
+    A CSVW description object as encountered "in the wild", i.e. identified by URL on the web or
+    as file on disk.
 
+    Since `TableLike` objects may be instantiated from "externally referenced" objects
+    (via file paths or URLs), they have the necessary means to resolve
+    `link properties <https://www.w3.org/TR/tabular-metadata/#link-properties>`_
+
+    .. code-block:: python
+
+        >>> from csvw import Table, TableGroup, Link
+        >>> t = Table.from_file('tests/fixtures/csv.txt-table-metadata.json')
+        >>> Link('abc.txt').resolve(t.base)
+        PosixPath('tests/fixtures/abc.txt')
+        >>> tg = TableGroup.from_url(
+        ...     'https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/'
+        ...     'csv.txt-metadata.json')
+        >>> str(tg.tables[0].url)
+        'csv.txt'
+        >>> tg.tables[0].url.resolve(tg.base)
+        'https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/csv.txt'
+
+    and `URI template properties <https://www.w3.org/TR/tabular-metadata/#uri-template-properties>`_
+    (see :meth:`~TableLike.expand`).
+    """
     dialect = attr.ib(
         default=None,
         converter=lambda v: v if (v is None or isinstance(v, str))
@@ -986,7 +1030,10 @@ class TableLike(Description):
         return self.tableSchema.get_column(spec) if self.tableSchema else None
 
     @classmethod
-    def from_file(cls, fname, data=None):
+    def from_file(cls, fname: typing.Union[str, pathlib.Path], data=None) -> 'TableLike':
+        """
+        Instantiate a CSVW Table or TableGroup description from a metadata file.
+        """
         if is_url(str(fname)):
             return cls.from_url(str(fname), data=data)
         res = cls.fromvalue(data or get_json(fname))
@@ -994,7 +1041,10 @@ class TableLike(Description):
         return res
 
     @classmethod
-    def from_url(cls, url, data=None):
+    def from_url(cls, url: str, data=None) -> 'TableLike':
+        """
+        Instantiate a CSVW Table or TableGroup description from a metadata file specified by URL.
+        """
         data = data or get_json(url)
         url = urlparse(url)
         data.setdefault('@base', urlunparse((url.scheme, url.netloc, url.path, '', '', '')))
@@ -1004,7 +1054,14 @@ class TableLike(Description):
         res = cls.fromvalue(data)
         return res
 
-    def to_file(self, fname, omit_defaults=True):
+    def to_file(self, fname: typing.Union[str, pathlib.Path], omit_defaults=True) -> pathlib.Path:
+        """
+        Write a CSVW Table or TableGroup description as JSON object to a local file.
+
+        :param omit_defaults: The CSVW spec specifies defaults for most properties of most \
+        description objects. If `omit_defaults==True`, these properties will be pruned from \
+        the JSON object.
+        """
         fname = utils.ensure_path(fname)
         data = self.asdict(omit_defaults=omit_defaults)
         with json_open(str(fname), 'w') as f:
@@ -1012,9 +1069,9 @@ class TableLike(Description):
         return fname
 
     @property
-    def base(self):
+    def base(self) -> typing.Union[str, pathlib.Path]:
         """
-        We only support data in the filesystem, thus we make sure `base` is a `pathlib.Path`.
+        The "base" to resolve relative links against.
         """
         at_props = self._parent.at_props if self._parent else self.at_props
         ctxbase = None
@@ -1033,6 +1090,17 @@ class TableLike(Description):
 
     def expand(self, tmpl: URITemplate, row: dict, _row, _name=None, qname=False, uri=False) -> str:
         """
+        Expand a `URITemplate` using `row`, `_row` and `_name` as context and resolving the result
+        against `TableLike.url`.
+
+        .. code-block:: python
+
+            >>> from csvw import URITemplate, TableGroup
+            >>> tg = TableGroup.from_url(
+            ...     'https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/'
+            ...     'csv.txt-metadata.json')
+            >>> tg.expand(URITemplate('/path?{a}{#b}'), dict(a='1', b='2'), None)
+            'https://raw.githubusercontent.com/path?1#2'
 
         """
         assert not (qname and uri)
@@ -1041,7 +1109,7 @@ class TableLike(Description):
         res = Link(
             tmpl.expand(
                 _row=_row, _name=_name, **{_k: _v for _k, _v in row.items() if isinstance(_k, str)}
-            )).resolve(self.url.resolve(self.base))
+            )).resolve(self.url.resolve(self.base) if self.url else self.base)
         if not isinstance(res, pathlib.Path):
             if qname:
                 for prefix, url in NAMESPACES.items():
@@ -1059,7 +1127,19 @@ class TableLike(Description):
 
 @attr.s
 class Table(TableLike):
+    """
+    A table description is an object that describes a table within a CSV file.
 
+    `Table` objects provide access to schema manipulation either by manipulating the `tableSchema`
+    property directly or via higher-level methods like :meth:`~Table.add_foreign_key`
+
+    `Table` objects also mediate read/write access to the actual data through
+
+    - :meth:`~Table.write`
+    - :meth:`~Table.iterdicts`
+
+    .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#tables>`_
+    """
     suppressOutput = attr.ib(default=False)
     _comments = []
 
@@ -1092,11 +1172,11 @@ class Table(TableLike):
     def _get_dialect(self):
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()
 
-    def write(self, items, fname=DEFAULT, base=None, _zipped=False):
+    def write(self, items: typing.Iterable[dict], fname=DEFAULT, base=None, _zipped=False):
         """
         Write row items to a CSV file according to the table schema.
 
-        :param items: Iterator of `dict`s storing the data per row.
+        :param items: Iterator of `dict` storing the data per row.
         :param fname: Name of the file to which to write the data.
         :param base: Base directory relative to which to interpret table urls.
         :param _zipped: Flag signaling whether the resulting data file should be zipped.
@@ -1160,7 +1240,7 @@ class Table(TableLike):
             fname=None,
             _Row=collections.OrderedDict,
             strict=True,
-    ):
+    ) -> typing.Generator[dict, None, None]:
         """Iterate over the rows of the table
 
         Create an iterator that maps the information in each row to a `dict` whose keys are
@@ -1176,6 +1256,9 @@ class Table(TableLike):
         :param bool with_metadata: (default False) Also yield fname and lineno
         :param fname: file-like, pathlib.Path, or str (default None)\
         The file to be read. Defaults to inheriting from a parent object, if one exists.
+        :param strict: Flag signaling whether data is read strictly - i.e. raising `ValueError` \
+        when invalid data is encountered - or not - i.e. only issueing a warning and returning \
+        invalid data as `str` as provided by the undelying DSV reader.
         :return: A generator of dicts or triples (fname, lineno, dict) if with_metadata
         """
         dialect = self._get_dialect()
@@ -1322,7 +1405,19 @@ def converter_tables(v):
 
 @attr.s
 class TableGroup(TableLike):
+    """
+    A table group description is an object that describes a group of tables.
 
+    A `TableGroup` delegates most of its responsibilities to the `Table` objects listed in its
+    `tables` property. For convenience, `TableGroup` provides methods to
+    - read data from all tables: :meth:`TableGroup.read`
+    - write data for all tables: :meth:`TableGroup.write`
+
+    It also provides a method to check the referential integrity of data in related tables via
+    :meth:`TableGroup.check_referential_integrity`
+
+    .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#table-groups>`_
+    """
     tables = attr.ib(repr=False, default=attr.Factory(list), converter=converter_tables)
 
     def __attrs_post_init__(self):

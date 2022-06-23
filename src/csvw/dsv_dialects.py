@@ -1,3 +1,14 @@
+"""
+DSV data can be surprisingly diverse. While Python's `csv` module offers out-of-the-box support
+for the basic formatting parameters, CSVW recognizes a couple more, like `skipColumns` or
+`skipRows`.
+
+.. seealso::
+
+    - `<https://www.w3.org/TR/2015/REC-tabular-metadata-20151217/#dialect-descriptions>`_
+    - `<https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`_
+    - `<https://specs.frictionlessdata.io/csv-dialect/>`_
+"""
 import attr
 import warnings
 import functools
@@ -32,9 +43,10 @@ def convert_encoding(s):
 
 @attr.s
 class Dialect(object):
-    """A CSV dialect specification.
+    """
+    A CSV dialect specification.
 
-    .. seealso:: http://w3c.github.io/csvw/metadata/#dialect-descriptions
+    .. seealso:: `<https://www.w3.org/TR/2015/REC-tabular-metadata-20151217/#dialect-descriptions>`_
     """
 
     encoding = attr.ib(

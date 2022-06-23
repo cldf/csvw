@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/csvw.svg)](https://pypi.org/project/csvw)
 
 This package provides a Python API to read and write relational, tabular data according to the
-[CSV on the Web](https://csvw.org/) specification.
+[CSV on the Web](https://csvw.org/) specification and commandline tools read and validate CSVW data.
 
 
 ## Links
@@ -42,8 +42,52 @@ $ pip install csvw
 
 ## CLI
 
+- `csvw2json`:
+
+```shell
+$ csvw2json tests/fixtures/zipped-metadata.json 
+{
+    "tables": [
+        {
+            "url": "tests/fixtures/zipped.csv",
+            "row": [
+                {
+                    "url": "tests/fixtures/zipped.csv#row=2",
+                    "rownum": 1,
+                    "describes": [
+                        {
+                            "ID": "abc",
+                            "Value": "the value"
+                        }
+                    ]
+                },
+                {
+                    "url": "tests/fixtures/zipped.csv#row=3",
+                    "rownum": 2,
+                    "describes": [
+                        {
+                            "ID": "cde",
+                            "Value": "another one"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
+```
+
+- `csvwvalidate`:
+
+```shell
+$ csvwvalidate tests/fixtures/zipped-metadata.json 
+OK
+```
+
 
 ## Python API
+
+Find the Python API documentation at [csvw.readthedocs.io](https://csvw.readthedocs.io/en/latest/).
 
 
 ## Known limitations
@@ -74,7 +118,7 @@ probably never will) implement the full extent of this spec.
   by specifying `"header": false` and `"skipRows": 1` in the table's dialect
   description.
 
-However, the `csvw.CSVW` works correctly for
+However, `csvw.CSVW` works correctly for
 - 269 out of 270 [JSON tests](https://w3c.github.io/csvw/tests/#manifest-json),
 - 280 out of 282 [validation tests](https://w3c.github.io/csvw/tests/#manifest-validation),
 - 10 out of 18 [non-normative tests](https://w3c.github.io/csvw/tests/#manifest-nonnorm)

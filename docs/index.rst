@@ -17,7 +17,6 @@ Follow the links below for documentation of the csvw Python API.
    :caption: Contents:
 
    dsv
-   dsv_dialects
    csvw
    datatypes
    db

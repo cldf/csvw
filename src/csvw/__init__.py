@@ -1,8 +1,8 @@
 # csvw - https://w3c.github.io/csvw/primer/
 
 from .metadata import (
-    TableGroup, Table, Column, ForeignKey, Link, NaturalLanguage, Datatype, URITemplate, CSVW
-)
+    TableGroup, Table, Column, ForeignKey, Link, NaturalLanguage, Datatype, URITemplate, CSVW,
+    Dialect)
 
 from .dsv import (UnicodeWriter,
     UnicodeReader, UnicodeReaderWithLineNumber, UnicodeDictReader, NamedTupleReader,
@@ -14,7 +14,7 @@ __all__ = [
     'Link', 'NaturalLanguage',
     'Datatype',
     'URITemplate',
-    'UnicodeWriter',
+    'Dialect', 'UnicodeWriter',
     'UnicodeReader', 'UnicodeReaderWithLineNumber', 'UnicodeDictReader', 'NamedTupleReader',
     'iterrows', 'rewrite',
     'CSVW',
