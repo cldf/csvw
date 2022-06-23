@@ -3,6 +3,7 @@ import json
 import math
 import typing
 import decimal
+import pathlib
 import datetime
 import collections
 
@@ -13,7 +14,7 @@ from isodate.duration import Duration
 
 from .utils import is_url
 
-__all__ = ['group_triples', 'to_json', 'Triple']
+__all__ = ['group_triples', 'to_json', 'Triple', 'format_value']
 
 
 def format_value(value, col):
@@ -41,6 +42,8 @@ def format_value(value, col):
         return value.unsplit()
     if isinstance(value, bytes):
         return col.datatype.formatted(value)
+    if isinstance(value, pathlib.Path):
+        return str(value)
     if isinstance(value, float):
         return 'NaN' if math.isnan(value) else (
             '{}INF'.format('-' if value < 0 else '') if math.isinf(value) else value)
@@ -78,8 +81,7 @@ class Triple:
         if valueUrl:
             val = table.expand(
                 valueUrl, row, _row=rownum, _name=_name, qname=is_type, uri=not is_type)
-        else:
-            val = format_value(val, col)
+        val = format_value(val, col)
         s = None
         aboutUrl = col.aboutUrl if col else None
         if aboutUrl:

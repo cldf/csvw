@@ -26,11 +26,19 @@ def test_URITemplate():
     assert ut != 1
 
 
-def test_Link():
-    li = csvw.Link('abc.csv')
-    assert li.resolve(None) == 'abc.csv'
-    assert li.resolve('http://example.com') == 'http://example.com/abc.csv'
-    assert li.resolve(pathlib.Path('.')) == pathlib.Path('abc.csv')
+@pytest.mark.parametrize(
+    'link,base,res',
+    [
+        ('abc.csv', None, 'abc.csv'),
+        ('abc.csv', 'http://example.com', 'http://example.com/abc.csv'),
+        ('abc.csv', pathlib.Path('.'), pathlib.Path('abc.csv')),
+        ('abc.csv', pathlib.Path(__file__), pathlib.Path(__file__).parent / 'abc.csv'),
+        ('http://example.com', pathlib.Path('.'), 'http://example.com')
+    ]
+)
+def test_Link(link, base, res):
+    assert str(csvw.Link(link)) == str(link)
+    assert csvw.Link(link).resolve(base) == res
 
 
 class TestColumnAccess(object):
@@ -182,16 +190,6 @@ def test_Schema():
 
     with pytest.warns(UserWarning, match='uplicate'):
         Schema.fromvalue({'columns': [{'name': 'a'}, {'titles': 'a'}]})
-
-
-class TestLink(object):
-
-    def test_link(self):
-        l = csvw.Link('a.csv')
-        assert '{}'.format(l) == l.resolve(None)
-        assert 'http://example.org/a.csv' == l.resolve('http://example.org')
-        base = pathlib.Path('.')
-        assert base == l.resolve(base).parent
 
 
 def _make_table_like(cls, tmp_path, data=None, metadata=None, mdname=None):

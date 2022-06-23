@@ -268,7 +268,9 @@ class Link(object):
         a local file.
         """
         if hasattr(base, 'joinpath'):
-            return base / self.string
+            if is_url(self.string):
+                return self.string
+            return (base if base.is_dir() else base.parent) / self.string
         return urljoin(base, self.string)
 
 
@@ -1040,18 +1042,18 @@ class TableLike(Description):
             tmpl.expand(
                 _row=_row, _name=_name, **{_k: _v for _k, _v in row.items() if isinstance(_k, str)}
             )).resolve(self.url.resolve(self.base))
-
-        if qname:
-            for prefix, url in NAMESPACES.items():
-                if res.startswith(url):
-                    res = res.replace(url, prefix + ':')
-                    break
-        if uri:
-            if res != 'rdf:type':
+        if not isinstance(res, pathlib.Path):
+            if qname:
                 for prefix, url in NAMESPACES.items():
-                    if res.startswith(prefix + ':'):
-                        res = res.replace(prefix + ':', url)
+                    if res.startswith(url):
+                        res = res.replace(url, prefix + ':')
                         break
+            if uri:
+                if res != 'rdf:type':
+                    for prefix, url in NAMESPACES.items():
+                        if res.startswith(prefix + ':'):
+                            res = res.replace(prefix + ':', url)
+                            break
         return res
 
 
@@ -1606,6 +1608,7 @@ class CSVW:
         if minimal:
             return list(
                 itertools.chain(*[[r['describes'][0] for r in t['row']] for t in res['tables']]))
+
         return res
 
     def _table_to_json(self, table):

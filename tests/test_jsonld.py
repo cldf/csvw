@@ -1,3 +1,5 @@
+import pathlib
+
 import pytest
 
 from csvw.jsonld import *
@@ -26,3 +28,7 @@ def test_grouped():
         Triple(about='http://example.com/1', property='schema:name', value='The Name'),
     ])
     assert len(res) == 1
+
+
+def test_format_value():
+    assert format_value(pathlib.Path(__file__), None) == __file__
