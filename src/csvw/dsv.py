@@ -40,8 +40,10 @@ class UnicodeWriter(object):
     """
     Write Unicode data to a csv file.
 
-    >>> with UnicodeWriter('data.csv') as writer:
-    ...     writer.writerow(['ä', 'ö', 'ü'])
+    .. code-block:: python
+
+        >>> with UnicodeWriter('data.csv') as writer:
+        ...     writer.writerow(['ä', 'ö', 'ü'])
     """
 
     def __init__(
@@ -49,6 +51,12 @@ class UnicodeWriter(object):
             f: typing.Optional[typing.Union[str, pathlib.Path]] = None,
             dialect: typing.Optional[typing.Union[Dialect, str]] = None,
             **kw):
+        """
+        :param f:
+        :param dialect: Either a dialect name as recognized by `csv.writer` or a `Dialect` \
+        instance for dialect customization not available via `csv.writer`.
+        :param kw: Keyword arguments passed through to `csv.writer`.
+        """
         self.f = f
         self.encoding = kw.pop('encoding', 'utf-8')
         if isinstance(dialect, Dialect):
@@ -88,7 +96,11 @@ class UnicodeWriter(object):
         self.writer = csv.writer(self.f, **self.kw)
         return self
 
-    def read(self):
+    def read(self) -> typing.Optional[bytes]:
+        """
+        If the writer has been initialized passing `None` as target, the CSV data as `bytes` can be
+        retrieved calling this method.
+        """
         if hasattr(self.f, 'seek'):
             self.f.seek(0)
         if hasattr(self.f, 'read'):
@@ -98,10 +110,10 @@ class UnicodeWriter(object):
         if self._close:
             self.f.close()
 
-    def writerow(self, row):
+    def writerow(self, row: typing.Union[tuple, list]):
         self.writer.writerow(self._escapedoubled(row))
 
-    def writerows(self, rows):
+    def writerows(self, rows: typing.Iterable[typing.Union[tuple, list]]):
         for row in rows:
             self.writerow(row)
 
@@ -172,10 +184,13 @@ class UnicodeReader(object):
                    row[0].startswith(self.dialect.commentPrefix)) or \
                     ((not row or set(row) == {''}) and self.dialect.skipBlankRows) or \
                     (self.lineno < self.dialect.skipRows):
-                if row and self.dialect.commentPrefix and \
-                        row[0].startswith(self.dialect.commentPrefix):
-                    self.comments.append(
-                        (self.lineno, self.dialect.delimiter.join(row)[1:].strip()))
+                if (row and self.dialect.commentPrefix and  # noqa: W504
+                        row[0].startswith(self.dialect.commentPrefix)) or \
+                        (row and self.lineno < self.dialect.skipRows):
+                    self.comments.append((
+                        self.lineno,
+                        self.dialect.delimiter.join(row).lstrip(self.dialect.commentPrefix).strip(),
+                    ))
                 row = self._next_row()
             row = [self.dialect.trimmer(s) for s in row][self.dialect.skipColumns:]
         return row

@@ -6,15 +6,19 @@ We model the hierarchy of basic datatypes using derived classes.
 """
 import re
 import json as _json
+import math
+import base64
 import decimal as _decimal
 import binascii
 import datetime
-import base64
+import warnings
+import itertools
 
 import isodate
 import rfc3986
 import dateutil.parser
 import babel.numbers
+import babel.dates
 
 __all__ = ['DATATYPES']
 
@@ -34,7 +38,13 @@ def to_binary(s, encoding='utf-8'):
 
 @register
 class anyAtomicType(object):
+    """
+    A basic datatype consists of
+    - a bag of attributes
+    - three staticmethods controlling marshalling and unmarshalling of string data.
 
+    Theses methods are orchestrated from `csvw.Datatype` in its `read` and `formatted` methods.
+    """
     name = 'any'
     minmax = False
     example = 'x'
@@ -48,28 +58,45 @@ class anyAtomicType(object):
 
     @staticmethod
     def derived_description(datatype):
+        """
+        Override to provide keyword arguments to `to_python` and `to_string` based on properties of
+        the `csvw.Datatype`.
+        """
         return {}
 
     @staticmethod
-    def to_python(v, **kw):
+    def to_python(v: str, **kw) -> object:
+        """
+        Convert a value serialized as `str` to a suitable Python object.
+        """
         return v  # pragma: no cover
 
     @staticmethod
-    def to_string(v, **kw):
+    def to_string(v: object, **kw) -> str:
+        """
+        Serialize a Python object as `str` - ideally allowing round-tripping with `to_python`.
+        """
         return '{}'.format(v)
 
 
 @register
 class string(anyAtomicType):
-
+    """
+    The lexical and value spaces of xs:string are the set of all possible strings composed of any
+    character allowed in a XML 1.0 document without any treatment done on whitespaces.
+    """
     name = 'string'
 
     @staticmethod
     def derived_description(datatype):
-        # We wrap a regex specified as `format` property into a group and add `$` to
-        # make sure the whole string is matched when validating.
-        return {'regex': re.compile(
-            '({})$'.format(datatype.format)) if datatype.format else None}
+        if datatype.format:
+            # We wrap a regex specified as `format` property into a group and add `$` to
+            # make sure the whole string is matched when validating.
+            try:
+                return {'regex': re.compile(r'({})$'.format(datatype.format))}
+            except re.error:
+                warnings.warn('Invalid regex pattern as datatype format')
+        return {}
 
     @staticmethod
     def to_python(v, regex=None):
@@ -80,7 +107,12 @@ class string(anyAtomicType):
 
 @register
 class anyURI(string):
-
+    """
+    This datatype corresponds normatively to the XLink href attribute. Its value space includes the
+    URIs defined by the RFCs `2396 <https://datatracker.ietf.org/doc/html/rfc2396>`_ and
+    `2732 <https://datatracker.ietf.org/doc/html/rfc2732>`_, but its lexical space doesn’t require
+    the character escapes needed to include non-ASCII characters in URIs.
+    """
     name = 'anyURI'
 
     @staticmethod
@@ -101,9 +133,33 @@ class anyURI(string):
 
 
 @register
+class NMTOKEN(string):
+    """
+    The lexical and value spaces of xs:NMTOKEN are the set of XML 1.0 “name tokens,” i.e., tokens
+    composed of characters, digits, “.”, “:”, “-”, and the characters defined by Unicode, such as
+    “combining” or “extender”.
+
+    This type is usually called a “token.”
+
+    Valid values include "Snoopy", "CMS", "1950-10-04", or "0836217462".
+
+    Invalid values include "brought classical music to the Peanuts strip" (spaces are forbidden)
+    or "bold,brash" (commas are forbidden).
+    """
+    name = "NMTOKEN"
+
+    @staticmethod
+    def to_python(v, regex=None):
+        v = string.to_python(v, regex=regex)
+        if not re.fullmatch(r'[\w.:-]*', v):
+            NMTOKEN.value_error(v)
+        return v
+
+
+@register
 class base64Binary(anyAtomicType):
 
-    name = 'binary'
+    name = 'base64Binary'
     example = 'YWJj'
 
     @staticmethod
@@ -113,14 +169,19 @@ class base64Binary(anyAtomicType):
         except UnicodeEncodeError:
             base64Binary.value_error(v[:10])
         try:
-            base64.decodebytes(res)
+            res = base64.decodebytes(res)
         except Exception:
             raise ValueError('invalid base64 encoding')
         return res
 
     @staticmethod
     def to_string(v, **kw):
-        return v.decode()
+        return base64.encodebytes(v).decode().strip()
+
+
+@register
+class _binary(base64Binary):
+    name = 'binary'
 
 
 @register
@@ -136,14 +197,14 @@ class hexBinary(anyAtomicType):
         except UnicodeEncodeError:
             hexBinary.value_error(v[:10])
         try:
-            binascii.unhexlify(res)
+            res = binascii.unhexlify(res)
         except (binascii.Error, TypeError):
             raise ValueError('invalid hexBinary encoding')
         return res
 
     @staticmethod
     def to_string(v, **kw):
-        return v.decode()
+        return binascii.hexlify(v).decode().upper()
 
 
 @register
@@ -155,9 +216,12 @@ class boolean(anyAtomicType):
 
     @staticmethod
     def derived_description(datatype):
-        if datatype.format:
+        if datatype.format and isinstance(datatype.format, str) and datatype.format.count('|') == 1:
             true, false = [[v] for v in datatype.format.split('|')]
         else:
+            if datatype.format and (
+                    (not isinstance(datatype.format, str)) or (datatype.format.count('|') != 1)):
+                warnings.warn('Invalid format spec for boolean')
             true, false = ['true', '1'], ['false', '0']
         return {'true': true, 'false': false}
 
@@ -176,6 +240,21 @@ class boolean(anyAtomicType):
         return (true if v else false)[0]
 
 
+def with_tz(v, func, args, kw):
+    tz_pattern = re.compile('(Z|[+-][0-2][0-9]:[0-5][0-9])$')
+    tz = tz_pattern.search(v)
+    if tz:
+        v = v[:tz.start()]
+        tz = tz.groups()[0]
+    res = func(v, *args, **kw)
+    if tz:
+        dt = dateutil.parser.parse('{}{}'.format(datetime.datetime.now(), tz))
+        res = datetime.datetime(
+            res.year, res.month, res.day, res.hour, res.minute, res.second, res.microsecond,
+            dt.tzinfo)
+    return res
+
+
 @register
 class dateTime(anyAtomicType):
 
@@ -189,47 +268,51 @@ class dateTime(anyAtomicType):
 
     @staticmethod
     def _parse(v, cls, regex, tz_marker=None):
+        v = v.strip()
         try:
             comps = regex.match(v).groupdict()
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
             dateTime.value_error(v)
-        if 'microsecond' in comps:
+        if comps.get('extramicroseconds'):
+            raise ValueError('Extra microseconds')
+        if comps.get('microsecond'):
             # We have to convert decimal fractions of seconds to microseconds.
             # This is done by first chopping off anything under 6 decimal places,
             # then (in case we got less precision) right-padding with 0 to get a
             # 6-digit number.
             comps['microsecond'] = comps['microsecond'][:6].ljust(6, '0')
-        res = cls(**{k: int(v) for k, v in comps.items()})
+        if cls == datetime.datetime and 'year' not in comps:
+            d = datetime.date.today()
+            for a in ['year', 'month', 'day']:
+                comps[a] = getattr(d, a)
+        res = cls(**{k: int(v) for k, v in comps.items() if v is not None})
         if tz_marker:
             # Let dateutils take care of parsing the timezone info:
             res = res.replace(tzinfo=dateutil.parser.parse(v).tzinfo)
         return res
 
     @staticmethod
-    def to_python(v, regex=None, fmt=None, tz_marker=None):
-        if regex is None:
-            return dateutil.parser.parse(v)
-        return dateTime._parse(v, datetime.datetime, regex, tz_marker=tz_marker)
+    def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):
+        if pattern and regex:
+            match = regex.match(v)
+            if not match:
+                raise ValueError('{} -- {} -- {}'.format(pattern, v, regex))  # pragma:
+        try:
+            return dateutil.parser.isoparse(v)
+        except ValueError:
+            return dateTime._parse(v, datetime.datetime, regex, tz_marker=tz_marker)
 
     @staticmethod
-    def to_string(v, regex=None, fmt=None, tz_marker=None):
-        if fmt is None:
-            return v.isoformat()
-        res = fmt.format(dt=v, microsecond='{:%f}'.format(v))
-        if tz_marker:
-            # We start out with the default timezone info: +##:##
-            tz_offset = v.isoformat()[-6:]
-            assert tz_offset[0] in '+-'
-            tz_offset = tz_offset.split(':')
-            if tz_marker.startswith(' '):
-                res += ' '
-            res += tz_offset[0]
-            tz_type = len(tz_marker.strip())
-            if tz_type == 3:
-                res += ':'
-            if (tz_type == 1 and tz_offset[1] != '00') or tz_type > 1:
-                res += tz_offset[1]
-        return res
+    def to_string(v, regex=None, fmt=None, tz_marker=None, pattern=None):
+        if pattern:
+            return babel.dates.format_datetime(v, tzinfo=v.tzinfo, format=pattern)
+        return v.isoformat()
+
+
+@register
+class _dateTime(dateTime):
+
+    name = 'dateTime'
 
 
 @register
@@ -240,11 +323,23 @@ class date(dateTime):
 
     @staticmethod
     def derived_description(datatype):
-        return dt_format_and_regex(datatype.format or 'yyyy-MM-dd')
+        try:
+            return dt_format_and_regex(datatype.format or 'yyyy-MM-dd')
+        except ValueError:
+            warnings.warn('Invalid date format')
+            return dt_format_and_regex('yyyy-MM-dd')
 
     @staticmethod
-    def to_python(v, regex=None, fmt=None, tz_marker=None):
-        return dateTime.to_python(v, regex=regex, fmt=fmt).date()
+    def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):
+        return with_tz(
+            v.strip(), dateTime.to_python, [], dict(regex=regex, fmt=fmt, pattern=pattern))
+
+    @staticmethod
+    def to_string(v, regex=None, fmt=None, tz_marker=None, pattern=None):
+        from babel.dates import format_date
+        if pattern:
+            return format_date(v, format=pattern, locale='en')
+        return dateTime.to_string(v, regex=regex, fmt=fmt, tz_marker=tz_marker, pattern=pattern)
 
 
 @register
@@ -265,16 +360,22 @@ class dateTimeStamp(dateTime):
 class _time(dateTime):
 
     name = 'time'
-    example = '2018-12-10T20:20:20'
+    example = '20:20:20'
 
     @staticmethod
     def derived_description(datatype):
         return dt_format_and_regex(datatype.format or 'HH:mm:ss', no_date=True)
 
     @staticmethod
-    def to_python(v, regex=None, fmt=None, tz_marker=None):
+    def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):
+        if pattern and 'x' in pattern.lower():
+            return dateutil.parser.parse('{}T{}'.format(datetime.date.today().isoformat(), v))
         assert regex is not None
-        return dateTime._parse(v, datetime.time, regex, tz_marker=tz_marker)
+        return with_tz(v, dateTime._parse, [datetime.datetime, regex], dict(tz_marker=tz_marker))
+
+    @staticmethod
+    def to_string(v, regex=None, fmt=None, tz_marker=None, pattern=None):
+        return babel.dates.format_time(v, tzinfo=v.tzinfo, format=pattern)
 
 
 @register
@@ -294,8 +395,18 @@ class duration(anyAtomicType):
         return isodate.parse_duration(v)
 
     @staticmethod
-    def to_string(v, **kw):
+    def to_string(v, format=None, **kw):
         return isodate.duration_isoformat(v)
+
+
+@register
+class dayTimeDuration(duration):
+    name = 'dayTimeDuration'
+
+
+@register
+class yearMonthDuration(duration):
+    name = 'yearMonthDuration'
 
 
 @register
@@ -312,9 +423,6 @@ class decimal(anyAtomicType):
     }
     _reverse_special = {v: k for k, v in _special.items()}
 
-    # TODO:
-    # - use babel.numbers.NumberPattern.apply to format a value!
-    # - use babel.numbers.parse_number to parse a value!
     @staticmethod
     def derived_description(datatype):
         if datatype.format:
@@ -324,13 +432,25 @@ class decimal(anyAtomicType):
 
     @staticmethod
     def to_python(v, pattern=None, decimalChar=None, groupChar=None):
+        if isinstance(v, str) and 'e' in v.lower():
+            raise ValueError('Invalid value for decimal')
+
+        if isinstance(v, str) and re.search('{0}{0}+'.format(re.escape(groupChar or ',')), v):
+            raise ValueError('Invalid value for decimal')
+
         if groupChar is None and pattern and ',' in pattern:
             groupChar = ','
         if decimalChar is None and pattern and '.' in pattern:
             decimalChar = '.'
+        if pattern and not NumberPattern(pattern).is_valid(
+                v.replace(groupChar or ',', ',').replace(decimalChar or '.', '.')):
+            raise ValueError(
+                'Invalid value "{}" for decimal with pattern "{}"'.format(v, pattern))
+
         factor = 1
         if isinstance(v, str):
             if v in decimal._special:
+                warnings.warn('Invalid special value for decimal')
                 return _decimal.Decimal(decimal._special[v])
             if groupChar:
                 v = v.replace(groupChar, '')
@@ -377,22 +497,177 @@ class decimal(anyAtomicType):
 class integer(decimal):
 
     name = 'integer'
+    range = None
 
-    @staticmethod
-    def to_python(v, **kw):
-        return int(decimal.to_python(v, **kw))
+    @classmethod
+    def to_python(cls, v, **kw):
+        res = decimal.to_python(v, **kw)
+        numerator, denominator = res.as_integer_ratio()
+        if denominator == 1:
+            if cls.range and not (cls.range[0] <= numerator <= cls.range[1]):
+                raise ValueError("{} must be an integer between {} and {}, but got ".format(
+                    cls.name, cls.range[0], cls.range[1]), v)
+            return numerator
+        raise ValueError('Invalid value for integer')
+
+
+@register
+class _int(integer):
+
+    name = 'int'
+
+
+@register
+class unsignedInt(integer):
+    """
+    The value space of xs:unsignedInt is the integers between 0 and 4294967295, i.e., the unsigned
+    values that can fit in a word of 32 bits. Its lexical space allows an optional “+” sign and
+    leading zeros before the significant digits.
+
+    The decimal point (even when followed only by insignificant zeros) is forbidden.
+
+    Valid values include "4294967295", "0", "+0000000000000000000005", or "1".
+
+    Invalid values include "-1" and "1.".
+    """
+    name = 'unsignedInt'
+    range = (0, 4294967295)
+
+
+@register
+class unsignedShort(integer):
+    """
+    The value space of xs:unsignedShort is the integers between 0 and 65535, i.e., the unsigned
+    values that can fit in a word of 16 bits. Its lexical space allows an optional “+” sign and
+    leading zeros before the significant digits.
+
+    The decimal point (even when followed only by insignificant zeros) is forbidden.
+
+    Valid values include "65535", "0", "+0000000000000000000005", or "1".
+
+    Invalid values include "-1" and "1." .
+    """
+    name = 'unsignedShort'
+    range = (0, 65535)
+
+
+@register
+class unsignedLong(integer):
+    """
+    The value space of xs:unsignedLong is the integers between 0 and 18446744073709551615, i.e.,
+    the unsigned values that can fit in a word of 64 bits. Its lexical space allows an optional
+    “+” sign and leading zeros before the significant digits.
+
+    The decimal point (even when followed only by insignificant zeros) is forbidden.
+
+    Valid values include "18446744073709551615", "0", "+0000000000000000000005", or "1".
+
+    Invalid values include "-1" and "1.".
+    """
+    name = 'unsignedLong'
+    range = (0, 18446744073709551615)
+
+
+@register
+class unsignedByte(integer):
+    """
+    The value space of xs:unsignedByte is the integers between 0 and 255, i.e., the unsigned values
+     that can fit in a word of 8 bits. Its lexical space allows an optional “+” sign and leading
+     zeros before the significant digits.
+
+    The lexical space does not allow values expressed in other numeration bases (such as
+    hexadecimal, octal, or binary).
+
+    The decimal point (even when followed only by insignificant zeros) is forbidden.
+
+    Valid values include "255", "0", "+0000000000000000000005", or "1".
+
+    Invalid values include "-1" and "1.".
+    """
+    name = 'unsignedByte'
+    range = (0, 255)
+
+
+@register
+class short(integer):
+    """
+    The value space of xs:short is the set of common short integers (16 bits), i.e., the integers
+    between -32768 and 32767; its lexical space allows any number of insignificant leading zeros.
+
+    The decimal point (even when followed only by insignificant zeros) is forbidden.
+
+    Valid values include "-32768", "0", "-0000000000000000000005", or "32767".
+
+    Invalid values include "32768" and "1.".
+    """
+    name = 'short'
+    range = (-32768, 32767)
+
+
+@register
+class long(integer):
+    """
+    The value space of xs:long is the set of common double-size integers (64 bits), i.e., the
+    integers between -9223372036854775808 and 9223372036854775807; its lexical space allows any
+    number of insignificant leading zeros.
+
+    The decimal point (even when followed only by insignificant zeros) is forbidden.
+
+    Valid values for xs:long include "-9223372036854775808", "0", "-0000000000000000000005", or
+    "9223372036854775807".
+
+    Invalid values include "9223372036854775808" and "1.".
+    """
+    name = 'long'
+    range = (-9223372036854775808, 9223372036854775807)
+
+
+@register
+class byte(integer):
+    """
+    The value space of xs:byte is the integers between -128 and 127, i.e., the signed values that
+    can fit in a word of 8 bits. Its lexical space allows an optional sign and leading zeros before
+    the significant digits.
+
+    The lexical space does not allow values expressed in other numeration bases (such as
+    hexadecimal, octal, or binary).
+
+    Valid values for byte include 27, -34, +105, and 0.
+
+    Invalid values include 0A, 1524, and INF.
+    """
+    name = 'byte'
+    range = (-128, 127)
 
 
 @register
 class nonNegativeInteger(integer):
 
     name = 'nonNegativeInteger'
+    range = (1, math.inf)
 
-    @staticmethod
-    def to_python(v, **kw):
-        ret = int(integer.to_python(v, **kw))
-        if ret < 0:
-            raise ValueError("nonNegativeIntegers can't be negative, but got ", v)
+
+@register
+class positiveInteger(integer):
+
+    name = 'positiveInteger'
+    range = (0, math.inf)
+
+
+@register
+class nonPositiveInteger(integer):
+
+    name = 'nonPositiveInteger'
+    example = '-5'
+    range = (-math.inf, 0)
+
+
+@register
+class negativeInteger(integer):
+
+    name = 'negativeInteger'
+    example = '-5'
+    range = (-math.inf, -1)
 
 
 @register
@@ -403,7 +678,18 @@ class _float(anyAtomicType):
     example = '5.3'
 
     @staticmethod
-    def to_python(v, **kw):
+    def derived_description(datatype):
+        if datatype.format:
+            return datatype.format if isinstance(datatype.format, dict) \
+                else {'pattern': datatype.format}
+        return {}
+
+    @staticmethod
+    def to_python(v, pattern=None, **kw):
+        if pattern and not NumberPattern(pattern).is_valid(v):
+            raise ValueError(
+                'Invalid value "{}" for number with pattern "{}"'.format(v, pattern))
+
         try:
             return float(v)
         except (TypeError, ValueError):
@@ -438,12 +724,6 @@ class normalizedString(string):
                 v = v.replace(c, ' ')
             v = v.strip()
         return string.to_python(v, '')
-
-
-@register
-class anySimpleType(string):
-
-    name = 'anySimpleType'
 
 
 @register
@@ -517,7 +797,12 @@ def dt_format_and_regex(fmt, no_date=False):
     .. seealso:: http://w3c.github.io/csvw/syntax/#formats-for-dates-and-times
     """
     if fmt is None:
-        return {'fmt': None, 'tz_marker': None, 'regex': None}
+        return {'fmt': None, 'tz_marker': None, 'regex': None, 'pattern': None}
+
+    if isinstance(fmt, dict) and list(fmt.keys()) == ['pattern']:
+        fmt = fmt['pattern']
+
+    pattern = fmt
 
     # First, we strip off an optional timezone marker:
     tz_marker = None
@@ -593,17 +878,23 @@ def dt_format_and_regex(fmt, no_date=False):
             if d_sep in dfmt:
                 break
         else:
-            raise ValueError('invalid date separator')  # pragma: no cover
+            d_sep = None
 
-        # Iterate over date components, converting them to string format specs and regular
-        # expressions.
-        for i, part in enumerate(dfmt.split(d_sep)):
-            if i > 0:
-                format += d_sep
-                regex += re.escape(d_sep)
-            f, r = translate[part]
-            format += f
-            regex += r
+        if d_sep:
+            # Iterate over date components, converting them to string format specs and regular
+            # expressions.
+            for i, part in enumerate(dfmt.split(d_sep)):
+                if i > 0:
+                    format += d_sep
+                    regex += re.escape(d_sep)
+                f, r = translate[part]
+                format += f
+                regex += r
+        else:
+            for _, chars in itertools.groupby(dfmt, lambda k: k):
+                f, r = translate[''.join(chars)]
+                format += f
+                regex += r
 
     if dt_sep:
         format += dt_sep
@@ -611,18 +902,147 @@ def dt_format_and_regex(fmt, no_date=False):
 
     if tfmt:
         # For time components the only valid separator is ":".
-        for i, part in enumerate(tfmt.split(':')):
-            if i > 0:
-                format += ':'
-                regex += re.escape(':')
-            f, r = translate[part]
-            format += f
-            regex += r
+        if ':' in tfmt:
+            for i, part in enumerate(tfmt.split(':')):
+                if i > 0:
+                    format += ':'
+                    regex += re.escape(':')
+                f, r = translate[part]
+                format += f
+                regex += r
+        else:
+            for _, chars in itertools.groupby(tfmt, lambda k: k):
+                f, r = translate[''.join(chars)]
+                format += f
+                regex += r
 
     # Fractions of seconds are a bit of a problem, because datetime objects only offer
     # microseconds.
     if msecs:
         format += '.{microsecond:.%s}' % msecs
-        regex += r'\.(?P<microsecond>[0-9]{1,%s})' % msecs
+        regex += r'(\.(?P<microsecond>[0-9]{1,%s})(?![0-9]))?' % msecs
+        regex += r'(\.(?P<extramicroseconds>[0-9]{%s,})(?![0-9]))?' % (msecs + 1,)
 
-    return {'regex': re.compile(regex), 'fmt': format, 'tz_marker': tz_marker}
+    return {'regex': re.compile(regex), 'fmt': format, 'tz_marker': tz_marker, 'pattern': pattern}
+
+
+class NumberPattern:
+    """
+    Implementations MUST recognise number format patterns containing the symbols 0, #, the specified
+    decimalChar (or "." if unspecified), the specified groupChar (or "," if unspecified), E, +, %
+    and ‰.
+
+    The number of # placeholder characters before the decimal do not matter, since no limit is
+    placed on the maximum number of digits. There should, however, be at least one zero someplace
+    in the pattern.
+    """
+
+    def __init__(self, pattern):
+        assert pattern.count(';') <= 1
+        self.positive, _, self.negative = pattern.partition(';')
+        if not self.negative:
+            self.negative = '-' + self.positive.replace('+', '')
+
+    @property
+    def primary_grouping_size(self):
+        comps = self.positive.split('.')[0].split(',')
+        if len(comps) > 1:
+            return comps[-1].count('#') + comps[-1].count('0')
+
+    @property
+    def secondary_grouping_size(self):
+        comps = self.positive.split('.')[0].split(',')
+        if len(comps) > 2:
+            return comps[1].count('#') + comps[1].count('0')
+        return self.primary_grouping_size
+
+    @property
+    def min_digits_before_decimal_point(self):
+        integral_part = self.positive.split('.')[0]
+        match = re.search('([0]+)$', integral_part)
+        if match:
+            return len(match.groups()[0])
+
+    @property
+    def exponent_digits(self):
+        _, _, exponent = self.positive.lower().partition('e')
+        i = 0
+        for c in exponent:
+            if c in '0#':
+                i += 1
+            elif c in ',':
+                continue
+            else:
+                break
+        return i
+
+    @property
+    def decimal_digits(self):
+        i = 0
+        _, _, decimal_part = self.positive.partition('.')
+        for c in decimal_part:
+            if c in '#0':
+                i += 1
+            if c == 'E':
+                break
+        return i
+
+    @property
+    def significant_decimal_digits(self):
+        i = 0
+        _, _, decimal_part = self.positive.partition('.')
+        for c in decimal_part:
+            if c == '0':
+                i += 1
+            if c in ['E', '#']:
+                break
+        return i
+
+    def is_valid(self, s):
+        def digits(ss):
+            return [c for c in ss if c not in '.,E+-%‰']
+
+        integral_part, _, decimal_part = s.partition('.')
+        decimal_part, _, exponent = decimal_part.lower().partition('e')
+        groups = integral_part.split(',')
+        significant, leadingzero, skip = [], False, True
+        for c in ''.join(groups):
+            if c in ['+', '-', '%',  # fixme: permil
+                     ]:
+                continue
+            if c == '0' and skip:
+                leadingzero = True
+                continue
+            if c != '0':
+                skip = False
+            significant.append(c)
+        if not significant and leadingzero:
+            significant = ['0']
+        if self.min_digits_before_decimal_point and \
+                len(significant) < self.min_digits_before_decimal_point:
+            return False
+        if self.primary_grouping_size and groups:
+            if len(digits(groups[-1])) > self.primary_grouping_size:
+                return False
+            if len(groups) > 1 and len(digits(groups[-1])) < self.primary_grouping_size:
+                return False
+        if self.secondary_grouping_size and len(groups) > 1:
+            for i, group in enumerate(groups[:-1]):
+                if i == 0:
+                    if len(digits(group)) > self.secondary_grouping_size:
+                        return False
+                else:
+                    if len(digits(group)) != self.secondary_grouping_size:
+                        return False
+        if decimal_part:
+            if len(digits(decimal_part)) > self.decimal_digits:
+                return False
+        if self.significant_decimal_digits:
+            if (not decimal_part) or (len(digits(decimal_part)) < self.significant_decimal_digits):
+                return False
+
+        if self.exponent_digits and 'e' in s.lower():
+            if len(digits(s.lower().split('e')[-1])) > self.exponent_digits:
+                return False
+
+        return True

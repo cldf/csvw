@@ -11,9 +11,10 @@ import io
 import re
 import json
 import shutil
+import decimal
 import pathlib
+import typing
 import zipfile
-import datetime
 import operator
 import warnings
 import functools
@@ -21,17 +22,17 @@ import itertools
 import contextlib
 import collections
 from urllib.parse import urljoin, urlparse, urlunparse
-from urllib.request import urlopen
 
+from language_tags import tags
 import attr
 import requests
 import uritemplate
-from rfc3986 import URIReference
 
 from . import utils
 from .datatypes import DATATYPES
-from .dsv import Dialect, UnicodeReaderWithLineNumber, UnicodeWriter
+from .dsv import Dialect as BaseDialect, UnicodeReaderWithLineNumber, UnicodeWriter
 from .frictionless import DataPackage
+from . import jsonld
 
 DEFAULT = object()
 
@@ -41,6 +42,7 @@ __all__ = [
     'Link', 'NaturalLanguage',
     'Datatype',
     'is_url',
+    'CSVW',
 ]
 
 NAMESPACES = {
@@ -53,6 +55,87 @@ NAMESPACES = {
     'prov': 'http://www.w3.org/ns/prov#',
     'schema': 'http://schema.org/',
 }
+CSVW_TERMS = """Cell
+Column
+Datatype
+Dialect
+Direction
+ForeignKey
+JSON
+NumericFormat
+Row
+Schema
+Table
+TableGroup
+TableReference
+Transformation
+aboutUrl
+base
+columnReference
+columns
+commentPrefix
+datatype
+decimalChar
+default
+delimiter
+describes
+dialect
+doubleQuote
+encoding
+foreignKeys
+format
+groupChar
+header
+headerRowCount
+json
+lang
+length
+lineTerminators
+maxExclusive
+maxInclusive
+maxLength
+maximum
+minExclusive
+minInclusive
+minLength
+minimum
+name
+notes
+null
+ordered
+pattern
+primaryKey
+propertyUrl
+quoteChar
+reference
+referencedRows
+required
+resource
+row
+rowTitles
+rownum
+schemaReference
+scriptFormat
+separator
+skipBlankRows
+skipColumns
+skipInitialSpace
+skipRows
+source
+suppressOutput
+tableDirection
+tableSchema
+tables
+targetFormat
+textDirection
+titles
+transformations
+trim
+uriTemplate
+url
+valueUrl
+virtual""".split()
+is_url = utils.is_url
 
 
 class Invalid:
@@ -62,8 +145,31 @@ class Invalid:
 INVALID = Invalid()
 
 
-def is_url(s):
-    return re.match(r'https?://', str(s))
+@attr.s
+class Dialect(BaseDialect):
+    """
+    The spec is ambiguous regarding a default for the commentPrefix property:
+
+    > commentPrefix
+    >     An atomic property that sets the comment prefix flag to the single provided value, which
+    >     MUST be a string. The default is "#".
+
+    vs.
+
+    > comment prefix
+    >     A string that, when it appears at the beginning of a row, indicates that the row is a
+    >     comment that should be associated as a rdfs:comment annotation to the table. This is set
+    >     by the commentPrefix property of a dialect description. The default is null, which means
+    >     no rows are treated as comments. A value other than null may mean that the source numbers
+    >     of rows are different from their numbers.
+
+    So, in order to pass the number formatting tests, with column names like `##.#`, we chose
+    the second reading - i.e. by default no rows are treated as comments.
+    """
+    commentPrefix = attr.ib(
+        default=None,
+        converter=functools.partial(utils.converter, str, None, allow_none=True),
+        validator=attr.validators.optional(attr.validators.instance_of(str)))
 
 
 def json_open(filename, mode='r', encoding='utf-8'):
@@ -74,8 +180,7 @@ def json_open(filename, mode='r', encoding='utf-8'):
 def get_json(fname):
     fname = str(fname)
     if is_url(fname):
-        with io.TextIOWrapper(urlopen(fname), encoding='utf8') as f:
-            return json.load(f, object_pairs_hook=collections.OrderedDict)
+        return requests.get(fname).json(object_pairs_hook=collections.OrderedDict)
     with json_open(fname) as f:
         return json.load(f, object_pairs_hook=collections.OrderedDict)
 
@@ -119,10 +224,18 @@ def uri_template_property():
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#uri-template-properties
     """
+    def converter_uriTemplate(v):
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            warnings.warn('Invalid value for aboutUrl property')
+            return INVALID
+        return URITemplate(v)
+
     return attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.instance_of((URITemplate, Invalid))),
-        converter=lambda v: None if v is None else (INVALID if not isinstance(v, str) else URITemplate(v)))
+        converter=converter_uriTemplate)
 
 
 class Link(object):
@@ -132,6 +245,8 @@ class Link(object):
     """
 
     def __init__(self, string):
+        if not isinstance(string, (str, pathlib.Path)):
+            raise ValueError('Invalid value for link property')
         self.string = string
 
     def __str__(self):
@@ -176,12 +291,23 @@ class NaturalLanguage(collections.OrderedDict):
         if isinstance(self.value, str):
             self[None] = [self.value]
         elif isinstance(self.value, (list, tuple)):
-            self[None] = list(self.value)
+            if not all(isinstance(v, str) for v in self.value):
+                warnings.warn('titles with array values containing non-string values are ignored')
+            else:
+                self[None] = list(self.value)
         elif isinstance(self.value, dict):
             for k, v in self.value.items():
+                if not tags.check(k):
+                    raise ValueError('Invalid language tag for NaturalLanguage')
                 if not isinstance(v, (list, tuple)):
                     v = [v]
-                self[k] = v
+                titles = []
+                for vv in v:
+                    if isinstance(vv, str):
+                        titles.append(vv)
+                    else:
+                        warnings.warn('Title with value which is not a string is ignored')
+                self[k] = titles
         else:
             raise ValueError('invalid value type for NaturalLanguage')
 
@@ -207,8 +333,60 @@ class NaturalLanguage(collections.OrderedDict):
 
 
 def valid_id_property(v):
+    if not isinstance(v, str):
+        warnings.warn('Inconsistent link property')
+        return None
     if v.startswith('_'):
         raise ValueError('Invalid @id property: {}'.format(v))
+    return v
+
+
+def valid_common_property(v):
+    if isinstance(v, dict):
+        if not {k[1:] for k in v if k.startswith('@')}.issubset(
+                {'id', 'language', 'type', 'value'}):
+            raise ValueError(
+                "Aside from @value, @type, @language, and @id, the properties used on an object "
+                "MUST NOT start with @.")
+        if '@value' in v:
+            if len(v) > 1:
+                if len(v) > 2 \
+                        or set(v.keys()) not in [{'@value', '@language'}, {'@value', '@type'}] \
+                        or not isinstance(v['@value'], (str, bool, int, decimal.Decimal)):
+                    raise ValueError(
+                        "If a @value property is used on an object, that object MUST NOT have "
+                        "any other properties aside from either @type or @language, and MUST "
+                        "NOT have both @type and @language as properties. The value of the "
+                        "@value property MUST be a string, number, or boolean value.")
+        if '@language' in v and '@value' not in v:
+            raise ValueError(
+                "A @language property MUST NOT be used on an object unless it also has a "
+                "@value property.")
+        if '@id' in v:
+            v['@id'] = valid_id_property(v['@id'])
+        if '@language' in v:
+            if not (isinstance(v['@language'], str) and tags.check(v['@language'])):
+                warnings.warn('Invalid language tag')
+                del v['@language']
+        if '@type' in v:
+            vv = v['@type']
+            if isinstance(vv, str):
+                if vv.startswith('_:'):
+                    raise ValueError(
+                        'The value of any @id or @type contained within a metadata document '
+                        'MUST NOT be a blank node.')
+                if not is_url(vv) and \
+                        not any(vv == ns or vv.startswith(ns + ':') for ns in NAMESPACES) and \
+                        vv not in CSVW_TERMS:
+                    raise ValueError(
+                        'The value of any member of @type MUST be either a term defined in '
+                        '[csvw-context], a prefixed name where the prefix is a term defined in '
+                        '[csvw-context], or an absolute URL.')
+            elif not isinstance(vv, (list, dict)):
+                raise ValueError('Invalid datatype for @type')
+        return {k: valid_common_property(vv) for k, vv in v.items()}
+    if isinstance(v, list):
+        return [valid_common_property(vv) for vv in v]
     return v
 
 
@@ -237,7 +415,7 @@ class DescriptionBase(object):
                     raise ValueError('Invalid @type property {} for {}'.format(v, type_name))
                 a[k[1:]] = v
             elif ':' in k:
-                c[k] = v
+                c[k] = valid_common_property(v)
             else:
                 if strict and (k not in fields):
                     warnings.warn('Invalid property {} for {}'.format(k, type_name))
@@ -289,6 +467,9 @@ class Datatype(DescriptionBase):
 
     base = attr.ib(
         default=None,
+        converter=functools.partial(
+            utils.converter,
+            str, 'string', allow_none=True, cond=lambda ss: ss is None or ss in DATATYPES),
         validator=attr.validators.optional(attr.validators.in_(DATATYPES)))
     format = attr.ib(default=None)
     length = optional_int()
@@ -313,6 +494,7 @@ class Datatype(DescriptionBase):
             return cls(base=v)
 
         if isinstance(v, dict):
+            v.setdefault('base', 'string')
             return cls(**cls.partition_properties(v))
 
         if isinstance(v, cls):
@@ -341,6 +523,48 @@ class Datatype(DescriptionBase):
 
         if not isinstance(self.derived_description, dict):
             raise ValueError()  # pragma: no cover
+
+        if not isinstance(
+                self.basetype(),
+                tuple((DATATYPES[name] for name in ['decimal', 'float', 'datetime', 'duration']))):
+            if any([getattr(self, at) for at in
+                    'minimum maximum minExclusive maxExclusive minInclusive maxInclusive'.split()]):
+                raise ValueError(
+                    'Applications MUST raise an error if minimum, minInclusive, maximum, '
+                    'maxInclusive, minExclusive, or maxExclusive are specified and the base '
+                    'datatype is not a numeric, date/time, or duration type.')
+
+        if not isinstance(
+                self.basetype(),
+                (DATATYPES['string'], DATATYPES['base64Binary'], DATATYPES['hexBinary'])):
+            if self.length or self.minLength or self.maxLength:
+                raise ValueError(
+                    'Applications MUST raise an error if length, maxLength, or minLength are '
+                    'specified and the base datatype is not string or one of its subtypes, or a '
+                    'binary type.')
+
+        if (self.minInclusive and self.minExclusive) or (self.maxInclusive and self.maxExclusive):
+            raise ValueError(
+                'Applications MUST raise an error if both minInclusive and minExclusive are '
+                'specified, or if both maxInclusive and maxExclusive are specified.')
+
+        if (self.minInclusive and self.maxExclusive and self.maxExclusive <= self.minInclusive) or \
+                (self.minInclusive and self.maxInclusive and self.maxInclusive < self.minInclusive):
+            raise ValueError('')
+
+        if (self.minExclusive and self.maxExclusive and self.maxExclusive <= self.minExclusive) or (
+                self.minExclusive and self.maxInclusive and self.maxInclusive <= self.minExclusive):
+            raise ValueError('')
+
+        if 'id' in self.at_props and any(
+                self.at_props['id'] == NAMESPACES['xsd'] + dt for dt in DATATYPES):
+            raise ValueError('datatype @id MUST NOT be the URL of a built-in datatype.')
+
+        if isinstance(self.basetype(), DATATYPES['decimal']) and \
+                'pattern' in self.derived_description:
+            if not set(self.derived_description['pattern']).issubset(set('#0.,;%‰E-+')):
+                self.format = None
+                warnings.warn('Invalid number pattern')
 
     def asdict(self, omit_defaults=True):
         res = DescriptionBase.asdict(self, omit_defaults=omit_defaults)
@@ -385,12 +609,35 @@ class Datatype(DescriptionBase):
         if self.basetype.minmax:
             if self.minimum is not None and v < self.minimum:
                 raise ValueError('value must be >= {}'.format(self.minimum))
+            if self.minInclusive is not None and v < self.minInclusive:
+                raise ValueError('value must be >= {}'.format(self.minInclusive))
+            if self.minExclusive is not None and v <= self.minExclusive:
+                raise ValueError('value must be > {}'.format(self.minExclusive))
             if self.maximum is not None and v > self.maximum:
                 raise ValueError('value must be <= {}'.format(self.maximum))
+            if self.maxInclusive is not None and v > self.maxInclusive:
+                raise ValueError('value must be <= {}'.format(self.maxInclusive))
+            if self.maxExclusive is not None and v >= self.maxExclusive:
+                raise ValueError('value must be < {}'.format(self.maxExclusive))
         return v
 
     def read(self, v):
         return self.validate(self.parse(v))
+
+
+def converter_null(v):
+    res = [] if v is None else (v if isinstance(v, list) else [v])
+    if not all(isinstance(vv, str) for vv in res):
+        warnings.warn('Invalid null property')
+        return [""]
+    return res
+
+
+def converter_lang(v):
+    if not tags.check(v):
+        warnings.warn('Invalid language tag')
+        return 'und'
+    return v
 
 
 @attr.s
@@ -408,39 +655,67 @@ class Description(DescriptionBase):
     datatype = attr.ib(
         default=None,
         converter=lambda v: v if not v else Datatype.fromvalue(v))
-    default = attr.ib(default="")
-    lang = attr.ib(default="und")
-    null = attr.ib(
-        default=attr.Factory(lambda: [""]),
-        converter=lambda v: [] if v is None else (v if isinstance(v, list) else [v]))
-    ordered = attr.ib(default=None)
+    default = attr.ib(
+        default="",
+        converter=functools.partial(utils.converter, str, "", allow_list=False),
+    )
+    lang = attr.ib(default="und", converter=converter_lang)
+    null = attr.ib(default=attr.Factory(lambda: [""]), converter=converter_null)
+    ordered = attr.ib(
+        default=None,
+        converter=functools.partial(utils.converter, bool, False, allow_none=True),
+    )
     propertyUrl = uri_template_property()
     required = attr.ib(default=None)
     separator = attr.ib(
         converter=functools.partial(utils.converter, str, None, allow_none=True),
         default=None,
     )
-    textDirection = attr.ib(default=None)
+    textDirection = attr.ib(
+        default=None,
+        converter=functools.partial(
+            utils.converter,
+            str, None, allow_none=True, cond=lambda v: v in [None, "ltr", "rtl", "auto", "inherit"])
+    )
     valueUrl = uri_template_property()
 
     def inherit(self, attr):
         v = getattr(self, attr)
         if v is None and self._parent:
             return self._parent.inherit(attr) if hasattr(self._parent, 'inherit') \
-                else  getattr(self._parent, attr)
+                else getattr(self._parent, attr)
         return v
+
+    def inherit_null(self):
+        if self.null == [""]:
+            if self._parent and hasattr(self._parent, 'inherit_null'):
+                return self._parent.inherit_null()
+        return self.null
+
+
+def converter_titles(v):
+    try:
+        return v if v is None else NaturalLanguage(v)
+    except ValueError:
+        warnings.warn('Invalid titles property')
+        return None
 
 
 @attr.s
 class Column(Description):
 
-    name = attr.ib(default=None)
-    suppressOutput = attr.ib(default=False)
+    name = attr.ib(
+        default=None,
+        converter=functools.partial(utils.converter, str, None, allow_none=True)
+    )
+    suppressOutput = attr.ib(
+        default=False,
+        converter=functools.partial(utils.converter, bool, False))
     titles = attr.ib(
         default=None,
         validator=attr.validators.optional(attr.validators.instance_of(NaturalLanguage)),
-        converter=lambda v: v if v is None else NaturalLanguage(v))
-    virtual = attr.ib(default=False)
+        converter=converter_titles)
+    virtual = attr.ib(default=False, converter=functools.partial(utils.converter, bool, False))
     _number = attr.ib(default=None, repr=False)
 
     def __str__(self):
@@ -448,13 +723,21 @@ class Column(Description):
             (self.titles and self.titles.getfirst()) or \
             '_col.{}'.format(self._number)
 
+    def has_title(self, v):
+        if self.name and self.name == v:
+            return True
+        for tag, titles in (self.titles or {}).items():
+            if v in titles:
+                return tag or 'und'
+        return False
+
     @property
     def header(self):
         return '{}'.format(self)
 
-    def read(self, v):
+    def read(self, v, strict=True):
         required = self.inherit('required')
-        null = self.inherit('null')
+        null = self.inherit_null()
         default = self.inherit('default')
         separator = self.inherit('separator')
         datatype = self.inherit('datatype')
@@ -463,6 +746,8 @@ class Column(Description):
             v = default
 
         if required and v in null:
+            if not strict:
+                warnings.warn('required column value is missing')
             raise ValueError('required column value is missing')
 
         if separator:
@@ -478,13 +763,19 @@ class Column(Description):
 
         if datatype:
             if isinstance(v, list):
-                return [datatype.read(vv) for vv in v]
+                try:
+                    return [datatype.read(vv) for vv in v]
+                except ValueError:
+                    if not strict:
+                        warnings.warn('Invalid value for list element.')
+                        return v
+                    raise
             return datatype.read(v)
         return v
 
     def write(self, v):
         sep = self.inherit('separator')
-        null = self.inherit('null')
+        null = self.inherit_null()
         datatype = self.inherit('datatype')
 
         def fmt(v):
@@ -526,6 +817,13 @@ class ForeignKey(object):
 
     @classmethod
     def fromdict(cls, d):
+        if isinstance(d, dict):
+            try:
+                _ = Reference(**d['reference'])
+            except TypeError:
+                raise ValueError('Invalid reference property')
+            if not set(d.keys()).issubset({'columnReference', 'reference'}):
+                raise ValueError('Invalid foreignKey spec')
         kw = dict(d, reference=Reference(**d['reference']))
         return cls(**kw)
 
@@ -535,22 +833,38 @@ class ForeignKey(object):
         return res
 
 
+def converter_foreignKeys(v):
+    res = []
+    for d in functools.partial(utils.converter, dict, None)(v):
+        try:
+            res.append(ForeignKey.fromdict(d))
+        except TypeError:
+            warnings.warn('Invalid foreignKeys spec')
+    return res
+
+
 @attr.s
 class Schema(Description):
 
     columns = attr.ib(
         default=attr.Factory(list),
-        converter=lambda v: [Column.fromvalue(c) for c in v])
+        converter=lambda v: [
+            Column.fromvalue(c) for c in functools.partial(utils.converter, dict, None)(
+                functools.partial(utils.converter, list, [])(v))])
     foreignKeys = attr.ib(
         default=attr.Factory(list),
-        converter=lambda v: [] if v is None else [
-            ForeignKey.fromdict(d) for d in functools.partial(utils.converter, dict, None)(v)])
+        converter=lambda v: [] if v is None else converter_foreignKeys(v))
     primaryKey = column_reference()
-    rowTitles = attr.ib(default=attr.Factory(list))
+    rowTitles = attr.ib(
+        default=attr.Factory(list),
+        converter=lambda v: v if isinstance(v, list) else [v],
+    )
 
     def __attrs_post_init__(self):
-        virtual, seen = False, set()
+        virtual, seen, names = False, set(), set()
         for i, col in enumerate(self.columns):
+            if col.name and (col.name.startswith('_') or re.search(r'\s', col.name)):
+                warnings.warn('Invalid column name')
             if col.virtual:  # first virtual column sets the flag
                 virtual = True
             elif virtual:  # non-virtual column after virtual column!
@@ -558,26 +872,40 @@ class Schema(Description):
             if not virtual:
                 if col.header in seen:
                     warnings.warn('Duplicate column name!')
+                if col.name:
+                    if col.name in names:
+                        raise ValueError('Duplicate column name!')
+                    names.add(col.name)
                 seen.add(col.header)
             col._parent = self
             col._number = i + 1
+        for colref in self.primaryKey or []:
+            col = self.columndict[colref]
+            if not col.name:
+                warnings.warn('A primaryKey referenced column MUST have a `name` property')
+                self.primaryKey = None
 
     @classmethod
     def fromvalue(cls, v):
         if isinstance(v, str):
             try:
                 # The schema is referenced with a URL
-                v = json.loads(urlopen(v).read().decode('utf8'))
-            except:
+                v = requests.get(v).json()
+            except:  # pragma: no cover # noqa: E722
                 return v
+        if not isinstance(v, dict):
+            if isinstance(v, int):
+                warnings.warn('Invalid value for tableSchema property')
+            v = {}
         return cls(**cls.partition_properties(v))
 
     @property
     def columndict(self):
         return {c.header: c for c in self.columns}
 
-    def get_column(self, name):
+    def get_column(self, name, strict=False):
         col = self.columndict.get(name)
+        assert (not strict) or (col and col.name)
         if not col:
             for c in self.columns:
                 if c.titles and c.titles.getfirst() == name:
@@ -588,9 +916,14 @@ class Schema(Description):
 
 
 def dialect_props(d):
+    if not isinstance(d, dict):
+        warnings.warn('Invalid dialect spec')
+        return {}
     partitioned = Description.partition_properties(d, type_name='Dialect', strict=False)
     del partitioned['at_props']
     del partitioned['common_props']
+    if partitioned.get('headerRowCount'):
+        partitioned['header'] = True
     return partitioned
 
 
@@ -606,7 +939,8 @@ class TableLike(Description):
 
     dialect = attr.ib(
         default=None,
-        converter=lambda v: Dialect(**dialect_props(v)) if isinstance(v, dict) else v)
+        converter=lambda v: v if (v is None or isinstance(v, str))
+        else Dialect(**dialect_props(v)))
     notes = attr.ib(default=attr.Factory(list))
     tableDirection = attr.ib(
         default='auto',
@@ -624,8 +958,27 @@ class TableLike(Description):
     _fname = attr.ib(default=None)  # The path of the metadata file.
 
     def __attrs_post_init__(self):
+        if isinstance(self.dialect, str):
+            self.dialect = Dialect(**dialect_props(get_json(Link(self.dialect).resolve(self.base))))
         if self.tableSchema and not(isinstance(self.tableSchema, str)):
             self.tableSchema._parent = self
+        if 'id' in self.at_props and self.at_props['id'] is None:
+            self.at_props['id'] = self.base
+        ctx = self.at_props.get('context')
+        if isinstance(ctx, list):
+            for obj in ctx:
+                if (isinstance(obj, dict) and not set(obj.keys()).issubset({'@base', '@language'}))\
+                        or (isinstance(obj, str) and obj != 'http://www.w3.org/ns/csvw'):
+                    raise ValueError(
+                        'The @context MUST have one of the following values: An array composed '
+                        'of a string followed by an object, where the string is '
+                        'http://www.w3.org/ns/csvw and the object represents a local context '
+                        'definition, which is restricted to contain either or both of'
+                        '@base and @language.')
+                if isinstance(obj, dict) and '@language' in obj:
+                    if not tags.check(obj['@language']):
+                        warnings.warn('Invalid value for @language property')
+                        del obj['@language']
 
     def get_column(self, spec):
         return self.tableSchema.get_column(spec) if self.tableSchema else None
@@ -643,7 +996,10 @@ class TableLike(Description):
         data = data or get_json(url)
         url = urlparse(url)
         data.setdefault('@base', urlunparse((url.scheme, url.netloc, url.path, '', '', '')))
-        res = cls.fromvalue(data or get_json(url))
+        for table in data.get('tables', [data]):
+            if isinstance(table, dict) and isinstance(table.get('tableSchema'), str):
+                table['tableSchema'] = Link(table['tableSchema']).resolve(data['@base'])
+        res = cls.fromvalue(data)
         return res
 
     def to_file(self, fname, omit_defaults=True):
@@ -659,16 +1015,51 @@ class TableLike(Description):
         We only support data in the filesystem, thus we make sure `base` is a `pathlib.Path`.
         """
         at_props = self._parent.at_props if self._parent else self.at_props
+        ctxbase = None
+        for obj in self.at_props.get('context', []):
+            if isinstance(obj, dict) and '@base' in obj:
+                ctxbase = obj['@base']
         if 'base' in at_props:
+            if ctxbase:
+                # If present, its value MUST be a string that is interpreted as a URL which is
+                # resolved against the location of the metadata document to provide the
+                # **base URL** for other URLs in the metadata document.
+                return Link(ctxbase).resolve(at_props['base'])
             return at_props['base']
         return self._parent._fname.parent if (self._parent and self._parent._fname) else \
             (self._fname.parent if self._fname else None)
+
+    def expand(self, tmpl: URITemplate, row: dict, _row, _name=None, qname=False, uri=False) -> str:
+        """
+
+        """
+        assert not (qname and uri)
+        if tmpl is INVALID:
+            return self.url.resolve(self.base)
+        res = Link(
+            tmpl.expand(
+                _row=_row, _name=_name, **{_k: _v for _k, _v in row.items() if isinstance(_k, str)}
+            )).resolve(self.url.resolve(self.base))
+
+        if qname:
+            for prefix, url in NAMESPACES.items():
+                if res.startswith(url):
+                    res = res.replace(url, prefix + ':')
+                    break
+        if uri:
+            if res != 'rdf:type':
+                for prefix, url in NAMESPACES.items():
+                    if res.startswith(prefix + ':'):
+                        res = res.replace(prefix + ':', url)
+                        break
+        return res
 
 
 @attr.s
 class Table(TableLike):
 
     suppressOutput = attr.ib(default=False)
+    _comments = []
 
     def add_foreign_key(self, colref, ref_resource, ref_colref):
         """
@@ -760,7 +1151,14 @@ class Table(TableLike):
     def __iter__(self):
         return self.iterdicts()
 
-    def iterdicts(self, log=None, with_metadata=False, fname=None, _Row=collections.OrderedDict):
+    def iterdicts(
+            self,
+            log=None,
+            with_metadata=False,
+            fname=None,
+            _Row=collections.OrderedDict,
+            strict=True,
+    ):
         """Iterate over the rows of the table
 
         Create an iterator that maps the information in each row to a `dict` whose keys are
@@ -792,7 +1190,8 @@ class Table(TableLike):
 
         with contextlib.ExitStack() as stack:
             if is_url(fname):
-                handle = io.TextIOWrapper(urlopen(str(fname)), encoding=dialect.encoding)
+                handle = io.TextIOWrapper(
+                    io.BytesIO(requests.get(str(fname)).content), encoding=dialect.encoding)
             else:
                 handle = fname
                 fpath = pathlib.Path(fname)
@@ -812,6 +1211,16 @@ class Table(TableLike):
             if dialect.header:
                 try:
                     _, header = next(reader)
+                    if not strict:
+                        if self.tableSchema.columns and len(self.tableSchema.columns) < len(header):
+                            warnings.warn('Column number mismatch')
+                        for name, col in zip(header, self.tableSchema.columns):
+                            res = col.has_title(name)
+                            if (not col.name) and not res:
+                                warnings.warn('Incompatible table models')
+                            if isinstance(res, str) and res.split('-')[0] not in [
+                                    'und', (self.lang or 'und').split('-')[0]]:
+                                warnings.warn('Incompatible column titles')
                 except StopIteration:  # pragma: no cover
                     return
             else:
@@ -819,11 +1228,22 @@ class Table(TableLike):
 
             # If columns in the data are ordered as in the spec, we can match values to
             # columns by index, rather than looking up columns by name.
-            if header == colnames:
+            if (header == colnames) or \
+                    (len(self.tableSchema.columns) >= len(header) and not strict):
                 # Note that virtual columns are only allowed to come **after** regular ones,
                 # so we can simply zip the whole columns list, and silently ignore surplus
                 # virtual columns.
                 header_cols = list(zip(header, self.tableSchema.columns))
+            elif not strict and self.tableSchema.columns and \
+                    (len(self.tableSchema.columns) < len(header)):
+                header_cols = []
+                for i, cname in enumerate(header):
+                    try:
+                        header_cols.append((cname, self.tableSchema.columns[i]))
+                    except IndexError:
+                        header_cols.append((
+                            '_col.{}'.format(i + 1),
+                            Column.fromvalue({'name': '_col.{}'.format(i + 1)})))
             else:
                 header_cols = [(h, self.tableSchema.get_column(h)) for h in header]
             header_cols = [(j, h, c) for j, (h, c) in enumerate(header_cols)]
@@ -844,18 +1264,24 @@ class Table(TableLike):
                 for (j, k, col), v in zip(header_cols, row):
                     # see http://w3c.github.io/csvw/syntax/#parsing-cells
                     if col:
+                        try:
+                            res[col.header] = col.read(v, strict=strict)
+                        except ValueError as e:
+                            if not strict:
+                                warnings.warn(
+                                    'Invalid column value: {} {}; {}'.format(v, col.datatype, e))
+                                res[col.header] = v
+                            else:
+                                log_or_raise(
+                                    '{0}:{1}:{2} {3}: {4}'.format(fname, lineno, j + 1, k, e),
+                                    log=log)
+                                error = True
                         if k in required:
                             del required[k]
-                        try:
-                            res[col.header] = col.read(v)
-                        except ValueError as e:
-                            log_or_raise(
-                                '{0}:{1}:{2} {3}: {4}'.format(fname, lineno, j + 1, k, e),
-                                log=log)
-                            error = True
                     else:
-                        warnings.warn(
-                            'Unspecified column "{0}" in table {1}'.format(k, self.local_name))
+                        if strict:
+                            warnings.warn(
+                                'Unspecified column "{0}" in table {1}'.format(k, self.local_name))
                         res[k] = v
 
                 for k, j in required.items():
@@ -879,26 +1305,28 @@ class Table(TableLike):
                         yield fname, lineno, res
                     else:
                         yield res
+        self._comments = reader.comments
+
+
+def converter_tables(v):
+    res = []
+    for vv in v:
+        if not isinstance(vv, (dict, Table)):
+            warnings.warn('Invalid value for Table spec')
+        else:
+            res.append(Table.fromvalue(vv) if isinstance(vv, dict) else vv)
+    return res
 
 
 @attr.s
 class TableGroup(TableLike):
 
-    tables = attr.ib(
-        repr=False,
-        default=attr.Factory(list),
-        converter=lambda v: [Table.fromvalue(vv) for vv in v])
+    tables = attr.ib(repr=False, default=attr.Factory(list), converter=converter_tables)
 
     def __attrs_post_init__(self):
         TableLike.__attrs_post_init__(self)
         for table in self.tables:
             table._parent = self
-            if isinstance(table.tableSchema, str):
-                table.tableSchema = Schema.fromvalue(
-                    Link(table.tableSchema).resolve(self.base))
-                if isinstance(table.tableSchema, str):
-                    table.tableSchema = Schema.fromvalue({})
-                table.tableSchema._parent = table
 
     @classmethod
     def from_frictionless_datapackage(cls, dp):
@@ -951,15 +1379,15 @@ class TableGroup(TableLike):
             for t in self.tables for fk in t.tableSchema.foreignKeys
             if not fk.reference.schemaReference]
 
-    def validate_schema(self):
+    def validate_schema(self, strict=False):
         try:
             for st, sc, tt, tc in self.foreign_keys():
                 if len(sc) != len(tc):
                     raise ValueError(
                         'Foreign key error: non-matching number of columns in source and target')
                 for scol, tcol in zip(sc, tc):
-                    scolumn = st.tableSchema.get_column(scol)
-                    tcolumn = tt.tableSchema.get_column(tcol)
+                    scolumn = st.tableSchema.get_column(scol, strict=strict)
+                    tcolumn = tt.tableSchema.get_column(tcol, strict=strict)
                     if not (scolumn and tcolumn):
                         raise ValueError(
                             'Foregin key error: missing column "{}" or "{}"'.format(scol, tcol))
@@ -968,13 +1396,23 @@ class TableGroup(TableLike):
                         raise ValueError(
                             'Foregin key error: non-matching datatype "{}:{}" or "{}:{}"'.format(
                                 scol, scolumn.datatype.base, tcol, tcolumn.datatype.base))
-        except KeyError as e:
+        except (KeyError, AssertionError) as e:
             raise ValueError('Foreign key error: missing table "{}" referenced'.format(e))
 
-    def check_referential_integrity(self, data=None, log=None):
+    def check_referential_integrity(self, data=None, log=None, strict=False):
+        """
+        Strict validation does not allow for nullable foreign key columns.
+        """
         if data is not None:
             warnings.warn('the data argument of check_referential_integrity '
                           'is deprecated (its content will be ignored)')  # pragma: no cover
+        if strict:
+            for t in self.tables:
+                for fk in t.tableSchema.foreignKeys:
+                    for row in t:
+                        if any(row.get(col) is None for col in fk.columnReference):
+                            raise ValueError('Foreign key column is null: {} {}'.format(
+                                [row.get(col) for col in fk.columnReference], fk.columnReference))
         try:
             self.validate_schema()
             success = True
@@ -995,6 +1433,10 @@ class TableGroup(TableLike):
             get_seen = [(operator.itemgetter(*key), set()) for key, _ in t_fkeys]
             for row in table.iterdicts(log=log):
                 for get, seen in get_seen:
+                    if get(row) in seen:
+                        # column references for a foreign key are not unique!
+                        if strict:
+                            success = False
                     seen.add(get(row))
             for (key, children), (_, seen) in zip(t_fkeys, get_seen):
                 single_column = (len(key) == 1)
@@ -1027,262 +1469,216 @@ class TableGroup(TableLike):
         return success
 
 
-#
-# CSVW to JSON
-#
-def get_metadata(url):
-    if is_url(url):
-        # 1. Look for a link header!
-        desc = requests.head(url).links.get('describedby')
-        if desc:
-            #
-            # FIXME: check mimetype!
-            #
-            return get_json(Link(desc['url']).resolve(url))
-        # 2. Get /.well-known/csvw - fallback to
-        # {+url}-metadata.json
-        # csv-metadata.json
-        # get URITemplate for each line, expand with url=url resolve against url - last path comp
-        res = requests.get(Link('/.well-known/csvw').resolve(url))
-        locs = res.text if res.status_code == 200 else '{+url}-metadata.json\ncsv-metadata.json'
-        for line in locs.split('\n'):
-            res = requests.get(Link(URITemplate(line).expand(url=url)).resolve(url))
-            if res.status_code == 200:
-                return res.json()
-    else:
-        if pathlib.Path(str(url) + '-metadata.json').exists():
-            return get_json(pathlib.Path(str(url) + '-metadata.json'))
-    return {
-        '@context': "http://www.w3.org/ns/csvw",
-        'url': url,
-    }
-
-
-def get_property_and_value(table, col, row, k, v, rownum):
-    def format(value):
-        if isinstance(value, (datetime.date, datetime.datetime)):
-            return value.isoformat()
-        if isinstance(value, URIReference):
-            return value.unsplit()
-        return value
-
-    def expand(tmpl, ctx):
-        if tmpl is INVALID:
-            return table.url.resolve(table.base)
-        return Link(
-            tmpl.expand(**{_k: _v for _k, _v in ctx.items() if isinstance(_k, str)})).resolve(
-            table.url.resolve(table.base))
-
-    # Copy the row data as context for expanding URI templates:
-    ctx = {_k: _v for _k, _v in row.items()}
-    ctx['_row'] = rownum
-    if col:
-        ctx[col.name] = ctx.pop(k)
-        ctx['_name'] = col.header
-
-    # Skip null values:
-    null = col.inherit('null') if col else table.inherit('null')
-    if (not (col and col.virtual)) and ((null and v in null) or v == ""):
-        return
-    if col and col.separator and v == []:
-        return
-
-    # Resolve property and value URLs:
-    propertyUrl = col.propertyUrl if col else table.inherit('propertyUrl')
-    if propertyUrl:
-        k = expand(propertyUrl, ctx)
-        for prefix, uri in NAMESPACES.items():
-            if k.startswith(uri):
-                k = k.replace(uri, prefix + ':')
-                break
-    valueUrl = col.valueUrl if col else table.inherit('valueUrl')
-    if valueUrl:
-        v = expand(valueUrl, ctx)
-        if k != 'rdf:type':
-            for prefix, uri in NAMESPACES.items():
-                if v.startswith(prefix + ':'):
-                    v = v.replace(prefix + ':', uri)
-                    break
-    s = None
-    if col and col.aboutUrl:
-        ss = expand(col.aboutUrl, ctx)
-        if ss:
-            s = ss
-    return k, format(v), s
-
-
-def simplyframe(data):
-    items, refs = collections.OrderedDict(), {}
-    for item in data:
-        itemid = item.get('@id')
-        if itemid:
-            items[itemid] = item
-        for vs in item.values():
-            for v in [vs] if not isinstance(vs, list) else vs:
-                if isinstance(v, dict):
-                    refid = v.get('@id')
-                    if refid:
-                        refs.setdefault(refid, (v, []))[1].append(item)
-    for ref, subjects in refs.values():
-        if len(subjects) == 1 and ref['@id'] in items:
-            ref.update(items.pop(ref['@id']))
-    return items.values()
-
-
-def group_by_about_url(d):
-    from rdflib import Graph, URIRef, Literal
-
-    def jsonld_to_json(obj):
-        if isinstance(obj, dict):
-            if '@value' in obj:
-                obj = obj['@value']
-            if len(obj) == 1 and '@id' in obj:
-                obj = obj['@id']
-        if isinstance(obj, dict):
-            return {'@type' if k == 'rdf:type' else k: jsonld_to_json(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            if len(obj) == 1:
-                return jsonld_to_json(obj[0])
-            return [jsonld_to_json(v) for v in obj]
-        return obj
-
-    grouped = collections.OrderedDict()
-    triples = []
-    # First pass: get top-level properties.
-    for k, v in d:
-        if k == '@id':
-            grouped[k] = v
-        else:
-            about, k = k
-            if not about:
-                # For test48
-                if k in grouped:
-                    if not isinstance(grouped[k], list):
-                        grouped[k] = [grouped[k]]
-                    grouped[k].append(v)
-                else:
-                    grouped[k] = v
-            else:
-                triples.append((about, k, v))
-    if not triples:
-        return [grouped]
-    g = Graph()
-    for s, p, o in triples:
-        g.add((URIRef(s), URIRef(p), URIRef(o) if is_url(o) else Literal(o)))
-    res = g.serialize(format='json-ld')
-    res = [jsonld_to_json(v) for v in simplyframe(json.loads(res))]
-    if grouped and len(res) == 1:
-        grouped.update(res[0])
-        return [grouped]
-    return res
-
-
 class CSVW:
-    def __init__(self, url, md_url=None):
-        # read md, check for @context, determine whether it's a Table or TableGroup, provide
-        # facade to access data.
-        try:
-            md = get_json(md_url or url)
-        except json.decoder.JSONDecodeError:  # So we got a CSV file, no JSON.
-            md = get_metadata(url)
-        assert "http://www.w3.org/ns/csvw" in md['@context']
-        if 'tables' in md:
-            if not md['tables'] or not isinstance(md['tables'], list):
-                raise ValueError('Invalid TableGroup with empty tables property')
-            if is_url(url):
-                self.t = TableGroup.from_url(url, data=md)
+    """
+    Python API to read CSVW described data and convert it to JSON.
+    """
+    def __init__(self, url: str, md_url=None, validate=False):
+        self.warnings = []
+        w = None
+        with contextlib.ExitStack() as stack:
+            if validate:
+                w = stack.enter_context(warnings.catch_warnings(record=True))
+
+            no_header = False
+            try:
+                md = get_json(md_url or url)
+                # The URL could be read as JSON document, thus, the user supplied us with overriding
+                # metadata as per https://w3c.github.io/csvw/syntax/#overriding-metadata
+            except json.decoder.JSONDecodeError:
+                # So we got a CSV file, no JSON. Let's locate metadata using the other methods.
+                md, no_header = self.locate_metadata(url)
+
+            self.no_metadata = set(md.keys()) == {'@context', 'url'}
+            assert "http://www.w3.org/ns/csvw" in md['@context']
+            if 'tables' in md:
+                if not md['tables'] or not isinstance(md['tables'], list):
+                    raise ValueError('Invalid TableGroup with empty tables property')
+                if is_url(url):
+                    self.t = TableGroup.from_url(url, data=md)
+                    self.t.validate_schema(strict=True)
+                else:
+                    self.t = TableGroup.from_file(url, data=md)
             else:
-                self.t = TableGroup.from_file(url, data=md)
-        else:
-            if is_url(url):
-                self.t = Table.from_url(url, data=md)
-            else:
-                self.t = Table.from_file(url, data=md)
+                if is_url(url):
+                    self.t = Table.from_url(url, data=md)
+                    if no_header:
+                        if self.t.dialect:
+                            self.t.dialect.header = False  # pragma: no cover
+                        else:
+                            self.t.dialect = Dialect(header=False)
+                else:
+                    self.t = Table.from_file(url, data=md)
+            self.tables = self.t.tables if isinstance(self.t, TableGroup) else [self.t]
+            for table in self.tables:
+                for col in table.tableSchema.columns:
+                    if col.name and (re.search(r'\s', col.name) or col.name.startswith('_')):
+                        col.name = None
+            self.common_props = self.t.common_props
+        if w:
+            self.warnings.extend(w)
+
+    @property
+    def is_valid(self):
+        if self.warnings:
+            return False
+        with warnings.catch_warnings(record=True) as w:
+            for table in self.tables:
+                for _ in table.iterdicts(strict=False):
+                    pass
+                if not table.check_primary_key():  # pragma: no cover
+                    warnings.warn('Duplicate primary key')
+            tg = TableGroup(at_props={'base': self.t.base}, tables=self.tables)
+            if not tg.check_referential_integrity(strict=True):
+                warnings.warn('Referential integrity check failed')
+            if w:
+                self.warnings.extend(w)
+        return not bool(self.warnings)
+
+    @staticmethod
+    def locate_metadata(url=None) -> typing.Tuple[dict, bool]:
+        """
+        Implements metadata discovery as specified in
+        `§5. Locating Metadata <https://w3c.github.io/csvw/syntax/#locating-metadata>`_
+        """
+        def describes(md, url):
+            for table in md.get('tables', [md]):
+                # FIXME: We check whether the metadata describes a CSV file just superficially,
+                # by comparing the last path components of the respective URLs.
+                if url.split('/')[-1] == table['url'].split('/')[-1]:
+                    return True
+            return False
+
+        no_header = False
+        if url and is_url(url):
+            # §5.2 Link Header
+            # https://w3c.github.io/csvw/syntax/#link-header
+            res = requests.head(url)
+            no_header = bool(re.search(r'header\s*=\s*absent', res.headers.get('content-type', '')))
+            desc = res.links.get('describedby')
+            if desc and desc['type'] in [
+                    "application/csvm+json", "application/ld+json", "application/json"]:
+                md = get_json(Link(desc['url']).resolve(url))
+                if describes(md, url):
+                    return md, no_header
+                else:
+                    warnings.warn('Ignoring linked metadata because it does not reference the data')
+
+            # §5.3 Default Locations and Site-wide Location Configuration
+            # https://w3c.github.io/csvw/syntax/
+            # #default-locations-and-site-wide-location-configuration
+            res = requests.get(Link('/.well-known/csvm').resolve(url))
+            locs = res.text if res.status_code == 200 else '{+url}-metadata.json\ncsv-metadata.json'
+            for line in locs.split('\n'):
+                res = requests.get(Link(URITemplate(line).expand(url=url)).resolve(url))
+                if res.status_code == 200:
+                    try:
+                        md = res.json()
+                        if describes(md, url):
+                            return md, no_header
+                        warnings.warn('Ignoring metadata because it does not reference the data')
+                    except json.JSONDecodeError:
+                        pass
+
+            # §5.4 Embedded Metadata
+            # https://w3c.github.io/csvw/syntax/#embedded-metadata
+            # We only recognize column names read from the first row of a CSV file.
+        elif url:
+            # Default Locations for local files:
+            if pathlib.Path(str(url) + '-metadata.json').exists():
+                return get_json(pathlib.Path(str(url) + '-metadata.json')), no_header
+        return {
+            '@context': "http://www.w3.org/ns/csvw",
+            'url': url,
+        }, no_header
 
     def to_json(self, minimal=False):
         """
-        Implements algorithm https://w3c.github.io/csvw/csv2json/#standard-mode
+        Implements algorithm described in `<https://w3c.github.io/csvw/csv2json/#standard-mode>`_
         """
-        def jsonld_to_json(obj):
-            if isinstance(obj, dict):
-                if '@value' in obj:
-                    obj = obj['@value']
-                if '@id' in obj:
-                    obj = obj['@id']
-            if isinstance(obj, dict):
-                return {k: jsonld_to_json(v) for k, v in obj.items()}
-            if isinstance(obj, list):
-                return [jsonld_to_json(v) for v in obj]
-            return obj
-
         res = collections.OrderedDict()
-        #if 'id' in :
-        #    pass
-        # Insert any notes and non-core annotations specified for the group of tables into object G according to the rules provided in § 5. JSON-LD to JSON.
+        # Insert any notes and non-core annotations specified for the group of tables into object
+        # G according to the rules provided in § 5. JSON-LD to JSON.
         if self.t.common_props and not isinstance(self.t, Table):
-            res.update(jsonld_to_json(self.t.common_props))
-        res['tables'] = []
-        for table in self.t.tables if isinstance(self.t, TableGroup) else [self.t]:
-            if table.suppressOutput:
-                continue
-            tres = collections.OrderedDict()
-            # FIXME: id
-            tres['url'] = str(table.url.resolve(table.base))
-            if 'id' in table.at_props:
-                tres['@id'] = table.at_props['id']
-            if table.notes:
-                tres['notes'] = jsonld_to_json(table.notes)
-            # Insert any notes and non-core annotations specified for the group of tables into object G according to the rules provided in § 5. JSON-LD to JSON.
-            tres.update(jsonld_to_json(table.common_props))
-            tres['row'] = []
-            cols = {col.header: col for col in table.tableSchema.columns}
-            for col in cols.values():
-                col.propertyUrl = col.inherit('propertyUrl')
-                col.valueUrl = col.inherit('valueUrl')
-
-            for rownum, (_, rowsourcenum, row) in enumerate(
-                    table.iterdicts(with_metadata=True), start=1):
-                rres = collections.OrderedDict()
-                rres['url'] = '{}#row={}'.format(table.url.resolve(table.base), rowsourcenum)
-                rres['rownum'] = rownum
-                # Specify any titles for the row; if row titles is not null, insert the following name-value pair into object R:
-                # name
-                #     titles
-                # value
-                #     t
-                # where t is the single value or array of values provided by the row titles annotation.
-
-                # Insert any notes and non-core annotations specified for the group of tables into object G according to the rules provided in § 5. JSON-LD to JSON.
-                rowd = []
-                aboutUrl = table.tableSchema.inherit('aboutUrl')
-                print(aboutUrl)
-                if aboutUrl:
-                    if aboutUrl is INVALID:
-                        rurl = table.url.resolve(table.base)
-                    else:
-                        rurl = aboutUrl.expand(_row=rownum, **row)
-                        if rurl.startswith('#'):
-                            rurl = '{}{}'.format(table.url.resolve(table.base), rurl)
-                    rowd.append(('@id', rurl))
-                for k, v in row.items():
-                    col = cols.get(k)
-                    if col and col.suppressOutput:
-                        continue
-                    kv = get_property_and_value(table, col, row, k, v, rownum)
-                    if kv:
-                        rowd.append(((kv[2], kv[0]), kv[1]))
-                for col in table.tableSchema.columns:
-                    if col.virtual:
-                        # put together from about/property/valueUrl
-                        kv = get_property_and_value(table, col, row, col.header, None, rownum)
-                        if kv:
-                            rowd.append(((kv[2], kv[0]), kv[1]))
-                rres['describes'] = group_by_about_url(rowd)
-                tres['row'].append(rres)
-            res['tables'].append(tres)
+            res.update(jsonld.to_json(self.t.common_props, flatten_list=True))
+        res['tables'] = [
+            self._table_to_json(table) for table in self.tables if not table.suppressOutput]
         if minimal:
-            return list(itertools.chain(*[[r['describes'][0] for r in t['row']] for t in res['tables']]))
+            return list(
+                itertools.chain(*[[r['describes'][0] for r in t['row']] for t in res['tables']]))
         return res
 
-    def pprint(self, minimal=False):
-        print(json.dumps(self.to_json(minimal=minimal), indent=4))
+    def _table_to_json(self, table):
+        res = collections.OrderedDict()
+        # FIXME: id
+        res['url'] = str(table.url.resolve(table.base))
+        if 'id' in table.at_props:
+            res['@id'] = table.at_props['id']
+        if table.notes:
+            res['notes'] = jsonld.to_json(table.notes)
+        # Insert any notes and non-core annotations specified for the group of tables into object
+        # G according to the rules provided in § 5. JSON-LD to JSON.
+        res.update(jsonld.to_json(table.common_props))
+
+        cols = collections.OrderedDict([(col.header, col) for col in table.tableSchema.columns])
+        for col in cols.values():
+            col.propertyUrl = col.inherit('propertyUrl')
+            col.valueUrl = col.inherit('valueUrl')
+
+        row = [
+            self._row_to_json(table, cols, row, rownum, rowsourcenum)
+            for rownum, (_, rowsourcenum, row) in enumerate(
+                table.iterdicts(with_metadata=True, strict=False), start=1)
+        ]
+        if table._comments:
+            res['rdfs:comment'] = [c[1] for c in table._comments]
+        res['row'] = row
+        return res
+
+    def _row_to_json(self, table, cols, row, rownum, rowsourcenum):
+        res = collections.OrderedDict()
+        res['url'] = '{}#row={}'.format(table.url.resolve(table.base), rowsourcenum)
+        res['rownum'] = rownum
+        if table.tableSchema.rowTitles:
+            res['titles'] = [
+                t for t in [row.get(name) for name in table.tableSchema.rowTitles] if t]
+            if len(res['titles']) == 1:
+                res['titles'] = res['titles'][0]
+        # Insert any notes and non-core annotations specified for the group of tables into object
+        # G according to the rules provided in § 5. JSON-LD to JSON.
+
+        res['describes'] = self._describes(table, cols, row, rownum)
+        return res
+
+    def _describes(self, table, cols, row, rownum):
+        triples = []
+
+        aboutUrl = table.tableSchema.inherit('aboutUrl')
+        if aboutUrl:
+            triples.append(jsonld.Triple(
+                about=None, property='@id', value=table.expand(aboutUrl, row, _row=rownum)))
+
+        for i, (k, v) in enumerate(row.items(), start=1):
+            col = cols.get(k)
+            if col and (col.suppressOutput or col.virtual):
+                continue
+
+            # Skip null values:
+            null = col.inherit_null() if col else table.inherit_null()
+            if (null and v in null) or v == "" or (v is None) or \
+                    (col and col.separator and v == []):
+                continue
+
+            triples.append(jsonld.Triple.from_col(
+                table,
+                col,
+                row,
+                '_col.{}'.format(i)
+                if (not table.tableSchema.columns and not self.no_metadata) else k,
+                v,
+                rownum))
+
+        for col in table.tableSchema.columns:
+            if col.virtual:
+                triples.append(jsonld.Triple.from_col(table, col, row, col.header, None, rownum))
+        return jsonld.group_triples(triples)

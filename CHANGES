@@ -1,6 +1,16 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- Better CSVW spec conformance:
+  - `csvw.CSVW.to_json` implements https://w3c.github.io/csvw/csv2json/
+  - `csvw.CSVW.is_valid`
+  - Completed datatype support
+- CLI
+- Docs
+
 
 Version 2.0
 -----------

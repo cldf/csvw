@@ -9,8 +9,12 @@ import unicodedata
 import attr
 
 
-def converter(type_, default, s, allow_none=False, cond=None):
-    if type_ != list and isinstance(s, list):
+def is_url(s):
+    return re.match(r'https?://', str(s))
+
+
+def converter(type_, default, s, allow_none=False, cond=None, allow_list=True):
+    if allow_list and type_ != list and isinstance(s, list):
         return [v for v in [converter(type_, None, ss, cond=cond) for ss in s] if v is not None]
 
     if allow_none and s is None:

@@ -1,0 +1,4 @@
+[submodule "tests/fixtures/csvw"]
+	path = tests/fixtures/csvw
+	url = https://github.com/w3c/csvw
+	branch = gh-pages
