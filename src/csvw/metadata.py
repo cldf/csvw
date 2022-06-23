@@ -880,8 +880,8 @@ class Schema(Description):
             col._parent = self
             col._number = i + 1
         for colref in self.primaryKey or []:
-            col = self.columndict[colref]
-            if not col.name:
+            col = self.columndict.get(colref)
+            if col and not col.name:
                 warnings.warn('A primaryKey referenced column MUST have a `name` property')
                 self.primaryKey = None
 
