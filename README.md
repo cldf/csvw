@@ -109,7 +109,7 @@ files.
 ## See also
 
 - https://www.w3.org/2013/csvw/wiki/Main_Page
-- https:csvw.org
+- https://csvw.org
 - https://github.com/CLARIAH/COW
 - https://github.com/CLARIAH/ruminator
 - https://github.com/bloomberg/pycsvw
