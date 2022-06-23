@@ -874,7 +874,7 @@ class Schema(Description):
                     warnings.warn('Duplicate column name!')
                 if col.name:
                     if col.name in names:
-                        raise ValueError('Duplicate column name!')
+                        raise ValueError('Duplicate column name {}'.format(col.name))
                     names.add(col.name)
                 seen.add(col.header)
             col._parent = self
