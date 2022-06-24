@@ -1,6 +1,7 @@
 import decimal
 import datetime
 import warnings
+from urllib.parse import urlparse
 
 import pytest
 
@@ -11,6 +12,8 @@ from csvw.datatypes import NumberPattern
 @pytest.mark.parametrize(
     'datatype,val,obj',
     [
+        ({'base': 'string', 'format': '[0-9]+[a-z]+'}, '1a', '1a'),
+        ('anyURI', '/a/b?d=5', None),
         ('integer', '5', 5),
         ('integer', '-5', -5),
         ('date', '2012-12-01', None),
@@ -55,7 +58,6 @@ def test_double():
 
 def test_string():
     t = Datatype.fromvalue({'base': 'string', 'format': '[0-9]+[a-z]+'})
-    assert t.read('1a') == '1a'
     with pytest.raises(ValueError):
         t.read('abc')
     with pytest.raises(ValueError):
@@ -66,14 +68,7 @@ def test_string():
 
 
 def test_anyURI():
-    from urllib.parse import urlparse
-
     t = Datatype.fromvalue('anyURI')
-    uri = t.parse('/a/b?d=5')
-    assert uri.resolve_with('http://example.org').unsplit() == \
-           'http://example.org/a/b?d=5'
-    assert t.formatted(uri) == '/a/b?d=5'
-
     assert t.formatted('Http://example.org') == 'http://example.org'
     assert t.formatted(urlparse('Http://example.org')) == 'http://example.org'
 
