@@ -1,10 +1,12 @@
 import sys
 import json
+import pathlib
 import argparse
 
 from colorama import init, Fore, Style
 
 from csvw import CSVW
+from csvw.db import Database
 
 
 def csvwvalidate():  # pragma: no cover
@@ -35,6 +37,29 @@ def csvwvalidate():  # pragma: no cover
         if args.verbose:
             print(Style.DIM + Fore.BLUE + str(e))
     sys.exit(ret)
+
+
+def csvw2datasette():  # pragma: no cover
+    parser = argparse.ArgumentParser(
+        description="""convert CSVW to data for datasette""")
+    parser.add_argument('url', help='URL or local path to CSV or JSON metadata file.')
+
+    args = parser.parse_args()
+    csvw = CSVW(args.url)
+    db = Database(csvw.tablegroup, pathlib.Path('datasette.db'))
+    db.write_from_tg()
+    md = {}
+    for k in ['title', 'description', 'license']:
+        if 'dc:{}'.format(k) in csvw.common_props:
+            md[k] = csvw.common_props['dc:{}'.format(k)]
+    # FIXME: flesh out, see https://docs.datasette.io/en/stable/metadata.html
+    pathlib.Path('datasette-metadata.json').write_text(json.dumps(md, indent=4))
+    print("""Run
+    datasette datasette.db --metadata datasette-metadata.json
+and open your browser at
+    http://localhost:8001/
+to browse the data.
+""")
 
 
 def csvw2json():  # pragma: no cover

@@ -1633,12 +1633,16 @@ class CSVW:
                     pass
                 if not table.check_primary_key():  # pragma: no cover
                     warnings.warn('Duplicate primary key')
-            tg = TableGroup(at_props={'base': self.t.base}, tables=self.tables)
-            if not tg.check_referential_integrity(strict=True):
+            if not self.tablegroup.check_referential_integrity(strict=True):
                 warnings.warn('Referential integrity check failed')
             if w:
                 self.warnings.extend(w)
         return not bool(self.warnings)
+
+    @property
+    def tablegroup(self):
+        return self.t if isinstance(self.t, TableGroup) else \
+            TableGroup(at_props={'base': self.t.base}, tables=self.tables)
 
     @staticmethod
     def locate_metadata(url=None) -> typing.Tuple[dict, bool]:
