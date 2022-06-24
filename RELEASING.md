@@ -12,9 +12,17 @@ tox -r
 flake8 src
 ```
 
+- Make sure docs can be created:
+```shell
+cd docs
+make clean html
+cd ..
+```
+
 - Update the version number, by removing the trailing `.dev0` in:
   - `setup.py`
   - `src/csvw/__init__.py`
+  - `docs/conf.py`
 
 - Edit `CHANGES`
 
