@@ -1570,7 +1570,7 @@ class CSVW:
     """
     Python API to read CSVW described data and convert it to JSON.
     """
-    def __init__(self, url: str, md_url: typing.Optional[str]=None, validate: bool = False):
+    def __init__(self, url: str, md_url: typing.Optional[str] = None, validate: bool = False):
         self.warnings = []
         w = None
         with contextlib.ExitStack() as stack:
