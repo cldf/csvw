@@ -1,9 +1,14 @@
-"""Datatypes
+"""
+We model the hierarchy of basic datatypes using a class hierarchy.
 
-We model the hierarchy of basic datatypes using derived classes.
+`Derived datatypes <https://www.w3.org/TR/tabular-metadata/#derived-datatypes>`_ are implemented
+via :class:`csvw.Datatype` which is
+`composed of <https://realpython.com/inheritance-composition-python/#whats-composition>`_
+a basic datatype and additional behaviour.
 
 .. seealso:: http://w3c.github.io/csvw/metadata/#datatypes
 """
+import collections
 import re
 import json as _json
 import math
@@ -37,13 +42,16 @@ def to_binary(s, encoding='utf-8'):
 
 
 @register
-class anyAtomicType(object):
+class anyAtomicType:
     """
     A basic datatype consists of
-    - a bag of attributes
-    - three staticmethods controlling marshalling and unmarshalling of string data.
 
-    Theses methods are orchestrated from `csvw.Datatype` in its `read` and `formatted` methods.
+    - a bag of attributes, most importantly a `name` which matches the name or alias of one of the \
+      `CSVW built-in datatypes <https://www.w3.org/TR/tabular-metadata/#built-in-datatypes>`_
+    - three staticmethods controlling marshalling and unmarshalling of Python objects to strings.
+
+    Theses methods are orchestrated from :class:`csvw.Datatype` in its `read` and `formatted`
+    methods.
     """
     name = 'any'
     minmax = False
@@ -58,32 +66,24 @@ class anyAtomicType(object):
 
     @staticmethod
     def derived_description(datatype):
-        """
-        Override to provide keyword arguments to `to_python` and `to_string` based on properties of
-        the `csvw.Datatype`.
-        """
         return {}
 
     @staticmethod
     def to_python(v: str, **kw) -> object:
-        """
-        Convert a value serialized as `str` to a suitable Python object.
-        """
         return v  # pragma: no cover
 
     @staticmethod
     def to_string(v: object, **kw) -> str:
-        """
-        Serialize a Python object as `str` - ideally allowing round-tripping with `to_python`.
-        """
         return '{}'.format(v)
 
 
 @register
 class string(anyAtomicType):
     """
-    The lexical and value spaces of xs:string are the set of all possible strings composed of any
-    character allowed in a XML 1.0 document without any treatment done on whitespaces.
+    Maps to `str`.
+
+        The lexical and value spaces of xs:string are the set of all possible strings composed of any
+        character allowed in a XML 1.0 document without any treatment done on whitespaces.
     """
     name = 'string'
 
@@ -108,10 +108,18 @@ class string(anyAtomicType):
 @register
 class anyURI(string):
     """
-    This datatype corresponds normatively to the XLink href attribute. Its value space includes the
-    URIs defined by the RFCs `2396 <https://datatracker.ietf.org/doc/html/rfc2396>`_ and
-    `2732 <https://datatracker.ietf.org/doc/html/rfc2732>`_, but its lexical space doesn’t require
-    the character escapes needed to include non-ASCII characters in URIs.
+    Maps to `rfc3986.URIReference`.
+
+        This datatype corresponds normatively to the XLink href attribute. Its value space includes
+        the URIs defined by the RFCs `2396 <https://datatracker.ietf.org/doc/html/rfc2396>`_ and
+        `2732 <https://datatracker.ietf.org/doc/html/rfc2732>`_, but its lexical space doesn’t
+        require the character escapes needed to include non-ASCII characters in URIs.
+
+    .. note::
+
+        We normalize URLs according to the rules in
+        `RFC 3986 <https://datatracker.ietf.org/doc/html/rfc3986#section-6.2>`_ when serializing
+        to `str`. Thus roundtripping isn't guaranteed.
     """
     name = 'anyURI'
 
@@ -135,16 +143,18 @@ class anyURI(string):
 @register
 class NMTOKEN(string):
     """
-    The lexical and value spaces of xs:NMTOKEN are the set of XML 1.0 “name tokens,” i.e., tokens
-    composed of characters, digits, “.”, “:”, “-”, and the characters defined by Unicode, such as
-    “combining” or “extender”.
+    Maps to `str`
 
-    This type is usually called a “token.”
+        The lexical and value spaces of xs:NMTOKEN are the set of XML 1.0 “name tokens,” i.e.,
+        tokens composed of characters, digits, “.”, “:”, “-”, and the characters defined by Unicode,
+        such as “combining” or “extender”.
 
-    Valid values include "Snoopy", "CMS", "1950-10-04", or "0836217462".
+        This type is usually called a “token.”
 
-    Invalid values include "brought classical music to the Peanuts strip" (spaces are forbidden)
-    or "bold,brash" (commas are forbidden).
+        Valid values include "Snoopy", "CMS", "1950-10-04", or "0836217462".
+
+        Invalid values include "brought classical music to the Peanuts strip" (spaces are forbidden)
+        or "bold,brash" (commas are forbidden).
     """
     name = "NMTOKEN"
 
@@ -158,7 +168,9 @@ class NMTOKEN(string):
 
 @register
 class base64Binary(anyAtomicType):
-
+    """
+    Maps to `bytes`
+    """
     name = 'base64Binary'
     example = 'YWJj'
 
@@ -181,12 +193,22 @@ class base64Binary(anyAtomicType):
 
 @register
 class _binary(base64Binary):
+    """
+    Maps to `bytes`. Alias for :class:`base64Binary`
+    """
     name = 'binary'
 
 
 @register
 class hexBinary(anyAtomicType):
+    """
+    Maps to `bytes`.
 
+    .. note::
+
+        We normalize to uppercase hex digits when seriializing to `str`. Thus, roundtripping is
+        limited.
+    """
     name = 'hexBinary'
     example = 'ab'
 
@@ -209,7 +231,20 @@ class hexBinary(anyAtomicType):
 
 @register
 class boolean(anyAtomicType):
-    """http://w3c.github.io/csvw/syntax/#formats-for-booleans"""
+    """
+    Maps to `bool`.
+
+    .. code-block:: python
+
+        >>> from csvw import Datatype
+        >>> dt = Datatype.fromvalue({"base": "boolean", "format": "Yea|Nay"})
+        >>> dt.read('Nay')
+        False
+        >>> dt.formatted(True)
+        'Yea'
+
+    .. seealso:: `<https://www.w3.org/TR/tabular-data-model/#formats-for-booleans>`_
+    """
 
     name = 'boolean'
     example = 'false'
@@ -257,7 +292,9 @@ def with_tz(v, func, args, kw):
 
 @register
 class dateTime(anyAtomicType):
-
+    """
+    Maps to `datetime.datetime`.
+    """
     name = 'datetime'
     minmax = True
     example = '2018-12-10T20:20:20'
@@ -311,13 +348,17 @@ class dateTime(anyAtomicType):
 
 @register
 class _dateTime(dateTime):
-
+    """
+    Maps to `datetime.datetime`. Alias for :class:`dateTime`
+    """
     name = 'dateTime'
 
 
 @register
 class date(dateTime):
-
+    """
+    Maps to `datetime.datetime` (in order to be able to preserve timezone information).
+    """
     name = 'date'
     example = '2018-12-10'
 
@@ -344,7 +385,9 @@ class date(dateTime):
 
 @register
 class dateTimeStamp(dateTime):
-
+    """
+    Maps to `datetime.datetime`.
+    """
     name = 'dateTimeStamp'
     example = '2018-12-10T20:20:20'
 
@@ -358,7 +401,9 @@ class dateTimeStamp(dateTime):
 
 @register
 class _time(dateTime):
-
+    """
+    Maps to `datetime.datetime` (in order to be able to preserve timezone information).
+    """
     name = 'time'
     example = '20:20:20'
 
@@ -380,7 +425,18 @@ class _time(dateTime):
 
 @register
 class duration(anyAtomicType):
+    """
+    Maps to `datetime.timedelta`.
 
+    .. code-block: python
+
+        >>> from csvw import Datatype
+        >>> dt = Datatype.fromvalue("datetime")
+        >>> duration = Datatype.fromvalue("duration")
+        >>> dt.formatted(dt.read("2022-06-24T12:00:00") + duration.read("P1MT2H"))
+        '2022-07-24T14:00:00'
+
+    """
     name = 'duration'
     example = 'P3Y6M4DT12H30M5S'
 
@@ -401,17 +457,53 @@ class duration(anyAtomicType):
 
 @register
 class dayTimeDuration(duration):
+    """
+    Maps to `datetime.timedelta`.
+    """
     name = 'dayTimeDuration'
 
 
 @register
 class yearMonthDuration(duration):
+    """
+    Maps to `datetime.timedelta`.
+    """
     name = 'yearMonthDuration'
 
 
 @register
 class decimal(anyAtomicType):
+    """
+    Maps to `decimal.Decimal`.
 
+        xs:decimal is the datatype that represents the set of all the decimal numbers with
+        arbitrary lengths. Its lexical space allows any number of insignificant leading and
+        trailing zeros (after the decimal point).
+
+        There is no support for scientific notations.
+
+        Valid values include: "123.456", "+1234.456", "-1234.456", "-.456", or "-456".
+
+        The following values would be invalid: [...] "1234.456E+2" (scientific notation ("E+2")
+        is forbidden).
+
+    XML-Schema restricts the lexical space by disallowing "thousand separator" and forcing the
+    decimal separator to be ".". But these limitations can be overcome within CSVW using a
+    `derived datatype <https://www.w3.org/TR/tabular-data-model/#formats-for-numeric-types>`_:
+
+    .. code-block:: python
+
+        >>> from csvw import Datatype
+        >>> dt = Datatype.fromvalue(
+        ...     {"base": "decimal", "format": {"groupChar": ".", "decimalChar": ","}})
+        >>> dt.read("1.234,5")
+        Decimal('1234.5')
+
+    .. note::
+
+        While mapping to `decimal.Decimal` rather than `float` makes handling of the Python object
+        somewhat cumbersome, it makes sure we can roundtrip values correctly.
+    """
     name = 'decimal'
     minmax = True
     example = '5'
@@ -495,7 +587,9 @@ class decimal(anyAtomicType):
 
 @register
 class integer(decimal):
-
+    """
+    Maps to `int`.
+    """
     name = 'integer'
     range = None
 
@@ -513,22 +607,26 @@ class integer(decimal):
 
 @register
 class _int(integer):
-
+    """
+    Maps to `int`. Alias for :class:`integer`.
+    """
     name = 'int'
 
 
 @register
 class unsignedInt(integer):
     """
-    The value space of xs:unsignedInt is the integers between 0 and 4294967295, i.e., the unsigned
-    values that can fit in a word of 32 bits. Its lexical space allows an optional “+” sign and
-    leading zeros before the significant digits.
+    Maps to `int`.
 
-    The decimal point (even when followed only by insignificant zeros) is forbidden.
+        The value space of xs:unsignedInt is the integers between 0 and 4294967295, i.e., the
+        unsigned values that can fit in a word of 32 bits. Its lexical space allows an optional “+”
+        sign and leading zeros before the significant digits.
 
-    Valid values include "4294967295", "0", "+0000000000000000000005", or "1".
+        The decimal point (even when followed only by insignificant zeros) is forbidden.
 
-    Invalid values include "-1" and "1.".
+        Valid values include "4294967295", "0", "+0000000000000000000005", or "1".
+
+        Invalid values include "-1" and "1.".
     """
     name = 'unsignedInt'
     range = (0, 4294967295)
@@ -537,15 +635,17 @@ class unsignedInt(integer):
 @register
 class unsignedShort(integer):
     """
-    The value space of xs:unsignedShort is the integers between 0 and 65535, i.e., the unsigned
-    values that can fit in a word of 16 bits. Its lexical space allows an optional “+” sign and
-    leading zeros before the significant digits.
+    Maps to `int`.
 
-    The decimal point (even when followed only by insignificant zeros) is forbidden.
+        The value space of xs:unsignedShort is the integers between 0 and 65535, i.e., the unsigned
+        values that can fit in a word of 16 bits. Its lexical space allows an optional “+” sign and
+        leading zeros before the significant digits.
 
-    Valid values include "65535", "0", "+0000000000000000000005", or "1".
+        The decimal point (even when followed only by insignificant zeros) is forbidden.
 
-    Invalid values include "-1" and "1." .
+        Valid values include "65535", "0", "+0000000000000000000005", or "1".
+
+        Invalid values include "-1" and "1." .
     """
     name = 'unsignedShort'
     range = (0, 65535)
@@ -554,15 +654,17 @@ class unsignedShort(integer):
 @register
 class unsignedLong(integer):
     """
-    The value space of xs:unsignedLong is the integers between 0 and 18446744073709551615, i.e.,
-    the unsigned values that can fit in a word of 64 bits. Its lexical space allows an optional
-    “+” sign and leading zeros before the significant digits.
+    Maps to `int`.
 
-    The decimal point (even when followed only by insignificant zeros) is forbidden.
+        The value space of xs:unsignedLong is the integers between 0 and 18446744073709551615, i.e.,
+        the unsigned values that can fit in a word of 64 bits. Its lexical space allows an optional
+        “+” sign and leading zeros before the significant digits.
 
-    Valid values include "18446744073709551615", "0", "+0000000000000000000005", or "1".
+        The decimal point (even when followed only by insignificant zeros) is forbidden.
 
-    Invalid values include "-1" and "1.".
+        Valid values include "18446744073709551615", "0", "+0000000000000000000005", or "1".
+
+        Invalid values include "-1" and "1.".
     """
     name = 'unsignedLong'
     range = (0, 18446744073709551615)
@@ -571,18 +673,20 @@ class unsignedLong(integer):
 @register
 class unsignedByte(integer):
     """
-    The value space of xs:unsignedByte is the integers between 0 and 255, i.e., the unsigned values
-     that can fit in a word of 8 bits. Its lexical space allows an optional “+” sign and leading
-     zeros before the significant digits.
+    Maps to `int`.
 
-    The lexical space does not allow values expressed in other numeration bases (such as
-    hexadecimal, octal, or binary).
+        The value space of xs:unsignedByte is the integers between 0 and 255, i.e., the unsigned
+        values that can fit in a word of 8 bits. Its lexical space allows an optional “+” sign and
+        leading zeros before the significant digits.
 
-    The decimal point (even when followed only by insignificant zeros) is forbidden.
+        The lexical space does not allow values expressed in other numeration bases (such as
+        hexadecimal, octal, or binary).
 
-    Valid values include "255", "0", "+0000000000000000000005", or "1".
+        The decimal point (even when followed only by insignificant zeros) is forbidden.
 
-    Invalid values include "-1" and "1.".
+        Valid values include "255", "0", "+0000000000000000000005", or "1".
+
+        Invalid values include "-1" and "1.".
     """
     name = 'unsignedByte'
     range = (0, 255)
@@ -591,14 +695,17 @@ class unsignedByte(integer):
 @register
 class short(integer):
     """
-    The value space of xs:short is the set of common short integers (16 bits), i.e., the integers
-    between -32768 and 32767; its lexical space allows any number of insignificant leading zeros.
+    Maps to `int`.
 
-    The decimal point (even when followed only by insignificant zeros) is forbidden.
+        The value space of xs:short is the set of common short integers (16 bits), i.e., the
+        integers between -32768 and 32767; its lexical space allows any number of insignificant
+        leading zeros.
 
-    Valid values include "-32768", "0", "-0000000000000000000005", or "32767".
+        The decimal point (even when followed only by insignificant zeros) is forbidden.
 
-    Invalid values include "32768" and "1.".
+        Valid values include "-32768", "0", "-0000000000000000000005", or "32767".
+
+        Invalid values include "32768" and "1.".
     """
     name = 'short'
     range = (-32768, 32767)
@@ -607,16 +714,18 @@ class short(integer):
 @register
 class long(integer):
     """
-    The value space of xs:long is the set of common double-size integers (64 bits), i.e., the
-    integers between -9223372036854775808 and 9223372036854775807; its lexical space allows any
-    number of insignificant leading zeros.
+    Maps to `int`.
 
-    The decimal point (even when followed only by insignificant zeros) is forbidden.
+        The value space of xs:long is the set of common double-size integers (64 bits), i.e., the
+        integers between -9223372036854775808 and 9223372036854775807; its lexical space allows any
+        number of insignificant leading zeros.
 
-    Valid values for xs:long include "-9223372036854775808", "0", "-0000000000000000000005", or
-    "9223372036854775807".
+        The decimal point (even when followed only by insignificant zeros) is forbidden.
 
-    Invalid values include "9223372036854775808" and "1.".
+        Valid values for xs:long include "-9223372036854775808", "0", "-0000000000000000000005", or
+        "9223372036854775807".
+
+        Invalid values include "9223372036854775808" and "1.".
     """
     name = 'long'
     range = (-9223372036854775808, 9223372036854775807)
@@ -625,16 +734,18 @@ class long(integer):
 @register
 class byte(integer):
     """
-    The value space of xs:byte is the integers between -128 and 127, i.e., the signed values that
-    can fit in a word of 8 bits. Its lexical space allows an optional sign and leading zeros before
-    the significant digits.
+    Maps to `int`.
 
-    The lexical space does not allow values expressed in other numeration bases (such as
-    hexadecimal, octal, or binary).
+        The value space of xs:byte is the integers between -128 and 127, i.e., the signed values
+        that can fit in a word of 8 bits. Its lexical space allows an optional sign and leading
+        zeros before the significant digits.
 
-    Valid values for byte include 27, -34, +105, and 0.
+        The lexical space does not allow values expressed in other numeration bases (such as
+        hexadecimal, octal, or binary).
 
-    Invalid values include 0A, 1524, and INF.
+        Valid values for byte include 27, -34, +105, and 0.
+
+        Invalid values include 0A, 1524, and INF.
     """
     name = 'byte'
     range = (-128, 127)
@@ -642,21 +753,27 @@ class byte(integer):
 
 @register
 class nonNegativeInteger(integer):
-
+    """
+    Maps to `int`.
+    """
     name = 'nonNegativeInteger'
     range = (1, math.inf)
 
 
 @register
 class positiveInteger(integer):
-
+    """
+    Maps to `int`.
+    """
     name = 'positiveInteger'
     range = (0, math.inf)
 
 
 @register
 class nonPositiveInteger(integer):
-
+    """
+    Maps to `int`.
+    """
     name = 'nonPositiveInteger'
     example = '-5'
     range = (-math.inf, 0)
@@ -664,7 +781,9 @@ class nonPositiveInteger(integer):
 
 @register
 class negativeInteger(integer):
-
+    """
+    Maps to `int`.
+    """
     name = 'negativeInteger'
     example = '-5'
     range = (-math.inf, -1)
@@ -672,7 +791,16 @@ class negativeInteger(integer):
 
 @register
 class _float(anyAtomicType):
+    """
+    Maps to `float`.
 
+    .. note::
+
+        Due to the well known issues with representing floating point numbers, roundtripping may
+        not work correctly.
+
+    .. seealso:: `<https://docs.python.org/3/tutorial/floatingpoint.html>`_
+    """
     name = 'float'
     minmax = True
     example = '5.3'
@@ -702,19 +830,36 @@ class _float(anyAtomicType):
 
 @register
 class number(_float):
-
+    """
+    Maps to `float`.
+    """
     name = 'number'
 
 
 @register
 class double(_float):
-
+    """
+    Maps to `float`.
+    """
     name = 'double'
 
 
 @register
 class normalizedString(string):
+    """
+    Maps to `str`.
 
+        The lexical space of xs:normalizedString is unconstrained (any valid XML character may be
+        used), and its value space is the set of strings after whitespace replacement (i.e., after
+        any occurrence of #x9 (tab), #xA (linefeed), and #xD (carriage return) have been replaced
+        by an occurrence of #x20 (space) without any whitespace collapsing).
+
+    .. note::
+
+        The CSVW test suite (specifically in `test036 <https://w3c.github.io/csvw/tests/#test036>`_
+        and `test037 <https://w3c.github.io/csvw/tests/#test037>`_) requires that `normalizedString`
+        is also trimmed, i.e. stripped from leading and trailing whitespace. So that's we do.
+    """
     name = 'normalizedString'
 
     @staticmethod
@@ -728,55 +873,87 @@ class normalizedString(string):
 
 @register
 class QName(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'QName'
 
 
 @register
 class gDay(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'gDay'
 
 
 @register
 class gMonth(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'gMonth'
 
 
 @register
 class gMonthDay(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'gMonthDay'
 
 
 @register
 class gYear(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'gYear'
 
 
 @register
 class gYearMonth(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'gYearMonth'
 
 
 @register
 class xml(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'xml'
 
 
 @register
 class html(string):
-
+    """
+    Maps to `str`.
+    """
     name = 'html'
 
 
 @register
 class json(string):
+    """
+    Maps to `str`, `list` or `dict`, i.e. to the result of `json.loads`.
 
+    .. code-block:: python
+
+        >>> from csvw import Datatype
+        >>> dt = Datatype.fromvalue("json")
+        >>> d = dt.read("{}")
+        >>> d["a"] = '123'
+        >>> dt.formatted(d)
+        '{"a": "123"}'
+
+    .. note::
+
+        To ensure proper roundtripping, we load the JSON strings using the
+        `object_pairs_hook=collections.OrderedDict` keyword.
+    """
     name = 'json'
     example = '{"a": [1,2]}'
 
@@ -784,7 +961,7 @@ class json(string):
     # why not just to_python = staticmethod(_json.loads)?
     @staticmethod
     def to_python(v, **kw):
-        return _json.loads(v)
+        return _json.loads(v, object_pairs_hook=collections.OrderedDict)
 
     @staticmethod
     def to_string(v, **kw):

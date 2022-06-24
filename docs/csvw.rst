@@ -80,3 +80,6 @@ A table's schema is described using a hierarchy of description objects:
 
 .. autoclass:: csvw.Datatype
     :members:
+
+
+For a list of datatypes supported by `csvw`, see :doc:`datatypes`
