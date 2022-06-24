@@ -1570,7 +1570,7 @@ class CSVW:
     """
     Python API to read CSVW described data and convert it to JSON.
     """
-    def __init__(self, url: str, md_url=None, validate=False):
+    def __init__(self, url: str, md_url: typing.Optional[str]=None, validate: bool = False):
         self.warnings = []
         w = None
         with contextlib.ExitStack() as stack:
@@ -1616,7 +1616,15 @@ class CSVW:
             self.warnings.extend(w)
 
     @property
-    def is_valid(self):
+    def is_valid(self) -> bool:
+        """
+        Performs CSVW validation.
+
+        .. note::
+
+            For this to also catch problems during metadata location, the
+            `CSVW` instance must be initialized with `validate=True`.
+        """
         if self.warnings:
             return False
         with warnings.catch_warnings(record=True) as w:

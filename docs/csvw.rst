@@ -23,6 +23,7 @@ Exploring CSVW described data
     >>> list(tg.tables[0])[0]['ID']
     'first'
 
+
 Creating CSVW described data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -37,6 +38,25 @@ Creating CSVW described data
     PosixPath('data.csv-metadata.json')
     >>> list(Table.from_file('data.csv-metadata.json').iterdicts())
     [OrderedDict([('ID', 1)]), OrderedDict([('ID', 2)])]
+
+
+Where's the "on the Web" part?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+While it's nice that we can fetch data descriptions from URLs with :class:`TableGroup` and :class:`Table`, CSVW
+also includes a specification for `locating metadata <https://www.w3.org/TR/tabular-data-model/#locating-metadata>`_.
+This is meant to support use cases where you find the data first - and might be missing out on the description without
+such mechanisms. This part of the spec is implemented in :class:`csvw.CSVW`.
+
+.. code-block:: python
+
+    >>> from csvw import CSVW
+    >>> data = CSVW('https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/csv.txt')
+    >>> data.t
+    TableGroup(...)
+
+.. autoclass:: csvw.CSVW
+    :members:
 
 
 Top-level descriptions

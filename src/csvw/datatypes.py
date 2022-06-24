@@ -82,8 +82,8 @@ class string(anyAtomicType):
     """
     Maps to `str`.
 
-        The lexical and value spaces of xs:string are the set of all possible strings composed of any
-        character allowed in a XML 1.0 document without any treatment done on whitespaces.
+        The lexical and value spaces of xs:string are the set of all possible strings composed of
+        any character allowed in a XML 1.0 document without any treatment done on whitespaces.
     """
     name = 'string'
 
