@@ -4,8 +4,9 @@
 [![codecov](https://codecov.io/gh/cldf/csvw/branch/master/graph/badge.svg)](https://codecov.io/gh/cldf/csvw)
 [![PyPI](https://img.shields.io/pypi/v/csvw.svg)](https://pypi.org/project/csvw)
 
-This package provides a Python API to read and write relational, tabular data according to the
-[CSV on the Web](https://csvw.org/) specification and commandline tools read and validate CSVW data.
+This package provides
+- a Python API to read and write relational, tabular data according to the [CSV on the Web](https://csvw.org/) specification and 
+- commandline tools for reading and validating CSVW data.
 
 
 ## Links
