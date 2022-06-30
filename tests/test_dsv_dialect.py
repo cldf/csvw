@@ -1,3 +1,5 @@
+import pytest
+
 from csvw.dsv_dialects import Dialect
 
 

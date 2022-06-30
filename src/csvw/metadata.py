@@ -15,7 +15,6 @@ import decimal
 import pathlib
 import typing
 import zipfile
-import datetime
 import operator
 import warnings
 import functools
@@ -28,7 +27,6 @@ from language_tags import tags
 import attr
 import requests
 import uritemplate
-from rfc3986 import URIReference
 
 from . import utils
 from .datatypes import DATATYPES
@@ -1426,12 +1424,6 @@ class TableGroup(TableLike):
         TableLike.__attrs_post_init__(self)
         for table in self.tables:
             table._parent = self
-            if isinstance(table.tableSchema, str):
-                table.tableSchema = Schema.fromvalue(
-                    Link(table.tableSchema).resolve(self.base))
-                if isinstance(table.tableSchema, str):
-                    table.tableSchema = Schema.fromvalue({})
-                table.tableSchema._parent = table
 
     @classmethod
     def from_frictionless_datapackage(cls, dp):
