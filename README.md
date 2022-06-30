@@ -27,24 +27,6 @@ $ pip install csvw
 ```
 
 
-## Example
-
-Using `csvw` from Python code:
-
-```python
-import json
-from csvw import CSVW
-data = CSVW('https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/test.tsv')
-print(json.dumps(data.to_json(minimal=True), indent=4))
-[
-    {
-        "province": "Hello",
-        "territory": "world",
-        "precinct": "1"
-    }
-]
-```
-
 ## CLI
 
 Using `csvw` commandline tools:
@@ -164,6 +146,22 @@ $ csvwdescribe --delimiter "|" tests/fixtures/frictionless-data.csv
 
 Find the Python API documentation at [csvw.readthedocs.io](https://csvw.readthedocs.io/en/latest/).
 
+A quick example for using `csvw` from Python code:
+
+```python
+import json
+from csvw import CSVW
+data = CSVW('https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/test.tsv')
+print(json.dumps(data.to_json(minimal=True), indent=4))
+[
+    {
+        "province": "Hello",
+        "territory": "world",
+        "precinct": "1"
+    }
+]
+```
+
 
 ## Known limitations
 
@@ -180,7 +178,7 @@ Find the Python API documentation at [csvw.readthedocs.io](https://csvw.readthed
   across Python versions (see https://bugs.python.org/issue44861).
 
 
-### CSVW conformance
+## CSVW conformance
 
 While we use the CSVW specification as guideline, this package does not (and 
 probably never will) implement the full extent of this spec.
