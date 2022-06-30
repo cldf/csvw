@@ -29,9 +29,9 @@ $ pip install csvw
 
 ## CLI
 
-Using `csvw` commandline tools:
+### `csvw2json`
 
-- `csvw2json`: Converting CSVW data [to JSON](https://www.w3.org/TR/csv2json/)
+Converting CSVW data [to JSON](https://www.w3.org/TR/csv2json/)
 
 ```shell
 $ csvw2json tests/fixtures/zipped-metadata.json 
@@ -66,14 +66,18 @@ $ csvw2json tests/fixtures/zipped-metadata.json
 }
 ```
 
-- `csvwvalidate`: Validating CSVW data
+### `csvwvalidate`
+
+Validating CSVW data
 
 ```shell
 $ csvwvalidate tests/fixtures/zipped-metadata.json 
 OK
 ```
 
-- `csvwdescribe`: Describing tabular-data files with CSVW metadata
+### `csvwdescribe`
+
+Describing tabular-data files with CSVW metadata
 
 ```shell
 $ csvwdescribe --delimiter "|" tests/fixtures/frictionless-data.csv
@@ -220,7 +224,7 @@ to make sure relative paths to data resources work.
 This functionality - together with the schema inference capabilities
 of [`frictionless describe`](https://framework.frictionlessdata.io/docs/guides/describing-data/) - provides
 a convenient way to bootstrap CSVW metadata for a set of "raw" CSV
-files, implemented in the `csvwdescribe` command described above.
+files, implemented in the [`csvwdescribe` command described above](#csvwdescribe).
 
 
 ## See also
