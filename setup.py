@@ -32,6 +32,7 @@ setup(
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
         'test': [
+            'frictionless',
             'pytest>=5',
             'pytest-mock',
             'requests-mock',

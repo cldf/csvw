@@ -11,16 +11,33 @@ from csvw import CSVW, TableGroup
 from csvw.db import Database
 
 
-def csvwdescribe():  # pragma: no cover
+def parsed_args(desc, *argspecs, **kw):
+    if kw.get('args') is None:  # pragma: no cover
+        parser = argparse.ArgumentParser(description=desc)
+        for kw, kwargs in argspecs:
+            parser.add_argument(*kw, **kwargs)
+        return parser.parse_args()
+    return kw['args']
+
+
+def exit(ret, test=False):
+    if test:
+        return ret
+    sys.exit(ret)  # pragma: no cover
+
+
+def csvwdescribe(args=None, test=False):
     frictionless = shutil.which('frictionless')
-    if not frictionless:
+    if not frictionless:  # pragma: no cover
         raise ValueError('The frictionless command must be installed for this functionality!\n'
                          'Run `pip install frictionless` and try again.')
-    parser = argparse.ArgumentParser(
-        description="Describe a (set of) CSV file(s) with basic CSVW metadata.")
-    parser.add_argument('--delimiter', default=None)
-    parser.add_argument('csv', nargs='+', help="CSV files to describe as CSVW TableGroup")
-    args = parser.parse_args()
+
+    args = parsed_args(
+        "Describe a (set of) CSV file(s) with basic CSVW metadata.",
+        (['--delimiter'], dict(default=None)),
+        (['csv'], dict(nargs='+', help="CSV files to describe as CSVW TableGroup")),
+        args=args)
+
     fargs = ['describe', '--json']
     if args.delimiter:
         fargs.extend(['--dialect', '{"delimiter": "%s"}' % args.delimiter])
@@ -39,20 +56,18 @@ def csvwdescribe():  # pragma: no cover
 
     tg = TableGroup.from_frictionless_datapackage(dp)
     print(json.dumps(tg.asdict(), indent=4))
+    return exit(0, test=test)
 
 
-def csvwvalidate():  # pragma: no cover
+def csvwvalidate(args=None, test=False):
     init()
-    parser = argparse.ArgumentParser(
-        description="Validates CSVW described data according to the "
-                    "Model for Tabular Data and Metadata on the Web "
-                    "(see https://www.w3.org/TR/tabular-data-model/).\n\n"
-                    "Returns 0 on success, 1 on warnings and 2 on error.")
-    parser.add_argument('url', help='URL or local path to CSV or JSON metadata file.')
-    parser.add_argument('-v', '--verbose', action='store_true', default=False)
+    args = parsed_args(
+        "Describe a (set of) CSV file(s) with basic CSVW metadata.",
+        (['url'], dict(help='URL or local path to CSV or JSON metadata file.')),
+        (['-v', '--verbose'], dict(action='store_true', default=False)),
+        args=args)
 
     ret = 0
-    args = parser.parse_args()
     try:
         csvw = CSVW(args.url, validate=True)
         if csvw.is_valid:
@@ -62,47 +77,50 @@ def csvwvalidate():  # pragma: no cover
             print(Style.BRIGHT + Fore.RED + 'FAIL')
             if args.verbose:
                 for w in csvw.warnings:
-                    print(Style.DIM + w.message)
+                    print(Style.DIM + str(w.message))
     except ValueError as e:
         ret = 2
         print(Style.BRIGHT + Fore.RED + 'FAIL')
         if args.verbose:
             print(Style.DIM + Fore.BLUE + str(e))
-    sys.exit(ret)
+    return exit(ret, test=test)
 
 
-def csvw2datasette():  # pragma: no cover
-    parser = argparse.ArgumentParser(
-        description="""convert CSVW to data for datasette""")
-    parser.add_argument('url', help='URL or local path to CSV or JSON metadata file.')
+def csvw2datasette(args=None, test=False):
+    args = parsed_args(
+        "Convert CSVW to data for datasette (https://datasette.io/).",
+        (['url'], dict(help='URL or local path to CSV or JSON metadata file.')),
+        (['-o', '--outdir'], dict(type=pathlib.Path, default=pathlib.Path('.'))),
+        args=args)
 
-    args = parser.parse_args()
+    dbname, mdname = 'datasette.db', 'datasette-metadata.json'
     csvw = CSVW(args.url)
-    db = Database(csvw.tablegroup, pathlib.Path('datasette.db'))
+    db = Database(csvw.tablegroup, args.outdir / dbname)
     db.write_from_tg()
     md = {}
     for k in ['title', 'description', 'license']:
         if 'dc:{}'.format(k) in csvw.common_props:
             md[k] = csvw.common_props['dc:{}'.format(k)]
     # FIXME: flesh out, see https://docs.datasette.io/en/stable/metadata.html
-    pathlib.Path('datasette-metadata.json').write_text(json.dumps(md, indent=4))
+    args.outdir.joinpath(mdname).write_text(json.dumps(md, indent=4))
     print("""Run
-    datasette datasette.db --metadata datasette-metadata.json
+    datasette {} --metadata {}
 and open your browser at
     http://localhost:8001/
 to browse the data.
-""")
+""".format(args.outdir / dbname, args.outdir / mdname))
+    return exit(0, test=test)
 
 
-def csvw2json():  # pragma: no cover
-    parser = argparse.ArgumentParser(
-        description="""convert CSVW to JSON, see https://w3c.github.io/csvw/csv2json/""")
-    parser.add_argument('url', help='URL or local path to CSV or JSON metadata file.')
-
-    args = parser.parse_args()
+def csvw2json(args=None, test=False):
+    args = parsed_args(
+        "Convert CSVW to JSON, see https://w3c.github.io/csvw/csv2json/",
+        (['url'], dict(help='URL or local path to CSV or JSON metadata file.')),
+        args=args)
     csvw = CSVW(args.url)
     print(json.dumps(csvw.to_json(), indent=4))
+    return exit(0, test=test)
 
 
 if __name__ == '__main__':  # pragma: no cover
-    sys.exit(csvw2json() or 0)
+    csvw2json()

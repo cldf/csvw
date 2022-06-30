@@ -5,6 +5,7 @@
             "@language": "en"
         }
     ],
+    "dc:title": "the data",
     "dialect": {
         "header": false,
         "encoding": "utf-8-sig"

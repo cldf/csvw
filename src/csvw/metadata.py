@@ -1587,7 +1587,8 @@ class CSVW:
                 md, no_header = self.locate_metadata(url)
 
             self.no_metadata = set(md.keys()) == {'@context', 'url'}
-            assert "http://www.w3.org/ns/csvw" in md['@context']
+            if "http://www.w3.org/ns/csvw" not in md.get('@context', ''):
+                raise ValueError('Invalid or no @context')
             if 'tables' in md:
                 if not md['tables'] or not isinstance(md['tables'], list):
                     raise ValueError('Invalid TableGroup with empty tables property')
