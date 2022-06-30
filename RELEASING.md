@@ -51,7 +51,8 @@ git push --tags
 
 - Increment version number and append `.dev0` to the version number for the new development cycle:
   - `src/csvw/__init__.py`
-  - `setup.py`
+  - `setup.cfg`
+  - `docs/conf.py`
 
 - Commit/push the version change:
 ```shell

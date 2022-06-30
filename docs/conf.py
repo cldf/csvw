@@ -22,7 +22,7 @@ copyright = '2022, Robert Forkel'
 author = 'Robert Forkel'
 
 # The full version, including alpha/beta/rc tags
-release = '3.0.0'
+release = '3.0.1.dev0'
 
 
 # -- General configuration ---------------------------------------------------
