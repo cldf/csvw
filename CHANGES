@@ -11,6 +11,10 @@ Unreleased
 - CLI
 - Docs
 
+Backwards incompatibility:
+- `commentPrefix=None` for default CSV dialect for Table and TableGroup (instead of `#`)
+- duplicate column names in CSVW metadata now raise `ValueError` rather than just issuing a warning
+
 
 Version 2.0
 -----------

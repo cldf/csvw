@@ -3,6 +3,8 @@
 [![Build Status](https://github.com/cldf/csvw/workflows/tests/badge.svg)](https://github.com/cldf/csvw/actions?query=workflow%3Atests)
 [![codecov](https://codecov.io/gh/cldf/csvw/branch/master/graph/badge.svg)](https://codecov.io/gh/cldf/csvw)
 [![PyPI](https://img.shields.io/pypi/v/csvw.svg)](https://pypi.org/project/csvw)
+[![Documentation Status](https://readthedocs.org/projects/csvw/badge/?version=latest)](https://csvw.readthedocs.io/en/latest/?badge=latest)
+
 
 This package provides
 - a Python API to read and write relational, tabular data according to the [CSV on the Web](https://csvw.org/) specification and 
