@@ -36,8 +36,9 @@ def translate():
     return _t
 
 
-@pytest.mark.parametrize('datatype', [dt for dt in DATATYPES.values() if dt.name != 'time'])
+@pytest.mark.parametrize('datatype', [dt for dt in DATATYPES if dt != 'time'])
 def test_datatypes(tg, datatype):
+    datatype = DATATYPES[datatype]
     tg.tables[0].tableSchema.columns.extend([
         Column.fromvalue({'datatype': datatype.name, 'name': 'v1'}),
         Column.fromvalue({'datatype': datatype.name, 'name': 'v2'}),
@@ -115,12 +116,12 @@ def test_extra_columns(tmp_path):
     ]
 }
 """, encoding='utf8')
-    tmp_path.joinpath('csv.txt').write_text('ID,extra\n1,ex', encoding='utf8')
-    tg = TableGroup.from_file(str(tmp_path.joinpath('md.json')))
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
 
+        tmp_path.joinpath('csv.txt').write_text('ID,extra\n1,ex', encoding='utf8')
+        tg = TableGroup.from_file(str(tmp_path.joinpath('md.json')))
         db = Database(tg, fname=tmp_path / 'test.sqlite')
         with pytest.raises(ValueError):
             db.write_from_tg()
@@ -237,22 +238,26 @@ def test_many_to_many_self_referential(tg):
 
 
 def test_integration():
-    tg = TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
-    orig = tg.read()
-    db = Database(tg)
-    db.write_from_tg()
-    for table, items in db.read().items():
-        assert items == orig[table]
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        tg = TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
+        orig = tg.read()
+        db = Database(tg)
+        db.write_from_tg()
+        for table, items in db.read().items():
+            assert items == orig[table]
 
 
 def test_write_file_exists(tmp_path):
-    target = tmp_path / 'db.sqlite3'
-    target.touch(exist_ok=False)
-    mtime = target.stat().st_mtime
-    tg = TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
-    db = Database(tg, fname=target)
-    with pytest.raises(ValueError, match=r'already exists'):
-        db.write()
-    time.sleep(0.1)
-    db.write(force=True)
-    assert target.stat().st_mtime > mtime
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        target = tmp_path / 'db.sqlite3'
+        target.touch(exist_ok=False)
+        mtime = target.stat().st_mtime
+        tg = TableGroup.from_file(FIXTURES / 'csv.txt-metadata.json')
+        db = Database(tg, fname=target)
+        with pytest.raises(ValueError, match=r'already exists'):
+            db.write()
+        time.sleep(0.1)
+        db.write(force=True)
+        assert target.stat().st_mtime > mtime

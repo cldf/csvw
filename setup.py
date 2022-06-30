@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='2.0.1.dev0',
+    version='3.0.0.dev0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
@@ -25,6 +25,9 @@ setup(
         'uritemplate>=3.0.0',
         'babel',
         'requests',
+        'language-tags',
+        'rdflib',
+        'colorama',
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
@@ -33,6 +36,18 @@ setup(
             'pytest-mock',
             'requests-mock',
             'pytest-cov',
+        ],
+        'docs': [
+            'sphinx',
+            'sphinx-autodoc-typehints',
+            'sphinx-rtd-theme',
+        ],
+    },
+    entry_points = {
+        'console_scripts': [
+            'csvw2json=csvw.__main__:csvw2json',
+            'csvw2datasette=csvw.__main__:csvw2datasette',
+            'csvwvalidate=csvw.__main__:csvwvalidate',
         ],
     },
     classifiers=[

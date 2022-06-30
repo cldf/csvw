@@ -1,3 +1,14 @@
+"""
+DSV data can be surprisingly diverse. While Python's `csv` module offers out-of-the-box support
+for the basic formatting parameters, CSVW recognizes a couple more, like `skipColumns` or
+`skipRows`.
+
+.. seealso::
+
+    - `<https://www.w3.org/TR/2015/REC-tabular-metadata-20151217/#dialect-descriptions>`_
+    - `<https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`_
+    - `<https://specs.frictionlessdata.io/csv-dialect/>`_
+"""
 import attr
 import warnings
 import functools
@@ -13,7 +24,7 @@ ENCODING_MAP = {
 
 # FIXME: replace with attrs.validators.ge(0) from attrs 21.3.0
 def _non_negative(instance, attribute, value):
-    if value < 0:
+    if value < 0:  # pragma: no cover
         raise ValueError('{0} is not a valid {1}'.format(value, attribute.name))
 
 
@@ -32,9 +43,10 @@ def convert_encoding(s):
 
 @attr.s
 class Dialect(object):
-    """A CSV dialect specification.
+    """
+    A CSV dialect specification.
 
-    .. seealso:: http://w3c.github.io/csvw/metadata/#dialect-descriptions
+    .. seealso:: `<https://www.w3.org/TR/2015/REC-tabular-metadata-20151217/#dialect-descriptions>`_
     """
 
     encoding = attr.ib(
@@ -58,7 +70,7 @@ class Dialect(object):
 
     skipRows = attr.ib(
         default=0,
-        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >=0),
+        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >= 0),
         validator=non_negative_int)
 
     commentPrefix = attr.ib(
@@ -73,7 +85,7 @@ class Dialect(object):
 
     headerRowCount = attr.ib(
         default=1,
-        converter=functools.partial(utils.converter, int, 1, cond=lambda s: s >=0),
+        converter=functools.partial(utils.converter, int, 1, cond=lambda s: s >= 0),
         validator=non_negative_int)
 
     delimiter = attr.ib(
@@ -83,7 +95,7 @@ class Dialect(object):
 
     skipColumns = attr.ib(
         default=0,
-        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >=0),
+        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >= 0),
         validator=non_negative_int)
 
     skipBlankRows = attr.ib(
@@ -100,7 +112,8 @@ class Dialect(object):
         default='false',
         validator=attr.validators.in_(['true', 'false', 'start', 'end']),
         converter=lambda v: functools.partial(
-            utils.converter, (str, bool), 'false')('{0}'.format(v).lower() if isinstance(v, bool) else v))
+            utils.converter,
+            (str, bool), 'false')('{0}'.format(v).lower() if isinstance(v, bool) else v))
 
     def updated(self, **kw):
         res = self.__class__(**attr.asdict(self))

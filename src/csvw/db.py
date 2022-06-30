@@ -16,6 +16,7 @@ SQL table and column names can be customized by passing a translator callable wh
 a `Database`.
 
 SQLite support has the following limitations:
+
 - lists as values (as specified via the separator attribute of a Column) are only supported for
   string types.
 - regex constraints on strings (as specified via a Datatype's format attribute) are not enforced

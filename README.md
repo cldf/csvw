@@ -4,9 +4,9 @@
 [![codecov](https://codecov.io/gh/cldf/csvw/branch/master/graph/badge.svg)](https://codecov.io/gh/cldf/csvw)
 [![PyPI](https://img.shields.io/pypi/v/csvw.svg)](https://pypi.org/project/csvw)
 
-
-[CSV on the Web](https://csvw.org/)
-
+This package provides
+- a Python API to read and write relational, tabular data according to the [CSV on the Web](https://csvw.org/) specification and 
+- commandline tools for reading and validating CSVW data.
 
 
 ## Links
@@ -18,7 +18,7 @@
 
 ## Installation
 
-This package runs under Python >=3.6, use pip to install:
+This package runs under Python >=3.7, use pip to install:
 
 ```bash
 $ pip install csvw
@@ -27,23 +27,68 @@ $ pip install csvw
 
 ## Example
 
-
 ```python
->>> import csvw
->>> tg = csvw.TableGroup.from_file('tests/csv.txt-metadata.json')
-
->>> tg.check_referential_integrity()
->>> assert len(tg.tables) == 1
-
->>> assert tg.tables[0] is tg.tabledict['csv.txt']
->>> tg.tables[0].check_primary_key()
-
->>> from collections import OrderedDict
->>> row = next(tg.tables[0].iterdicts())
->>> assert row == OrderedDict([('ID', 'first'), ('_col.2', 'line')])
-
->>> assert len(list(tg.tables[0].iterdicts())) == 2
+>>> import json
+>>> from csvw import CSVW
+>>> data = CSVW('https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/test.tsv')
+>>> print(json.dumps(data.to_json(minimal=True), indent=4))
+[
+    {
+        "province": "Hello",
+        "territory": "world",
+        "precinct": "1"
+    }
+]
 ```
+
+## CLI
+
+- `csvw2json`:
+
+```shell
+$ csvw2json tests/fixtures/zipped-metadata.json 
+{
+    "tables": [
+        {
+            "url": "tests/fixtures/zipped.csv",
+            "row": [
+                {
+                    "url": "tests/fixtures/zipped.csv#row=2",
+                    "rownum": 1,
+                    "describes": [
+                        {
+                            "ID": "abc",
+                            "Value": "the value"
+                        }
+                    ]
+                },
+                {
+                    "url": "tests/fixtures/zipped.csv#row=3",
+                    "rownum": 2,
+                    "describes": [
+                        {
+                            "ID": "cde",
+                            "Value": "another one"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
+```
+
+- `csvwvalidate`:
+
+```shell
+$ csvwvalidate tests/fixtures/zipped-metadata.json 
+OK
+```
+
+
+## Python API
+
+Find the Python API documentation at [csvw.readthedocs.io](https://csvw.readthedocs.io/en/latest/).
 
 
 ## Known limitations
@@ -54,14 +99,14 @@ $ pip install csvw
   and skipped.
 - Low level CSV parsing is delegated to the `csv` module in Python's standard library. Thus, if a `commentPrefix`
   is specified in a `Dialect` instance, this will lead to skipping rows where the first value starts
-  with `commentPrefix`, even if the value was quoted.
+  with `commentPrefix`, **even if the value was quoted**.
   Also, cell content containing `escapechar` may not be round-tripped as expected (when specifying
   `escapechar` or a `csvw.Dialect` with `quoteChar` but `doubleQuote==False`),
   when minimal quoting is specified. This is due to inconsistent `csv` behaviour
   across Python versions (see https://bugs.python.org/issue44861).
 
 
-### Deviations from the CSVW specificaton
+### CSVW conformance
 
 While we use the CSVW specification as guideline, this package does not (and 
 probably never will) implement the full extent of this spec.
@@ -74,10 +119,18 @@ probably never will) implement the full extent of this spec.
   by specifying `"header": false` and `"skipRows": 1` in the table's dialect
   description.
 
+However, `csvw.CSVW` works correctly for
+- 269 out of 270 [JSON tests](https://w3c.github.io/csvw/tests/#manifest-json),
+- 280 out of 282 [validation tests](https://w3c.github.io/csvw/tests/#manifest-validation),
+- 10 out of 18 [non-normative tests](https://w3c.github.io/csvw/tests/#manifest-nonnorm)
+
+from the [CSVW Test suites](https://w3c.github.io/csvw/tests/).
+
 
 ## Compatibility with [Frictionless Data Specs](https://specs.frictionlessdata.io/)
 
-The CSVW-described dataset is basically equivalent to a Frictionless DataPackage where all [Data Resources](https://specs.frictionlessdata.io/data-resource/) are [Tabular Data](https://specs.frictionlessdata.io/tabular-data-resource/).
+A CSVW-described dataset is basically equivalent to a Frictionless DataPackage where all 
+[Data Resources](https://specs.frictionlessdata.io/data-resource/) are [Tabular Data](https://specs.frictionlessdata.io/tabular-data-resource/).
 Thus, the `csvw` package provides some conversion functionality. To
 "read CSVW data from a Data Package", there's the `csvw.TableGroup.from_frictionless_datapackage` method:
 ```python
@@ -101,6 +154,7 @@ files.
 ## See also
 
 - https://www.w3.org/2013/csvw/wiki/Main_Page
+- https://csvw.org
 - https://github.com/CLARIAH/COW
 - https://github.com/CLARIAH/ruminator
 - https://github.com/bloomberg/pycsvw
