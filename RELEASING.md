@@ -20,7 +20,7 @@ cd ..
 ```
 
 - Update the version number, by removing the trailing `.dev0` in:
-  - `setup.py`
+  - `setup.cfg`
   - `src/csvw/__init__.py`
   - `docs/conf.py`
 
