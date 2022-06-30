@@ -1,9 +1,52 @@
 import decimal
 import datetime
+import warnings
+from urllib.parse import urlparse
 
 import pytest
 
 from csvw import Datatype
+from csvw.datatypes import NumberPattern
+
+
+@pytest.mark.parametrize(
+    'datatype,val,obj',
+    [
+        ({'base': 'string', 'format': '[0-9]+[a-z]+'}, '1a', '1a'),
+        ('anyURI', '/a/b?d=5', None),
+        ('integer', '5', 5),
+        ('integer', '-5', -5),
+        ('date', '2012-12-01', None),
+        ('datetime', '2012-12-01T12:12:12', None),
+        ({'base': 'datetime', 'format': 'd.M.yyyy HH:mm'}, '22.3.2015 22:05', None),
+        ({'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.SSS'}, '22.3.2015 22:05:55.012', None),
+        ({'base': 'datetime', 'format': 'd.M.yyyy HH:mm X'}, '22.3.2015 22:05 +03', None),
+        ({'base': 'datetime', 'format': 'd.M.yyyy HH:mm XXX'}, '22.3.2015 22:05 +03:30', None),
+        ({'base': 'date', 'format': "d.M.yyyy"}, '22.3.2015', None),
+        ({'base': "date", 'format': 'M/d/yyyy'}, '10/18/2010', None),
+        ({'base': 'duration'}, 'P1Y1D', None),
+        ({'base': 'duration'}, 'PT2H30M', None),
+        ({'base': 'time', 'format': 'HH:mm X'}, '23:05 +0430', None),
+        ('time', '11:11:11', None),
+        ('binary', 'aGVsbG8gd29ybGQ=', b'hello world'),
+        ('hexBinary', 'ABCDEF12', None),
+        ({'base': 'decimal', 'format': '#,##0.##'}, '1,234.57', None),
+        ({'base': 'decimal', 'format': {'pattern': '#,##0.##', 'groupChar': ' '}}, '1 234.57', None),
+        ('json', '{"a": 5}', {'a': 5}),
+        ('float', '3.5', 3.5),
+        ('number', '3.123456789', 3.123456789),
+        ({'base': 'boolean', 'format': 'J|N'}, 'J', True),
+    ]
+)
+def test_roundtrip(datatype, val, obj):
+    t = Datatype.fromvalue(datatype)
+    o = t.parse(val)
+    if obj:
+        if isinstance(obj, float):
+            assert o == pytest.approx(obj)
+        else:
+            assert o == obj
+    assert t.formatted(o) == val
 
 
 def test_double():
@@ -15,30 +58,22 @@ def test_double():
 
 def test_string():
     t = Datatype.fromvalue({'base': 'string', 'format': '[0-9]+[a-z]+'})
-    assert t.read('1a') == '1a'
     with pytest.raises(ValueError):
         t.read('abc')
     with pytest.raises(ValueError):
         t.read('1a.')
 
+    with pytest.raises(ValueError):
+        Datatype.fromvalue('NMTOKEN').read("bold,brash")
+
 
 def test_anyURI():
-    from urllib.parse import urlparse
-
     t = Datatype.fromvalue('anyURI')
-    uri = t.parse('/a/b?d=5')
-    assert uri.resolve_with('http://example.org').unsplit() == \
-           'http://example.org/a/b?d=5'
-    assert t.formatted(uri) == '/a/b?d=5'
-
     assert t.formatted('Http://example.org') == 'http://example.org'
     assert t.formatted(urlparse('Http://example.org')) == 'http://example.org'
 
 
 def test_number():
-    t = Datatype.fromvalue('integer')
-    assert t.parse('5') == 5
-
     t = Datatype.fromvalue({'base': 'integer', 'minimum': 5, 'maximum': 10})
     v = t.parse('3')
     with pytest.raises(ValueError):
@@ -53,18 +88,33 @@ def test_number():
 
     t = Datatype.fromvalue(
         {'base': 'decimal', 'format': {'groupChar': '.', 'decimalChar': ','}})
-    assert t.parse('INF') == decimal.Decimal('Infinity')
-    assert t.formatted(decimal.Decimal('NaN')) == 'NaN'
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        assert t.parse('INF') == decimal.Decimal('Infinity')
+        assert t.formatted(decimal.Decimal('NaN')) == 'NaN'
     assert t.parse('1.234,567') == decimal.Decimal('1234.567')
+    assert t.parse('20%') == decimal.Decimal('0.2')
+    # From https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/#parsing-cells
+    # For example, the string value "-25%" must be interpreted as -0.25 and the string value "1E6"
+    # as 1000000.
+    assert t.parse('-25%') == decimal.Decimal('-0.25')
+
+    assert t.parse('20‰') == decimal.Decimal('0.02')
     assert t.formatted(decimal.Decimal('1234.567')) == '1.234,567'
     with pytest.raises(ValueError):
         t.parse(' ')
+
+    t = Datatype.fromvalue({'base': 'decimal', 'format': '0.00;0.00-'})
+    assert t.formatted(decimal.Decimal('-3.1415')) == '3.14-'
+
+    t = Datatype.fromvalue(
+        {'base': 'decimal', 'format': {'pattern': '0.00;0.00-', 'decimalChar': ','}})
+    assert t.formatted(decimal.Decimal('-3.1415')) == '3,14-'
 
     t = Datatype.fromvalue('float')
     with pytest.raises(ValueError):
         t.parse(' ')
     
-
 
 def test_object():
     t = Datatype.fromvalue({'base': 'string', 'length': 5, '@id': 'x', 'dc:type': ''})
@@ -96,14 +146,8 @@ def test_errors():
 
 
 def test_date():
-    t = Datatype.fromvalue('date')
-    assert t.formatted(t.parse('2012-12-01')) == '2012-12-01'
-
-    with pytest.raises(ValueError):
+    with pytest.warns(UserWarning):
         Datatype.fromvalue({'base': 'date', 'format': '2012+12+12'})
-
-    t = Datatype.fromvalue('datetime')
-    assert t.formatted(t.parse('2012-12-01T12:12:12')) == '2012-12-01T12:12:12'
 
     with pytest.raises(ValueError):
         Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.SGS'})
@@ -111,34 +155,18 @@ def test_date():
     with pytest.raises(ValueError):
         Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.S XxX'})
 
-    t = Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm'})
-    assert t.formatted(t.parse('22.3.2015 22:05')) == '22.3.2015 22:05'
-
     t = Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.SSS'})
-    assert t.formatted(t.parse('22.3.2015 22:05:55.012')) == '22.3.2015 22:05:55.012'
     assert t.formatted(datetime.datetime(2012, 12, 12, 12, 12, 12, microsecond=12345)) == \
            '12.12.2012 12:12:12.012'
 
     t = Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm X'})
-    assert t.formatted(t.parse('22.3.2015 22:05 +03')) == '22.3.2015 22:05 +03'
-
-    t = Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm XXX'})
-    assert t.formatted(t.parse('22.3.2015 22:05 +03:30')) == '22.3.2015 22:05 +03:30'
-
-    t = Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm X'})
-    assert t.formatted(t.parse('22.3.2015 22:05 +0330')) == '22.3.2015 22:05 +0330'
     assert t.parse('22.3.2015 23:05 +0430') == t.parse('22.3.2015 22:05 +0330')
 
     t = Datatype.fromvalue({'base': 'time', 'format': 'HH:mm X'})
     assert t.parse('23:05 +0430') == t.parse('22:05 +0330')
-    assert t.formatted(t.parse('23:05 +0430')) == '23:05 +0430'
 
     t = Datatype.fromvalue({'base': 'time'})
     assert t.parse('23:05:22') == t.parse('23:05:22')
-
-    # "d.M.yyyy",  # e.g., 22.3.2015
-    t = Datatype.fromvalue({'base': 'date', 'format': "d.M.yyyy"})
-    assert t.formatted(t.parse('22.3.2015')) == '22.3.2015'
 
     t = Datatype.fromvalue({'base': 'dateTimeStamp'})
     with pytest.raises(ValueError):
@@ -149,12 +177,6 @@ def test_date():
     with pytest.raises(ValueError):
         Datatype.fromvalue({'base': 'dateTimeStamp', 'format': 'd.M.yyyy HH:mm:ss.SSS'})
 
-    t = Datatype.fromvalue({'base': 'duration'})
-    assert t.formatted(t.parse('P1Y1D')) == 'P1Y1D'
-
-    t = Datatype.fromvalue({'base': 'duration'})
-    assert t.formatted(t.parse('PT2H30M')) == 'PT2H30M'
-
     t = Datatype.fromvalue({'base': 'duration', 'format': 'P[1-5]Y'})
     with pytest.raises(ValueError):
         t.parse('P8Y')
@@ -163,18 +185,6 @@ def test_date():
 def test_misc():
     t = Datatype.fromvalue({'base': 'any'})
     assert t.formatted(None) == 'None'
-
-    t = Datatype.fromvalue({'base': 'float'})
-    assert t.parse('3.5') == pytest.approx(3.5)
-    assert t.formatted(3.5) == '3.5'
-
-    t = Datatype.fromvalue({'base': 'number'})
-    assert t.parse('3.123456789') == pytest.approx(3.123456789)
-    assert t.formatted(3.123456789) == '3.123456789'
-
-    t = Datatype.fromvalue({'base': 'json'})
-    assert t.parse('{"a": 5}') == {'a': 5}
-    assert t.formatted({'a': 5}) == '{"a": 5}'
 
     t = Datatype.fromvalue({'base': 'boolean'})
     with pytest.raises(ValueError):
@@ -186,20 +196,21 @@ def test_misc():
     assert t.parse('false') is False
     assert t.formatted(True) == 'true'
 
-    t = Datatype.fromvalue({'base': 'boolean', 'format': 'J|N'})
-    assert t.parse('J') is True
-    assert t.formatted(True) == 'J'
-
     t = Datatype.fromvalue({'base': 'binary'})
-    assert t.formatted(t.parse('aGVsbG8gd29ybGQ=')) == 'aGVsbG8gd29ybGQ='
     with pytest.raises(ValueError):
         t.parse('sp\u00e4m')
     with pytest.raises(ValueError):
         t.parse('aGVsbG8gd29ybGQ')
 
     t = Datatype.fromvalue({'base': 'hexBinary'})
-    assert t.formatted(t.parse('abcdef12')) == 'abcdef12'
     with pytest.raises(ValueError):
         t.parse('sp\u00e4m')
     with pytest.raises(ValueError):
         t.parse('spam')
+
+
+def test_NumberPattern():
+    np = NumberPattern('0.0E#,##0 #')
+    assert np.exponent_digits == 4
+
+    assert not NumberPattern('#,##,##0').is_valid('234,567')

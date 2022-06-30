@@ -16,11 +16,13 @@ SQL table and column names can be customized by passing a translator callable wh
 a `Database`.
 
 SQLite support has the following limitations:
+
 - lists as values (as specified via the separator attribute of a Column) are only supported for
   string types.
 - regex constraints on strings (as specified via a Datatype's format attribute) are not enforced
   by the database.
 """
+import typing
 import decimal
 import pathlib
 import sqlite3
@@ -31,6 +33,7 @@ import collections
 import attr
 
 from csvw.datatypes import DATATYPES
+from csvw.metadata import TableGroup
 
 
 def identity(s):
@@ -291,7 +294,11 @@ def schema(tg):
 
 
 class Database(object):
-    def __init__(self, tg, fname=None, translate=None):
+    def __init__(
+            self,
+            tg: TableGroup,
+            fname: typing.Optional[typing.Union[pathlib.Path, str]] = None,
+            translate: typing.Optional[typing.Callable] = None):
         self.translate = translate or Database.name_translator
         self.fname = pathlib.Path(fname) if fname else None
         self.init_schema(tg)
@@ -302,11 +309,11 @@ class Database(object):
         self.tables = schema(self.tg) if self.tg else []
 
     @property
-    def tdict(self):
+    def tdict(self) -> typing.Dict[str, TableSpec]:
         return {t.name: t for t in self.tables}
 
     @staticmethod
-    def name_translator(table, column=None):
+    def name_translator(table: str, column: typing.Optional[str] = None) -> str:
         """
         A callable with this signature can be passed into DB creation to control the names
         of the schema objects.
@@ -318,7 +325,7 @@ class Database(object):
         # By default, no translation is done:
         return column or table
 
-    def connection(self):
+    def connection(self) -> typing.Union[sqlite3.Connection, contextlib.closing]:
         if self.fname:
             return contextlib.closing(sqlite3.connect(str(self.fname)))
         if not self._connection:
@@ -342,13 +349,27 @@ FROM {2} {3} GROUP BY {0}""".format(
             r[0]: [(k, v) if context is None else k
                    for k, v in zip(r[1].split(), r[2].split('||'))] for r in cu.fetchall()}
 
-    def read(self):
+    def separator(self, tname: str, cname: str) -> typing.Optional[str]:
+        """
+        :return: separator for the column specified by db schema names `tname` and `cname`.
+        """
+        for name in self.tdict:
+            if self.translate(name) == tname:
+                for col in self.tdict[name].columns:
+                    if self.translate(name, col.name) == cname:
+                        return col.separator
+
+    def split_value(self, tname, cname, value) -> typing.Union[typing.List[str], str, None]:
+        sep = self.separator(tname, cname)
+        return (value or '').split(sep) if sep else value
+
+    def read(self) -> typing.Dict[str, typing.List[typing.OrderedDict]]:
         res = collections.defaultdict(list)
         with self.connection() as conn:
             for tname in self.tg.tabledict:
                 #
                 # FIXME: how much do we want to use DB types? Probably as much as possible!
-                # Thus we need tp convert on write **and** read!
+                # Thus we need to convert on write **and** read!
                 #
                 convert, seps, refs = {}, {}, collections.defaultdict(dict)
                 table = self.tdict[tname]  # The TableSpec object.

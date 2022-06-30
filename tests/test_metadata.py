@@ -1,4 +1,3 @@
-import io
 import sys
 import json
 import shutil
@@ -27,11 +26,19 @@ def test_URITemplate():
     assert ut != 1
 
 
-def test_Link():
-    li = csvw.Link('abc.csv')
-    assert li.resolve(None) == 'abc.csv'
-    assert li.resolve('http://example.com') == 'http://example.com/abc.csv'
-    assert li.resolve(pathlib.Path('.')) == pathlib.Path('abc.csv')
+@pytest.mark.parametrize(
+    'link,base,res',
+    [
+        ('abc.csv', None, 'abc.csv'),
+        ('abc.csv', 'http://example.com', 'http://example.com/abc.csv'),
+        ('abc.csv', pathlib.Path('.'), pathlib.Path('abc.csv')),
+        ('abc.csv', pathlib.Path(__file__), pathlib.Path(__file__).parent / 'abc.csv'),
+        ('http://example.com', pathlib.Path('.'), 'http://example.com')
+    ]
+)
+def test_Link(link, base, res):
+    assert str(csvw.Link(link)) == str(link)
+    assert csvw.Link(link).resolve(base) == res
 
 
 class TestColumnAccess(object):
@@ -158,6 +165,11 @@ class TestColumn(object):
         assert col.write(None) == ''
         assert col.write('') == ''
 
+        with pytest.raises(ValueError):
+            col = csvw.Column.fromvalue(
+                {'separator': ' ', 'datatype': {'base': 'string', 'minLength': 3}})
+            col.read('abc ab')
+
     def test_read_required_empty_string(self):
         col = csvw.Column.fromvalue({'required': True})
         with pytest.raises(ValueError):
@@ -177,17 +189,7 @@ def test_Schema():
     from csvw.metadata import Schema
 
     with pytest.warns(UserWarning, match='uplicate'):
-        Schema.fromvalue({'columns': [{'name': 'a'}, {'name': 'a'}]})
-
-
-class TestLink(object):
-
-    def test_link(self):
-        l = csvw.Link('a.csv')
-        assert '{}'.format(l) == l.resolve(None)
-        assert 'http://example.org/a.csv' == l.resolve('http://example.org')
-        base = pathlib.Path('.')
-        assert base == l.resolve(base).parent
+        Schema.fromvalue({'columns': [{'name': 'a'}, {'titles': 'a'}]})
 
 
 def _make_table_like(cls, tmp_path, data=None, metadata=None, mdname=None):
@@ -258,6 +260,7 @@ class TestTable(object):
     def test_unspecified_column_in_table_without_url(self, tmp_path):
         t = csvw.Table.fromvalue({
             "@context": ["http://www.w3.org/ns/csvw", {"@language": "en"}],
+            "url": "x",
             "tableSchema": {
                 "columns": [
                     {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
@@ -279,8 +282,10 @@ class TestTableGroup(object):
             csvw.TableGroup, tmp_path, data=data, metadata=metadata, mdname='csv.txt-metadata.json')
 
     def test_from_frictionless(self):
-        tg = csvw.TableGroup.from_frictionless_datapackage(FIXTURES / 'datapackage.json')
-        assert list(tg.tables[0])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            tg = csvw.TableGroup.from_frictionless_datapackage(FIXTURES / 'datapackage.json')
+            assert list(tg.tables[0])
 
     def test_iteritems_column_renaming(self):
         t = csvw.TableGroup.from_file(FIXTURES / 'test.tsv-metadata.json')
@@ -720,20 +725,22 @@ AF,9799379"""}
             with pytest.raises(ValueError):
                 tg.check_referential_integrity()
 
-    def test_remote_schema(self, mocker, tmp_path):
-        schema = """
-        {"columns": [
-            {"name": "countryCode", "datatype": "string"},
-            {"name": "name", "datatype": "string"}]}
-        """
-        mocker.patch(
-            'csvw.metadata.urlopen', mocker.Mock(return_value=io.BytesIO(schema.encode('utf8'))))
-        tg = self._make_tablegroup(
-            tmp_path,
-            metadata="""{
+    def test_remote_schema(self, tmp_path):
+        import requests_mock
+
+        with requests_mock.Mocker() as m:
+            schema = """
+            {"columns": [
+                {"name": "countryCode", "datatype": "string"},
+                {"name": "name", "datatype": "string"}]}
+            """
+            m.get("http://example.com/schema", content=schema.encode('utf8'))
+            tg = self._make_tablegroup(
+                tmp_path,
+                metadata="""{
   "@context": "http://www.w3.org/ns/csvw",
-  "tables": [{"url": "countries.csv", "tableSchema": "url"}]}""")
-        assert len(tg.tables[0].tableSchema.columns) == 2
+  "tables": [{"url": "countries.csv", "tableSchema": "http://example.com/schema"}]}""")
+            assert len(tg.tables[0].tableSchema.columns) == 2
 
         # The remote content has been inlined:
         out = tmp_path / 'md.json'
@@ -783,17 +790,24 @@ def test_zip_support(tmp_path):
     assert len(list(csvw.TableGroup.from_file(out.parent / 'md.json').tables[0])) == 4
 
 
-def test_from_url(mocker):
-    from io import BytesIO
-    mocker.patch(
-        'csvw.metadata.urlopen',
-        lambda u: BytesIO(FIXTURES.joinpath(u.split('/')[-1]).read_bytes()))
-    t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
-    assert len(list(t)) == 2
+def test_from_url():
+    import requests_mock
+
+    def content(req, ctx):
+        ctx.status_code = 200
+        return FIXTURES.joinpath(req.url.split('/')[-1]).read_bytes()
+
+    with requests_mock.Mocker() as m:
+        m.get(
+            requests_mock.ANY,
+            content=content)
+
+        t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
+        assert len(list(t)) == 2
 
 
 def test_datatype_limits(tmp_path):
-    tg = csvw.Table()
+    tg = csvw.Table(url='x')
     tg.tableSchema.columns.append(
         csvw.Column.fromvalue(dict(name='dec', datatype='decimal'))
     )
@@ -802,7 +816,7 @@ def test_datatype_limits(tmp_path):
     tg = csvw.Table.from_file(tmp_path / 'md.json')
     assert isinstance(tg.tableSchema.columns[0].datatype.minimum, decimal.Decimal)
 
-    tg = csvw.Table()
+    tg = csvw.Table(url='x')
     tg.tableSchema.columns.append(
         csvw.Column.fromvalue(dict(name='date', datatype='date'))
     )
@@ -861,3 +875,10 @@ def test_fk_non_matching_datatypes(tables, breakage, match_error):
             tg.check_referential_integrity()
     else:
         tg.validate_schema()
+
+
+def test_CSVW():
+    res = csvw.CSVW(FIXTURES / 'csv.txt')
+    assert res.to_json()
+    res = csvw.CSVW(FIXTURES / 'csv.txt-table-metadata.json')
+    assert res.to_json()

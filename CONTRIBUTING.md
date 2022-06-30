@@ -3,7 +3,10 @@
 ## Installing csvw for development
 
 1. Fork `cldf/csvw`
-2. Clone your fork
+2. Clone your fork (including submodules):
+   ```shell
+   git clone --recurse-submodules https://github.com/<your-handle>/csvw
+   ```
 3. Install `csvw` for development (preferably in a separate [virtual environment](https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/)) running
 ```shell script
 pip install -r requirements

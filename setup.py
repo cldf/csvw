@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='csvw',
-    version='2.0.1.dev0',
+    version='3.0.0.dev0',
     author='Robert Forkel',
     author_email='forkel@shh.mpg.de',
     description='',
@@ -16,20 +16,38 @@ setup(
     package_dir={'': 'src'},
     zip_safe=False,
     platforms='any',
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=[
         'attrs>=18.1',
         'isodate',
         'python-dateutil',
-        'rfc3986<2',  # version 2.0.0 dropped python 3.6 support.
+        'rfc3986<2',  # Pin until https://github.com/python-hyper/rfc3986/issues/86 is resolved.
         'uritemplate>=3.0.0',
+        'babel',
+        'requests',
+        'language-tags',
+        'rdflib',
+        'colorama',
     ],
     extras_require={
         'dev': ['flake8', 'wheel', 'twine'],
         'test': [
             'pytest>=5',
             'pytest-mock',
+            'requests-mock',
             'pytest-cov',
+        ],
+        'docs': [
+            'sphinx',
+            'sphinx-autodoc-typehints',
+            'sphinx-rtd-theme',
+        ],
+    },
+    entry_points = {
+        'console_scripts': [
+            'csvw2json=csvw.__main__:csvw2json',
+            'csvw2datasette=csvw.__main__:csvw2datasette',
+            'csvwvalidate=csvw.__main__:csvwvalidate',
         ],
     },
     classifiers=[
@@ -39,7 +57,6 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
