@@ -45,6 +45,7 @@ setup(
     },
     entry_points = {
         'console_scripts': [
+            'csvwdescribe=csvw.__main__:csvwdescribe',
             'csvw2json=csvw.__main__:csvw2json',
             'csvw2datasette=csvw.__main__:csvw2datasette',
             'csvwvalidate=csvw.__main__:csvwvalidate',

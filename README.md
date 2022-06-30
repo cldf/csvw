@@ -29,11 +29,13 @@ $ pip install csvw
 
 ## Example
 
+Using `csvw` from Python code:
+
 ```python
->>> import json
->>> from csvw import CSVW
->>> data = CSVW('https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/test.tsv')
->>> print(json.dumps(data.to_json(minimal=True), indent=4))
+import json
+from csvw import CSVW
+data = CSVW('https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/test.tsv')
+print(json.dumps(data.to_json(minimal=True), indent=4))
 [
     {
         "province": "Hello",
@@ -45,7 +47,9 @@ $ pip install csvw
 
 ## CLI
 
-- `csvw2json`:
+Using `csvw` commandline tools:
+
+- `csvw2json`: Converting CSVW data [to JSON](https://www.w3.org/TR/csv2json/)
 
 ```shell
 $ csvw2json tests/fixtures/zipped-metadata.json 
@@ -80,11 +84,79 @@ $ csvw2json tests/fixtures/zipped-metadata.json
 }
 ```
 
-- `csvwvalidate`:
+- `csvwvalidate`: Validating CSVW data
 
 ```shell
 $ csvwvalidate tests/fixtures/zipped-metadata.json 
 OK
+```
+
+- `csvwdescribe`: Describing tabular-data files with CSVW metadata
+
+```shell
+$ csvwdescribe --delimiter "|" tests/fixtures/frictionless-data.csv
+{
+    "@context": "http://www.w3.org/ns/csvw",
+    "dc:conformsTo": "data-package",
+    "tables": [
+        {
+            "dialect": {
+                "delimiter": "|"
+            },
+            "tableSchema": {
+                "columns": [
+                    {
+                        "datatype": "string",
+                        "name": "FK"
+                    },
+                    {
+                        "datatype": "integer",
+                        "name": "Year"
+                    },
+                    {
+                        "datatype": "string",
+                        "name": "Location name"
+                    },
+                    {
+                        "datatype": "string",
+                        "name": "Value"
+                    },
+                    {
+                        "datatype": "string",
+                        "name": "binary"
+                    },
+                    {
+                        "datatype": "string",
+                        "name": "anyURI"
+                    },
+                    {
+                        "datatype": "string",
+                        "name": "email"
+                    },
+                    {
+                        "datatype": "string",
+                        "name": "boolean"
+                    },
+                    {
+                        "datatype": {
+                            "dc:format": "application/json",
+                            "base": "json"
+                        },
+                        "name": "array"
+                    },
+                    {
+                        "datatype": {
+                            "dc:format": "application/json",
+                            "base": "json"
+                        },
+                        "name": "geojson"
+                    }
+                ]
+            },
+            "url": "tests/fixtures/frictionless-data.csv"
+        }
+    ]
+}
 ```
 
 
@@ -102,7 +174,7 @@ Find the Python API documentation at [csvw.readthedocs.io](https://csvw.readthed
 - Low level CSV parsing is delegated to the `csv` module in Python's standard library. Thus, if a `commentPrefix`
   is specified in a `Dialect` instance, this will lead to skipping rows where the first value starts
   with `commentPrefix`, **even if the value was quoted**.
-  Also, cell content containing `escapechar` may not be round-tripped as expected (when specifying
+- Also, cell content containing `escapechar` may not be round-tripped as expected (when specifying
   `escapechar` or a `csvw.Dialect` with `quoteChar` but `doubleQuote==False`),
   when minimal quoting is specified. This is due to inconsistent `csv` behaviour
   across Python versions (see https://bugs.python.org/issue44861).
@@ -148,9 +220,9 @@ Note that the CSVW metadata file must be written to the Data Package's directory
 to make sure relative paths to data resources work.
 
 This functionality - together with the schema inference capabilities
-of [`frictionless describe`](https://frictionlessdata.io/tooling/python/describing-data/#describe-functions) - provides
+of [`frictionless describe`](https://framework.frictionlessdata.io/docs/guides/describing-data/) - provides
 a convenient way to bootstrap CSVW metadata for a set of "raw" CSV
-files.
+files, implemented in the `csvwdescribe` command described above.
 
 
 ## See also

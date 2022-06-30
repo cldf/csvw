@@ -170,7 +170,7 @@ class DataPackage:
     def to_tablegroup(self, cls=None):
         from csvw import TableGroup
 
-        md = {}
+        md = {'@context': "http://www.w3.org/ns/csvw"}
         # Package metadata:
         md['dc:replaces'] = json.dumps(self.json)
 

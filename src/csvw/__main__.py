@@ -1,12 +1,44 @@
 import sys
 import json
+import shutil
 import pathlib
 import argparse
+import subprocess
 
 from colorama import init, Fore, Style
 
-from csvw import CSVW
+from csvw import CSVW, TableGroup
 from csvw.db import Database
+
+
+def csvwdescribe():  # pragma: no cover
+    frictionless = shutil.which('frictionless')
+    if not frictionless:
+        raise ValueError('The frictionless command must be installed for this functionality!\n'
+                         'Run `pip install frictionless` and try again.')
+    parser = argparse.ArgumentParser(
+        description="Describe a (set of) CSV file(s) with basic CSVW metadata.")
+    parser.add_argument('--delimiter', default=None)
+    parser.add_argument('csv', nargs='+', help="CSV files to describe as CSVW TableGroup")
+    args = parser.parse_args()
+    fargs = ['describe', '--json']
+    if args.delimiter:
+        fargs.extend(['--dialect', '{"delimiter": "%s"}' % args.delimiter])
+    onefile = False
+    if len(args.csv) == 1 and '*' not in args.csv[0]:
+        onefile = True
+        # Make sure we infer a tabular-data schema even if the file suffix does not suggest a CSV
+        # file.
+        fargs.extend(['--format', 'csv'])
+    else:
+        fargs.extend(['--type', 'package'])
+
+    dp = json.loads(subprocess.check_output([frictionless] + fargs + args.csv))
+    if onefile:
+        dp = dict(resources=[dp], profile='data-package')
+
+    tg = TableGroup.from_frictionless_datapackage(dp)
+    print(json.dumps(tg.asdict(), indent=4))
 
 
 def csvwvalidate():  # pragma: no cover
