@@ -2,9 +2,10 @@
 SQLite as alternative storage backend for a TableGroup's data.
 
 For the most part, translation of a TableGroup's tableSchema to SQL works as expected:
-- each table is converted to a "CREATE TABLE" statement
-- each column specifies a column in the corresponding "CREATE TABLE" statement
-- foreignKey constraints are added according to the corresponding tableSchema property.
+
+- each table is converted to a `CREATE TABLE` statement
+- each column specifies a column in the corresponding `CREATE TABLE` statement
+- `foreignKey` constraints are added according to the corresponding `tableSchema` property.
 
 List-valued foreignKeys are supported as follows: For each pair of tables related through a
 list-valued foreign key, an association table is created. To make it possible to distinguish
@@ -13,14 +14,14 @@ a column `context`, which stores the name of the foreign key column from which a
 assocation table was created.
 
 SQL table and column names can be customized by passing a translator callable when instantiating
-a `Database`.
+a :class:`Database`.
 
 SQLite support has the following limitations:
 
 - lists as values (as specified via the separator attribute of a Column) are only supported for
   string types.
-- regex constraints on strings (as specified via a Datatype's format attribute) are not enforced
-  by the database.
+- regex constraints on strings (as specified via a :class:`csvw.Datatype`'s format attribute) are
+  not enforced by the database.
 """
 import typing
 import decimal
@@ -32,6 +33,7 @@ import collections
 
 import attr
 
+import csvw
 from csvw.datatypes import DATATYPES
 from csvw.metadata import TableGroup
 
@@ -95,7 +97,7 @@ def select(db, table):
 @attr.s
 class ColSpec(object):
     """
-    A `ColSpec` captures sufficient information about a `Column` for the DB schema.
+    A `ColSpec` captures sufficient information about a :class:`csvw.Column` for the DB schema.
     """
     name = attr.ib()
     csvw_type = attr.ib(default='string', converter=lambda s: s if s else 'string')
@@ -151,7 +153,7 @@ class ColSpec(object):
                 constraints.append('length(`{0}`) <= {1}'.format(cname, c.maxLength))
         return ' AND '.join(constraints)
 
-    def sql(self, translate):
+    def sql(self, translate) -> str:
         _check = self.check(translate)
         return '`{0}` {1}{2}{3}'.format(
             translate(self.name),
@@ -163,14 +165,16 @@ class ColSpec(object):
 @attr.s
 class TableSpec(object):
     """
-    A `TableSpec` captures sufficient information about a `Table` for the DB schema.
+    A `TableSpec` captures sufficient information about a :class:`csvw.Table` for the DB schema.
 
-    Note: We support "light-weight" many-to-many relationships by allowing list-valued foreign key
-    columns in CSVW. In the database these columns are turned into an associative table, adding
-    the name of the column as value a "context" column. Thus, multiple columns in a table my be
-    specified as targets of many-to-many relations with the same table.
+    .. note::
 
-    See also https://en.wikipedia.org/wiki/Associative_entity
+        We support "light-weight" many-to-many relationships by allowing list-valued foreign key
+        columns in CSVW. In the database these columns are turned into an associative table, adding
+        the name of the column as value a `context` column. Thus, multiple columns in a table my be
+        specified as targets of many-to-many relations with the same table.
+
+        .. seealso:: `<https://en.wikipedia.org/wiki/Associative_entity>`_
     """
     name = attr.ib()
     columns = attr.ib(default=attr.Factory(list))
@@ -179,7 +183,7 @@ class TableSpec(object):
     primary_key = attr.ib(default=None)
 
     @classmethod
-    def from_table_metadata(cls, table):
+    def from_table_metadata(cls, table: csvw.Table) -> 'TableSpec':
         """
         Create a `TableSpec` from the schema description of a `csvw.metadata.Table`.
 
@@ -225,7 +229,7 @@ class TableSpec(object):
         return spec
 
     @classmethod
-    def association_table(cls, atable, apk, btable, bpk):
+    def association_table(cls, atable, apk, btable, bpk) -> 'TableSpec':
         afk = ColSpec('{0}_{1}'.format(atable, apk))
         bfk = ColSpec('{0}_{1}'.format(btable, bpk))
         if afk.name == bfk.name:
@@ -240,7 +244,7 @@ class TableSpec(object):
             ]
         )
 
-    def sql(self, translate):
+    def sql(self, translate) -> str:
         """
         :param translate:
         :return: The SQL statement to create the table.
@@ -259,7 +263,7 @@ class TableSpec(object):
             translate(self.name), ',\n    '.join(clauses))
 
 
-def schema(tg):
+def schema(tg: csvw.TableGroup) -> typing.List[TableSpec]:
     """
     Convert the table and column descriptions of a `TableGroup` into specifications for the
     DB schema.
@@ -294,6 +298,9 @@ def schema(tg):
 
 
 class Database(object):
+    """
+    Represents a SQLite database associated with a :class:`csvw.TableGroup` instance.
+    """
     def __init__(
             self,
             tg: TableGroup,

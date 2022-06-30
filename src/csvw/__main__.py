@@ -11,13 +11,13 @@ from csvw import CSVW, TableGroup
 from csvw.db import Database
 
 
-def parsed_args(desc, *argspecs, **kw):
-    if kw.get('args') is None:  # pragma: no cover
+def parsed_args(desc, args, *argspecs):
+    if args is None:  # pragma: no cover
         parser = argparse.ArgumentParser(description=desc)
         for kw, kwargs in argspecs:
             parser.add_argument(*kw, **kwargs)
         return parser.parse_args()
-    return kw['args']
+    return args
 
 
 def exit(ret, test=False):
@@ -34,10 +34,10 @@ def csvwdescribe(args=None, test=False):
 
     args = parsed_args(
         "Describe a (set of) CSV file(s) with basic CSVW metadata.",
+        args,
         (['--delimiter'], dict(default=None)),
         (['csv'], dict(nargs='+', help="CSV files to describe as CSVW TableGroup")),
-        args=args)
-
+    )
     fargs = ['describe', '--json']
     if args.delimiter:
         fargs.extend(['--dialect', '{"delimiter": "%s"}' % args.delimiter])
@@ -63,10 +63,10 @@ def csvwvalidate(args=None, test=False):
     init()
     args = parsed_args(
         "Describe a (set of) CSV file(s) with basic CSVW metadata.",
+        args,
         (['url'], dict(help='URL or local path to CSV or JSON metadata file.')),
         (['-v', '--verbose'], dict(action='store_true', default=False)),
-        args=args)
-
+    )
     ret = 0
     try:
         csvw = CSVW(args.url, validate=True)
@@ -89,10 +89,10 @@ def csvwvalidate(args=None, test=False):
 def csvw2datasette(args=None, test=False):
     args = parsed_args(
         "Convert CSVW to data for datasette (https://datasette.io/).",
+        args,
         (['url'], dict(help='URL or local path to CSV or JSON metadata file.')),
         (['-o', '--outdir'], dict(type=pathlib.Path, default=pathlib.Path('.'))),
-        args=args)
-
+    )
     dbname, mdname = 'datasette.db', 'datasette-metadata.json'
     csvw = CSVW(args.url)
     db = Database(csvw.tablegroup, args.outdir / dbname)
@@ -115,8 +115,9 @@ to browse the data.
 def csvw2json(args=None, test=False):
     args = parsed_args(
         "Convert CSVW to JSON, see https://w3c.github.io/csvw/csv2json/",
+        args,
         (['url'], dict(help='URL or local path to CSV or JSON metadata file.')),
-        args=args)
+    )
     csvw = CSVW(args.url)
     print(json.dumps(csvw.to_json(), indent=4))
     return exit(0, test=test)
