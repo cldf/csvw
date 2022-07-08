@@ -1697,10 +1697,17 @@ class CSVW:
             # Default Locations for local files:
             if pathlib.Path(str(url) + '-metadata.json').exists():
                 return get_json(pathlib.Path(str(url) + '-metadata.json')), no_header
-        return {
+        res = {
             '@context': "http://www.w3.org/ns/csvw",
             'url': url,
-        }, no_header
+        }
+        if not is_url(url or ''):
+            # No metadata detected for a local CSV file. To make table reading work, we set the
+            # directory as @base and the filename as url property of the description.
+            p = pathlib.Path(url)
+            res['@base'] = str(p)
+            res['url'] = p.name
+        return res, no_header
 
     def to_json(self, minimal=False):
         """

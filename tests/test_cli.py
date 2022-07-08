@@ -38,6 +38,9 @@ def test_csvw2json(csvname, mdname, capsys):
     run(csvw2json, url=mdname)
     out, _ = capsys.readouterr()
     assert json.loads(out)
+    run(csvw2json, url=relpath('no-metadata.csv'))
+    out, _ = capsys.readouterr()
+    assert json.loads(out)
 
 
 def test_csvwvalidate(mdname, tmp_path):
