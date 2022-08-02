@@ -4,6 +4,9 @@ Changelog
 Unreleased
 ----------
 
+- Support [JSON Schema](https://json-schema.org/) documents as `format`
+  annotation for datatype `json`.
+
 
 Version 3.0
 -----------

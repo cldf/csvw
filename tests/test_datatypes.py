@@ -67,6 +67,22 @@ def test_string():
         Datatype.fromvalue('NMTOKEN').read("bold,brash")
 
 
+def test_json():
+    t = Datatype.fromvalue({'base': "json", "format": '{"type":"object"}'})
+    t = Datatype.fromvalue({'base': "json", "format": '{"type":"object","required":["a"]}'})
+    assert t.read('{"a": 1}') == dict(a=1)
+    with pytest.raises(ValueError):
+        t.read('{"x": 1}')
+    t = Datatype.fromvalue({'base': "json", "format": '{"type":"object"}'})
+    t.read('{"x": 1}')
+    t = Datatype.fromvalue({'base': "json", "format": 'x'})
+    t.read('{"x": 1}')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        t = Datatype.fromvalue({'base': "json", "format": '{"type":"obj"}'})
+        t.read('{"x": 1}')
+
+
 def test_anyURI():
     t = Datatype.fromvalue('anyURI')
     assert t.formatted('Http://example.org') == 'http://example.org'

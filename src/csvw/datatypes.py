@@ -24,6 +24,7 @@ import rfc3986
 import dateutil.parser
 import babel.numbers
 import babel.dates
+import jsonschema
 
 __all__ = ['DATATYPES']
 
@@ -949,6 +950,21 @@ class json(string):
         >>> dt.formatted(d)
         '{"a": "123"}'
 
+    Additional constraints on JSON data can be imposed by specifying
+    `JSON Schema <https://json-schema.org/>`_ documents as `format` annotation:
+
+    .. code-block:: python
+
+        >>> from csvw import Datatype
+        >>> dt = Datatype.fromvalue({"base": "json", "format": '{"type": "object"}'})
+        >>> dt.read('{}')
+        OrderedDict()
+        >>> dt.read('4')
+        ...
+        jsonschema.exceptions.ValidationError: 4 is not of type 'object'
+        ...
+        ValueError: invalid lexical value for json: 4
+
     .. note::
 
         To ensure proper roundtripping, we load the JSON strings using the
@@ -957,11 +973,33 @@ class json(string):
     name = 'json'
     example = '{"a": [1,2]}'
 
+    @staticmethod
+    def derived_description(datatype):
+        if datatype.format:
+            try:
+                schema = _json.loads(datatype.format)
+                try:
+                    jsonschema.validate({}, schema=schema)
+                    return {'schema': schema}
+                except jsonschema.ValidationError:
+                    return {'schema': schema}
+                except jsonschema.SchemaError:
+                    warnings.warn('Invalid JSON schema as datatype format')
+            except _json.JSONDecodeError:
+                pass
+        return {}
+
     # FIXME: ignored **kw?
     # why not just to_python = staticmethod(_json.loads)?
     @staticmethod
-    def to_python(v, **kw):
-        return _json.loads(v, object_pairs_hook=collections.OrderedDict)
+    def to_python(v, schema=None, **kw):
+        res = _json.loads(v, object_pairs_hook=collections.OrderedDict)
+        if schema:
+            try:
+                jsonschema.validate(res, schema=schema)
+            except jsonschema.ValidationError:
+                json.value_error(v)
+        return res
 
     @staticmethod
     def to_string(v, **kw):
