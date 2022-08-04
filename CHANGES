@@ -4,6 +4,8 @@ Changelog
 Unreleased
 ----------
 
+- Fixed the ranges of positiveInteger and nonNegativeInteger
+
 
 Version 3.1
 -----------
