@@ -758,7 +758,7 @@ class nonNegativeInteger(integer):
     Maps to `int`.
     """
     name = 'nonNegativeInteger'
-    range = (1, math.inf)
+    range = (0, math.inf)
 
 
 @register
@@ -767,7 +767,7 @@ class positiveInteger(integer):
     Maps to `int`.
     """
     name = 'positiveInteger'
-    range = (0, math.inf)
+    range = (1, math.inf)
 
 
 @register
