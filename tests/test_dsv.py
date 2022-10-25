@@ -146,6 +146,15 @@ def test_UnicodeReader_comments(lines=['1,x,y', ' *1,a,b', 'a,b,c', '*1,1,2']):
     assert reader.comments[0] == (3, '1,1,2')
 
 
+def test_iterrows_iterable():
+    def lines():
+        for _ in range(10):
+            yield 'a,b,c'
+    res = list(iterrows(lines()))
+    assert len(res) == 10
+    assert res[-1] == ['a', 'b', 'c']
+
+
 def test_iterrows_dialect(lines=['1,x,y', ' #1,a,b', '#1,1,2', ',,', '1,3, 4\t ']):
     dialect = Dialect(trim=True, skipRows=1, skipColumns=1, skipBlankRows=True)
     r = list(iterrows(lines, dialect=dialect))

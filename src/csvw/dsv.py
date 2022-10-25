@@ -144,7 +144,7 @@ class UnicodeReader(object):
     """
     def __init__(
             self,
-            f: typing.Union[str, pathlib.Path, typing.IO, typing.List[str]],
+            f: typing.Union[str, pathlib.Path, typing.IO, typing.Iterable[str]],
             dialect: typing.Optional[typing.Union[Dialect, str]] = None,
             **kw):
         self.f = f
