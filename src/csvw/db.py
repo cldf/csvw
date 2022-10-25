@@ -302,6 +302,12 @@ class Database(object):
     """
     Represents a SQLite database associated with a :class:`csvw.TableGroup` instance.
 
+    :param tg: `TableGroup` instance defining the schema of the database.
+    :param fname: Path to which to write the database file.
+    :param translate: Schema object name translator.
+    :param drop_self_referential_fks: Flag signaling whether to drop or enforce self-referential \
+    foreign-key constraints.
+
     .. warning::
 
         We write rows of a table to the database sequentially. Since CSVW does not require ordering
