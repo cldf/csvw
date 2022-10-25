@@ -1,7 +1,6 @@
 # csvw
 
 [![Build Status](https://github.com/cldf/csvw/workflows/tests/badge.svg)](https://github.com/cldf/csvw/actions?query=workflow%3Atests)
-[![codecov](https://codecov.io/gh/cldf/csvw/branch/master/graph/badge.svg)](https://codecov.io/gh/cldf/csvw)
 [![PyPI](https://img.shields.io/pypi/v/csvw.svg)](https://pypi.org/project/csvw)
 [![Documentation Status](https://readthedocs.org/projects/csvw/badge/?version=latest)](https://csvw.readthedocs.io/en/latest/?badge=latest)
 
