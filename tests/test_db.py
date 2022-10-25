@@ -154,6 +154,27 @@ def test_foreign_keys(tg, translate):
     assert 'vv' in db.read()['data'][0]
 
 
+def test_self_referential_foreign_keys(tg):
+    tg.tables[0].tableSchema.columns.append(Column.fromvalue({'name': 'id'}))
+    tg.tables[0].tableSchema.columns.append(Column.fromvalue({'name': 'ref'}))
+    tg.tables[0].tableSchema.primaryKey = ['id']
+    tg.tables[0].tableSchema.foreignKeys.append(
+        ForeignKey.fromdict(dict(
+            reference=dict(resource='data', columnReference=['id']),
+            columnReference=['ref']
+        )))
+    db = Database(tg)
+    db.write(data=[{'id': '1', 'ref': '2'}, {'id': '2', 'ref': None}])
+    assert len(db.read()['data']) == 2
+
+    db = Database(tg, drop_self_referential_fks=False)
+    with pytest.raises(sqlite3.IntegrityError):
+        db.write(data=[{'id': '1', 'ref': '2'}, {'id': '2', 'ref': None}])
+
+    db = Database(tg, drop_self_referential_fks=False)
+    db.write(data=[{'id': '2', 'ref': None}, {'id': '1', 'ref': '2'}])
+
+
 @pytest.fixture
 def tg_with_foreign_keys(tg):
     tg.tables[0].tableSchema.columns.append(Column.fromvalue({'name': 'v'}))

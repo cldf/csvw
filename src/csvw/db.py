@@ -183,7 +183,7 @@ class TableSpec(object):
     primary_key = attr.ib(default=None)
 
     @classmethod
-    def from_table_metadata(cls, table: csvw.Table) -> 'TableSpec':
+    def from_table_metadata(cls, table: csvw.Table, drop_self_referential_fks=True) -> 'TableSpec':
         """
         Create a `TableSpec` from the schema description of a `csvw.metadata.Table`.
 
@@ -210,7 +210,7 @@ class TableSpec(object):
                         fk.reference.resource.string,
                         fk.reference.columnReference[0],
                     )
-                else:
+                elif not (drop_self_referential_fks and fk.reference.resource.string == spec.name):
                     spec.foreign_keys.append((
                         sorted(fk.columnReference),
                         fk.reference.resource.string,
@@ -263,7 +263,7 @@ class TableSpec(object):
             translate(self.name), ',\n    '.join(clauses))
 
 
-def schema(tg: csvw.TableGroup) -> typing.List[TableSpec]:
+def schema(tg: csvw.TableGroup, drop_self_referential_fks=True) -> typing.List[TableSpec]:
     """
     Convert the table and column descriptions of a `TableGroup` into specifications for the
     DB schema.
@@ -273,7 +273,8 @@ def schema(tg: csvw.TableGroup) -> typing.List[TableSpec]:
     """
     tables = {}
     for tname, table in tg.tabledict.items():
-        t = TableSpec.from_table_metadata(table)
+        t = TableSpec.from_table_metadata(
+            table, drop_self_referential_fks=drop_self_referential_fks)
         tables[t.name] = t
         for at in t.many_to_many.values():
             tables[at.name] = at
@@ -300,20 +301,32 @@ def schema(tg: csvw.TableGroup) -> typing.List[TableSpec]:
 class Database(object):
     """
     Represents a SQLite database associated with a :class:`csvw.TableGroup` instance.
+
+    .. warning::
+
+        We write rows of a table to the database sequentially. Since CSVW does not require ordering
+        rows in tables such that self-referential foreign-key constraints are satisfied at each row,
+        we don't enforce self-referential foreign-keys by default in order to not trigger "false"
+        integrity errors. If data in a CSVW Table is known to be ordered appropriately, `False`
+        should be passed as `drop_self_referential_fks` keyword parameter to enforce
+        self-referential foreign-keys.
     """
     def __init__(
             self,
             tg: TableGroup,
             fname: typing.Optional[typing.Union[pathlib.Path, str]] = None,
-            translate: typing.Optional[typing.Callable] = None):
+            translate: typing.Optional[typing.Callable] = None,
+            drop_self_referential_fks: typing.Optional[bool] = True,
+    ):
         self.translate = translate or Database.name_translator
         self.fname = pathlib.Path(fname) if fname else None
-        self.init_schema(tg)
+        self.init_schema(tg, drop_self_referential_fks=drop_self_referential_fks)
         self._connection = None  # For in-memory dbs we need to keep the connection!
 
-    def init_schema(self, tg):
+    def init_schema(self, tg, drop_self_referential_fks=True):
         self.tg = tg
-        self.tables = schema(self.tg) if self.tg else []
+        self.tables = schema(
+            self.tg, drop_self_referential_fks=drop_self_referential_fks) if self.tg else []
 
     @property
     def tdict(self) -> typing.Dict[str, TableSpec]:

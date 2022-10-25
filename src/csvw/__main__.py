@@ -95,7 +95,7 @@ def csvw2datasette(args=None, test=False):
     )
     dbname, mdname = 'datasette.db', 'datasette-metadata.json'
     csvw = CSVW(args.url)
-    db = Database(csvw.tablegroup, args.outdir / dbname)
+    db = Database(csvw.tablegroup, fname=args.outdir / dbname)
     db.write_from_tg()
     md = {}
     for k in ['title', 'description', 'license']:
