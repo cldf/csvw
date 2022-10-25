@@ -4,6 +4,10 @@ Changelog
 Unreleased
 ----------
 
+
+Version 3.1.2
+-------------
+
 - DB creation will now drop self-referential foreign-keys by default
 
 
