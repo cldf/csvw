@@ -1205,8 +1205,12 @@ class Table(TableLike):
                 return writer.read()
         if fname and _zipped:
             fpath = pathlib.Path(fname)
-            with zipfile.ZipFile(str(fpath.parent.joinpath(fpath.name + '.zip')), 'w') as zipf:
-                zipf.write(str(fpath))
+            with zipfile.ZipFile(
+                str(fpath.parent.joinpath(fpath.name + '.zip')),
+                'w',
+                compression=zipfile.ZIP_DEFLATED
+            ) as zipf:
+                zipf.write(str(fpath), arcname=fpath.name)
             fpath.unlink()
         return rowcount
 
