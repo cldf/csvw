@@ -73,8 +73,24 @@ def test_UnicodeWriter(tmp_path, row, expected):
     assert filepath.read_bytes() == expected
 
 
-@pytest.mark.xfail(sys.version_info >= (3, 10), reason="https://bugs.python.org/issue44861")
-@pytest.mark.parametrize('quoting', [getattr(csv, q) for q in QUOTING], ids=QUOTING)
+@pytest.mark.parametrize(
+    'quoting',
+    [
+        pytest.param(
+            csv.QUOTE_ALL,
+            marks=pytest.mark.xfail(
+                sys.version_info >= (3, 10), reason="https://bugs.python.org/issue44861")),
+        pytest.param(
+            csv.QUOTE_MINIMAL,
+            marks=pytest.mark.xfail(
+                sys.version_info >= (3, 10), reason="https://bugs.python.org/issue44861")),
+        pytest.param(
+            csv.QUOTE_NONNUMERIC,
+            marks=pytest.mark.xfail(
+                sys.version_info >= (3, 10), reason="https://bugs.python.org/issue44861")),
+        csv.QUOTE_NONE,
+    ],
+    ids=QUOTING)
 def test_roundtrip_escapechar(tmp_path, quoting, escapechar='\\', row=['\\spam', 'eggs']):
     filename = tmp_path / 'spam.csv'
     kwargs = {'escapechar': escapechar, 'quoting': quoting}

@@ -46,7 +46,9 @@ def test_quotechar(dialect):
 
 @pytest.mark.parametrize('dialect', [
     QuoteNone,
-    pytest.param(EscapeQuote, marks=pytest.mark.xfail(reason='does not escape escapechar')),
+    pytest.param(EscapeQuote, marks=pytest.mark.xfail(
+        sys.version_info < (3, 10), reason='does not escape escapechar'),
+    ),
 ])
 def test_escapechar(dialect):
     value = 'spam %s eggs' % dialect.escapechar
@@ -56,7 +58,8 @@ def test_escapechar(dialect):
 
 @pytest.mark.parametrize('dialect', [
     QuoteNone,
-    pytest.param(EscapeQuote, marks=pytest.mark.xfail(reason='does not escape escapechar')),
+    pytest.param(EscapeQuote, marks=pytest.mark.xfail(
+        sys.version_info < (3, 10), reason='does not escape escapechar')),
 ])
 def test_escapecharquotechar(dialect):
     value = 'spam %s%s eggs' % (dialect.escapechar, dialect.quotechar)
