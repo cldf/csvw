@@ -184,6 +184,16 @@ class TestColumn(object):
         col2 = csvw.Column(name='col2', datatype=col1.datatype)
         assert col2.datatype.format
 
+    def test_serialize_empty_null(self):
+        col = csvw.Column.fromvalue({'name': 'col', 'null': []})
+        assert col.read('') == ''
+        ser = col.asdict()
+        assert 'null' in ser
+        assert csvw.Column.fromvalue(ser).read('') == ''
+
+        table = csvw.Table.fromvalue({'url': 'x', 'tableSchema': {'columns': [ser]}})
+        assert table.tableSchema.columns[0].inherit_null() == []
+
 
 def test_Schema():
     from csvw.metadata import Schema

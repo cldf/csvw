@@ -4,6 +4,9 @@ Changelog
 Unreleased
 ----------
 
+- Fixed bug whereby it was impossible to set `Column.null` to the empty list.
+
+
 Version 3.1.3
 -------------
 

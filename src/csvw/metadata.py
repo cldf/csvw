@@ -449,8 +449,13 @@ class DescriptionBase(object):
                 yield k, _asdict_multiple(v)
 
     def asdict(self, omit_defaults=True):
+        # Note: The `null` property is the only inherited, list-valued property where the default
+        # is not the empty list. Thus, to allow setting it to empty, we must treat `null` as
+        # special case here.
+        # See also https://www.w3.org/TR/tabular-metadata/#dfn-inherited-property
         return collections.OrderedDict(
-            (k, v) for k, v in self._iter_dict_items(omit_defaults) if v not in ([], {}))
+            (k, v) for k, v in self._iter_dict_items(omit_defaults)
+            if (k == 'null' or (v not in ([], {}))))
 
 
 def optional_int():
