@@ -1011,7 +1011,7 @@ class TableLike(Description):
     def __attrs_post_init__(self):
         if isinstance(self.dialect, str):
             self.dialect = Dialect(**dialect_props(get_json(Link(self.dialect).resolve(self.base))))
-        if self.tableSchema and not(isinstance(self.tableSchema, str)):
+        if self.tableSchema and not (isinstance(self.tableSchema, str)):
             self.tableSchema._parent = self
         if 'id' in self.at_props and self.at_props['id'] is None:
             self.at_props['id'] = self.base
