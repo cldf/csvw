@@ -1,5 +1,6 @@
-import json
 import os
+import json
+import shutil
 import pathlib
 import argparse
 
@@ -58,7 +59,7 @@ def test_csvwdescribe(csvname, tsvname, capsys):
     out, _ = capsys.readouterr()
     assert json.loads(out)
 
-    run(csvwdescribe, csv=[tsvname, tsvname], delimiter=None)
+    run(csvwdescribe, csv=[tsvname, csvname], delimiter=None)
     out, _ = capsys.readouterr()
     assert json.loads(out)
 
