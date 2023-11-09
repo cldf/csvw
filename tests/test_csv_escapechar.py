@@ -72,4 +72,4 @@ def test_escapequote_escapecharquotechar_final(dialect=EscapeQuote):
     value = 'spam %s%s' % (dialect.escapechar, dialect.quotechar)
     out, cell = roundtrip(value, dialect)
     assert out.strip() == '"spam //""'  # why does this not raise on reading?
-    assert cell == value
+    assert cell == value  # pragma: no cover

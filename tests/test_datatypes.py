@@ -15,6 +15,8 @@ from csvw.datatypes import NumberPattern
         ({'base': 'string', 'format': '[0-9]+[a-z]+'}, '1a', '1a', True),
         ('anyURI', '/a/b?d=5', None, True),
         ('integer', '5', 5, True),
+        ('decimal', '0.00000001', decimal.Decimal((0, (1,), -8)), True),
+        ('decimal', '1000000000000', decimal.Decimal('1e12'), True),
         ('integer', '-5', -5, True),
         ('date', '2012-12-01', None, True),
         ('datetime', '2012-12-01T12:12:12', None, True),
@@ -218,6 +220,9 @@ def test_misc():
     assert t.parse(False) is False
     assert t.parse('false') is False
     assert t.formatted(True) == 'true'
+
+    t = Datatype.fromvalue('decimal')
+    assert t.formatted('1e6') == '100000.0'
 
 
 def test_NumberPattern():

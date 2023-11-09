@@ -6,6 +6,8 @@ Unreleased
 
 - Fixed bug whereby it was impossible to set `Column.null` to the empty list.
 - Dropped py3.7 compatibility.
+- Fixed bug whereby decimals were serialised in scientific notation which is
+  against the spec.
 
 
 Version 3.1.3
