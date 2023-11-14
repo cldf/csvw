@@ -204,7 +204,6 @@ class DataPackage:
         for rsc in resources:
             schema = rsc.get('schema')
             if schema and \
-                    rsc.get('profile') == 'tabular-data-resource' and \
                     rsc.get('scheme') == 'file' and \
                     rsc.get('format') == 'csv':
                 # Table Schema:

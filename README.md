@@ -19,7 +19,7 @@ This package provides
 
 ## Installation
 
-This package runs under Python >=3.7, use pip to install:
+This package runs under Python >=3.8, use pip to install:
 
 ```bash
 $ pip install csvw
