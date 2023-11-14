@@ -9,6 +9,8 @@ Unreleased
 - Fixed bug whereby decimals were serialised in scientific notation which is
   against the spec.
 - Add Python 3.12 to tested and supported versions.
+- Replace `lazyproperty` with `functools.cached_property`, since we don't support
+  py < 3.8 anymore.
 
 
 Version 3.1.3

@@ -55,37 +55,6 @@ def attr_asdict(obj, omit_defaults=True, omit_private=True):
     return res
 
 
-class lazyproperty(object):
-    """Non-data descriptor caching the computed result as instance attribute.
-    >>> import itertools
-    >>> class Spam(object):
-    ...     @lazyproperty
-    ...     def eggs(self, _ints=itertools.count()):
-    ...         return next(_ints)
-    >>> spam=Spam(); spam.eggs
-    0
-    >>> spam.eggs=42; spam.eggs
-    42
-    >>> Spam().eggs
-    1
-    >>> del spam.eggs; spam.eggs, spam.eggs
-    (2, 2)
-    >>> Spam.eggs  # doctest: +ELLIPSIS
-    <...lazyproperty object at 0x...>
-    """
-
-    def __init__(self, fget):
-        self.fget = fget
-        for attr_ in ('__module__', '__name__', '__doc__'):
-            setattr(self, attr_, getattr(fget, attr_))
-
-    def __get__(self, instance, owner):
-        if instance is None:
-            return self
-        result = instance.__dict__[self.__name__] = self.fget(instance)
-        return result
-
-
 def normalize_name(s):
     """Convert a string into a valid python attribute name.
     This function is called to convert ASCII strings to something that can pass as

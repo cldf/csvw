@@ -121,16 +121,16 @@ class Dialect(object):
             setattr(res, k, v)
         return res
 
-    @utils.lazyproperty
+    @functools.cached_property
     def escape_character(self):
         return None if self.quoteChar is None else ('"' if self.doubleQuote else '\\')
 
-    @utils.lazyproperty
+    @functools.cached_property
     def line_terminators(self):
         return [self.lineTerminators] \
             if isinstance(self.lineTerminators, str) else self.lineTerminators
 
-    @utils.lazyproperty
+    @functools.cached_property
     def trimmer(self):
         return {
             'true': lambda s: s.strip(),

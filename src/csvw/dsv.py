@@ -19,6 +19,7 @@ import typing
 import pathlib
 import tempfile
 import warnings
+import functools
 import collections
 
 from . import utils
@@ -319,7 +320,7 @@ class NamedTupleReader(UnicodeDictReader):
 
     _normalize_fieldname = staticmethod(utils.normalize_name)
 
-    @utils.lazyproperty
+    @functools.cached_property
     def cls(self):
         fieldnames = list(map(self._normalize_fieldname, self.fieldnames))
         return collections.namedtuple('Row', fieldnames)
