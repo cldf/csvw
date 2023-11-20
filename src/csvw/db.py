@@ -507,7 +507,7 @@ FROM {2} {3} GROUP BY {0}""".format(
                             if isinstance(v, list):
                                 # Note: This assumes list-valued columns are of datatype string!
                                 v = (col.separator or ';').join(
-                                    col.convert(vv) for vv in v)
+                                    col.convert(vv) or '' for vv in v)
                             else:
                                 v = col.convert(v) if v is not None else None
                             if i == 0:

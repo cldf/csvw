@@ -61,6 +61,7 @@ def test_list_valued(tg, translate):
     data = db.read()['data']
     assert data[0]['vv'] == ['a', 'b', ' c']
     assert data[1]['vv'] == []
+    db.write(data=[{'v': ['a', 'b', None]}])
 
 
 def test_required(tg):
