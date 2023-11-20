@@ -1,8 +1,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+Version 3.2.1
+-------------
 
 - Fixed bug whereby NULL values list-valued fields couldn't be written to sqlite.
 
