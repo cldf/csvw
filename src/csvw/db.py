@@ -13,6 +13,10 @@ multiple list-valued foreign keys between the same two tables, the association t
 a column `context`, which stores the name of the foreign key column from which a row in the
 assocation table was created.
 
+Other list-valued columns work in two different ways: If the atomic datatype is `string`, the
+specified separator is used to create a concatenated string representation in the database field.
+Otherwise, the list of values is serialized as JSON.
+
 SQL table and column names can be customized by passing a translator callable when instantiating
 a :class:`Database`.
 
