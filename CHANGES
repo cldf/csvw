@@ -1,8 +1,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+Version 3.2.2
+-------------
 
 - Support list-valued column data of non-string datatypes (as long as they can be
   JSON serialized) in `db`.

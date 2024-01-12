@@ -21,7 +21,7 @@ __all__ = [
 ]
 
 __title__ = 'csvw'
-__version__ = '3.2.2.dev0'
+__version__ = '3.2.2'
 __author__ = 'Robert Forkel'
 __license__ = 'Apache 2.0, see LICENSE'
 __copyright__ = 'Copyright (c) 2023 Robert Forkel'
