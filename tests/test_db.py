@@ -64,6 +64,15 @@ def test_list_valued(tg, translate):
     db.write(data=[{'v': ['a', 'b', None]}])
 
 
+def test_list_valued_non_text(tg, translate):
+    tg.tables[0].tableSchema.columns.append(Column.fromvalue(
+        {'separator': '#', 'name': 'v', 'datatype': 'integer'}))
+    db = Database(tg, translate=translate)
+    db.write(data=[{'v': [1, 2, 3]}])
+    data = db.read()['data']
+    assert data[0]['vv'] == [1, 2, 3]
+
+
 def test_required(tg):
     tg.tables[0].tableSchema.columns.append(Column.fromvalue({'required': 'True', 'name': 'v'}))
     db = Database(tg)

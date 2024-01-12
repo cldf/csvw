@@ -18,11 +18,10 @@ a :class:`Database`.
 
 SQLite support has the following limitations:
 
-- lists as values (as specified via the separator attribute of a Column) are only supported for
-  string types.
 - regex constraints on strings (as specified via a :class:`csvw.Datatype`'s format attribute) are
   not enforced by the database.
 """
+import json
 import typing
 import decimal
 import pathlib
@@ -115,8 +114,8 @@ class ColSpec(object):
             self.db_type = 'TEXT'
             self.convert = DATATYPES[self.csvw_type].to_string
             self.read = DATATYPES[self.csvw_type].to_python
-        if self.separator and self.db_type != 'TEXT':  # pragma: no cover
-            raise ValueError('list-valued fields are only supported for string types')
+        if self.separator and self.db_type != 'TEXT':
+            self.db_type = 'TEXT'
 
     def check(self, translate):
         """
@@ -409,7 +408,10 @@ FROM {2} {3} GROUP BY {0}""".format(
                         convert[self.translate(tname, col.name)][1] = \
                             DATATYPES[col.csvw_type].to_python
                     if col.separator:
-                        seps[self.translate(tname, col.name)] = col.separator
+                        if col.csvw_type == 'string':
+                            seps[self.translate(tname, col.name)] = col.separator
+                        else:
+                            seps[self.translate(tname, col.name)] = 'json'
 
                 # Retrieve the many-to-many relations:
                 for col, at in table.many_to_many.items():
@@ -423,6 +425,8 @@ FROM {2} {3} GROUP BY {0}""".format(
                         if k in seps:
                             if not v:
                                 d[k] = []
+                            elif seps[k] == 'json':
+                                d[k] = json.loads(v)
                             else:
                                 d[k] = [convert[k][1](v_) for v_ in (v or '').split(seps[k])]
                         else:
@@ -506,8 +510,11 @@ FROM {2} {3} GROUP BY {0}""".format(
                             col = cols[k]
                             if isinstance(v, list):
                                 # Note: This assumes list-valued columns are of datatype string!
-                                v = (col.separator or ';').join(
-                                    col.convert(vv) or '' for vv in v)
+                                if col.csvw_type == 'string':
+                                    v = (col.separator or ';').join(
+                                        col.convert(vv) or '' for vv in v)
+                                else:
+                                    v = json.dumps(v)
                             else:
                                 v = col.convert(v) if v is not None else None
                             if i == 0:
