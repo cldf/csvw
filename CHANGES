@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- Fixed handling of null values for list-valued columns when reading from sqlite db.
+
+
+
 Version 3.2.2
 -------------
 

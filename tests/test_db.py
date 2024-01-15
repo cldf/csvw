@@ -68,9 +68,10 @@ def test_list_valued_non_text(tg, translate):
     tg.tables[0].tableSchema.columns.append(Column.fromvalue(
         {'separator': '#', 'name': 'v', 'datatype': 'integer'}))
     db = Database(tg, translate=translate)
-    db.write(data=[{'v': [1, 2, 3]}])
+    db.write(data=[{'v': [1, 2, 3]}, {'v': None}])
     data = db.read()['data']
     assert data[0]['vv'] == [1, 2, 3]
+    assert data[1]['vv'] is None
 
 
 def test_required(tg):

@@ -427,7 +427,9 @@ FROM {2} {3} GROUP BY {0}""".format(
                     d = collections.OrderedDict()
                     for k, v in zip(cols, row):
                         if k in seps:
-                            if not v:
+                            if v is None:
+                                d[k] = None
+                            elif not v:
                                 d[k] = []
                             elif seps[k] == 'json':
                                 d[k] = json.loads(v)
