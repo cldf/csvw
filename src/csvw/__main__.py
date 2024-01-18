@@ -62,7 +62,7 @@ def csvwdescribe(args=None, test=False):
 def csvwvalidate(args=None, test=False):
     init()
     args = parsed_args(
-        "Describe a (set of) CSV file(s) with basic CSVW metadata.",
+        "Validate a (set of) CSV file(s) described by CSVW metadata.",
         args,
         (['url'], dict(help='URL or local path to CSV or JSON metadata file.')),
         (['-v', '--verbose'], dict(action='store_true', default=False)),

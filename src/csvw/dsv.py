@@ -32,12 +32,14 @@ __all__ = [
     'rewrite', 'add_rows', 'filter_rows_as_dict',
 ]
 
+LINES_OR_PATH = typing.Union[str, pathlib.Path, typing.IO, typing.Iterable[str]]
 
-def normalize_encoding(encoding):
+
+def normalize_encoding(encoding: str) -> str:
     return codecs.lookup(encoding).name
 
 
-class UnicodeWriter(object):
+class UnicodeWriter:
     """
     Write Unicode data to a csv file.
 
@@ -122,7 +124,7 @@ class UnicodeWriter(object):
             self.writerow(row)
 
 
-class UnicodeReader(object):
+class UnicodeReader:
     """
     Read Unicode data from a csv file.
 
@@ -145,7 +147,7 @@ class UnicodeReader(object):
     """
     def __init__(
             self,
-            f: typing.Union[str, pathlib.Path, typing.IO, typing.Iterable[str]],
+            f: LINES_OR_PATH,
             dialect: typing.Optional[typing.Union[Dialect, str]] = None,
             **kw):
         self.f = f
@@ -333,7 +335,11 @@ class NamedTupleReader(UnicodeDictReader):
             **{self._normalize_fieldname(k): v for k, v in d.items() if k in self.fieldnames})
 
 
-def iterrows(lines_or_file, namedtuples=False, dicts=False, encoding='utf-8', **kw):
+def iterrows(lines_or_file: LINES_OR_PATH,
+             namedtuples: typing.Optional[bool] = False,
+             dicts: typing.Optional[bool] = False,
+             encoding: typing.Optional[str] = 'utf-8',
+             **kw) -> typing.Generator:
     """Convenience factory function for csv reader.
 
     :param lines_or_file: Content to be read. Either a file handle, a file path or a list\
@@ -361,7 +367,9 @@ def iterrows(lines_or_file, namedtuples=False, dicts=False, encoding='utf-8', **
 reader = iterrows
 
 
-def rewrite(fname, visitor, **kw):
+def rewrite(fname: typing.Union[str, pathlib.Path],
+            visitor: typing.Callable[[int, typing.List[str]], typing.Union[None, typing.List[str]]],
+            **kw):
     """Utility function to rewrite rows in dsv files.
 
     :param fname: Path of the dsv file to operate on.
@@ -383,7 +391,7 @@ def rewrite(fname, visitor, **kw):
     shutil.move(str(tmp), str(fname))  # Path.replace is Python 3.3+
 
 
-def add_rows(fname, *rows):
+def add_rows(fname: typing.Union[str, pathlib.Path], *rows: typing.List[str]):
     with tempfile.NamedTemporaryFile(delete=False) as fp:
         tmp = pathlib.Path(fp.name)
 
@@ -397,7 +405,9 @@ def add_rows(fname, *rows):
     shutil.move(str(tmp), str(fname))  # Path.replace is Python 3.3+
 
 
-def filter_rows_as_dict(fname, filter_, **kw):
+def filter_rows_as_dict(fname: typing.Union[str, pathlib.Path],
+                        filter_: typing.Callable[[dict], bool],
+                        **kw) -> int:
     """Rewrite a dsv file, filtering the rows.
 
     :param fname: Path to dsv file

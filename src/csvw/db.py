@@ -69,11 +69,37 @@ TYPE_MAP = {
 }
 
 
+class SchemaTranslator(typing.Protocol):
+    def __call__(self, table: str, column: typing.Optional[str] = None) -> str:
+        ...
+
+
+class ColumnTranslator(typing.Protocol):
+    def __call__(self, column: str) -> str:
+        ...
+
+
 def quoted(*names):
     return ','.join('`{0}`'.format(name) for name in names)
 
 
-def insert(db, translate, table, keys, *rows, **kw):
+def insert(db: sqlite3.Connection,
+           translate: SchemaTranslator,
+           table: str,
+           keys: typing.Sequence[str],
+           *rows: list,
+           single: typing.Optional[bool] = False):
+    """
+    Insert a sequence of rows into a table.
+
+    :param db: Database connection.
+    :param translate: Callable translating table and column names to proper schema object names.
+    :param table: Untranslated table name.
+    :param keys: Untranslated column names.
+    :param rows: Sequence of rows to insert.
+    :param single: Flag signaling whether to insert all rows at once using `executemany` or one at \
+    a time, allowing for more focused debugging output in case of errors.
+    """
     if rows:
         sql = "INSERT INTO {0} ({1}) VALUES ({2})".format(
             quoted(translate(table)),
@@ -82,7 +108,7 @@ def insert(db, translate, table, keys, *rows, **kw):
         try:
             db.executemany(sql, rows)
         except:  # noqa: E722 - this is purely for debugging.
-            if 'single' not in kw:
+            if not single:
                 for row in rows:
                     insert(db, translate, table, keys, row, single=True)
             else:
@@ -91,14 +117,14 @@ def insert(db, translate, table, keys, *rows, **kw):
                 raise
 
 
-def select(db, table):
+def select(db: sqlite3.Connection, table: str) -> typing.Tuple[typing.List[str], typing.Sequence]:
     cu = db.execute("SELECT * FROM {0}".format(quoted(table)))
     cols = [d[0] for d in cu.description]
     return cols, list(cu.fetchall())
 
 
 @attr.s
-class ColSpec(object):
+class ColSpec:
     """
     A `ColSpec` captures sufficient information about a :class:`csvw.Column` for the DB schema.
     """
@@ -121,12 +147,12 @@ class ColSpec(object):
         if self.separator and self.db_type != 'TEXT':
             self.db_type = 'TEXT'
 
-    def check(self, translate):
+    def check(self, translate: ColumnTranslator) -> typing.Optional[str]:
         """
         We try to convert as many data constraints as possible into SQLite CHECK constraints.
 
-        :param translate:
-        :return:
+        :param translate: Callable to translate column names between CSVW metadata and DB schema.
+        :return: A string suitable as argument of an SQL CHECK constraint.
         """
         if not self.csvw:
             return
@@ -156,7 +182,7 @@ class ColSpec(object):
                 constraints.append('length(`{0}`) <= {1}'.format(cname, c.maxLength))
         return ' AND '.join(constraints)
 
-    def sql(self, translate) -> str:
+    def sql(self, translate: ColumnTranslator) -> str:
         _check = self.check(translate)
         return '`{0}` {1}{2}{3}'.format(
             translate(self.name),
@@ -186,11 +212,16 @@ class TableSpec(object):
     primary_key = attr.ib(default=None)
 
     @classmethod
-    def from_table_metadata(cls, table: csvw.Table, drop_self_referential_fks=True) -> 'TableSpec':
+    def from_table_metadata(cls,
+                            table: csvw.Table,
+                            drop_self_referential_fks: typing.Optional[bool] = True) -> 'TableSpec':
         """
         Create a `TableSpec` from the schema description of a `csvw.metadata.Table`.
 
         :param table: `csvw.metadata.Table` instance.
+        :param drop_self_referential_fks: Flag signaling whether to drop self-referential foreign \
+        keys. This may be necessary, if the order of rows in a CSVW table does not guarantee \
+        referential integrity when inserted in order (e.g. an eralier row refering to a later one).
         :return: `TableSpec` instance.
         """
         spec = cls(name=table.local_name, primary_key=table.tableSchema.primaryKey)
@@ -233,6 +264,13 @@ class TableSpec(object):
 
     @classmethod
     def association_table(cls, atable, apk, btable, bpk) -> 'TableSpec':
+        """
+        List-valued foreignKeys are supported as follows: For each pair of tables related through a
+        list-valued foreign key, an association table is created. To make it possible to distinguish
+        multiple list-valued foreign keys between the same two tables, the association table has
+        a column `context`, which stores the name of the foreign key column from which a row in the
+        assocation table was created.
+        """
         afk = ColSpec('{0}_{1}'.format(atable, apk))
         bfk = ColSpec('{0}_{1}'.format(btable, bpk))
         if afk.name == bfk.name:
@@ -247,7 +285,7 @@ class TableSpec(object):
             ]
         )
 
-    def sql(self, translate) -> str:
+    def sql(self, translate: SchemaTranslator) -> str:
         """
         :param translate:
         :return: The SQL statement to create the table.
@@ -266,12 +304,16 @@ class TableSpec(object):
             translate(self.name), ',\n    '.join(clauses))
 
 
-def schema(tg: csvw.TableGroup, drop_self_referential_fks=True) -> typing.List[TableSpec]:
+def schema(tg: csvw.TableGroup,
+           drop_self_referential_fks: typing.Optional[bool] = True) -> typing.List[TableSpec]:
     """
     Convert the table and column descriptions of a `TableGroup` into specifications for the
     DB schema.
 
-    :param ds:
+    :param tg: CSVW TableGroup.
+    :param drop_self_referential_fks: Flag signaling whether to drop self-referential foreign \
+    keys. This may be necessary, if the order of rows in a CSVW table does not guarantee \
+    referential integrity when inserted in order (e.g. an eralier row refering to a later one).
     :return: A pair (tables, reference_tables).
     """
     tables = {}
@@ -324,7 +366,7 @@ class Database(object):
             self,
             tg: TableGroup,
             fname: typing.Optional[typing.Union[pathlib.Path, str]] = None,
-            translate: typing.Optional[typing.Callable] = None,
+            translate: typing.Optional[SchemaTranslator] = None,
             drop_self_referential_fks: typing.Optional[bool] = True,
     ):
         self.translate = translate or Database.name_translator
@@ -347,8 +389,8 @@ class Database(object):
         A callable with this signature can be passed into DB creation to control the names
         of the schema objects.
 
-        :param table: Name of the table before translation
-        :param column: Name of a column of `table` before translation
+        :param table: CSVW name of the table before translation
+        :param column: CSVW name of a column of `table` before translation
         :return: Translated table name if `column is None` else translated column name
         """
         # By default, no translation is done:
@@ -361,7 +403,7 @@ class Database(object):
             self._connection = sqlite3.connect(':memory:')
         return self._connection
 
-    def select_many_to_many(self, db, table, context):
+    def select_many_to_many(self, db, table, context) -> dict:
         if context is not None:
             context_sql = "WHERE context = '{0}'".format(context)
         else:
@@ -393,6 +435,10 @@ FROM {2} {3} GROUP BY {0}""".format(
         return (value or '').split(sep) if sep else value
 
     def read(self) -> typing.Dict[str, typing.List[typing.OrderedDict]]:
+        """
+        :return: A `dict` where keys are SQL table names corresponding to CSVW tables and values \
+        are lists of rows, represented as dicts where keys are the SQL column names.
+        """
         res = collections.defaultdict(list)
         with self.connection() as conn:
             for tname in self.tg.tabledict:

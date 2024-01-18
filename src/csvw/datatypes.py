@@ -8,16 +8,17 @@ a basic datatype and additional behaviour.
 
 .. seealso:: http://w3c.github.io/csvw/metadata/#datatypes
 """
-import collections
 import re
 import json as _json
 import math
 import base64
+import typing
 import decimal as _decimal
 import binascii
 import datetime
 import warnings
 import itertools
+import collections
 
 import isodate
 import rfc3986
@@ -25,6 +26,9 @@ import dateutil.parser
 import babel.numbers
 import babel.dates
 import jsonschema
+
+if typing.TYPE_CHECKING:  # pragma: no cover
+    import csvw
 
 __all__ = ['DATATYPES']
 
@@ -62,11 +66,11 @@ class anyAtomicType:
     def value_error(cls, v):
         raise ValueError('invalid lexical value for {}: {}'.format(cls.name, v))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         return {}
 
     @staticmethod
@@ -89,7 +93,7 @@ class string(anyAtomicType):
     name = 'string'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         if datatype.format:
             # We wrap a regex specified as `format` property into a group and add `$` to
             # make sure the whole string is matched when validating.
@@ -251,7 +255,7 @@ class boolean(anyAtomicType):
     example = 'false'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         if datatype.format and isinstance(datatype.format, str) and datatype.format.count('|') == 1:
             true, false = [[v] for v in datatype.format.split('|')]
         else:
@@ -301,7 +305,7 @@ class dateTime(anyAtomicType):
     example = '2018-12-10T20:20:20'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         return dt_format_and_regex(datatype.format)
 
     @staticmethod
@@ -364,7 +368,7 @@ class date(dateTime):
     example = '2018-12-10'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         try:
             return dt_format_and_regex(datatype.format or 'yyyy-MM-dd')
         except ValueError:
@@ -393,7 +397,7 @@ class dateTimeStamp(dateTime):
     example = '2018-12-10T20:20:20'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         res = dt_format_and_regex(datatype.format or 'yyyy-MM-ddTHH:mm:ss.SSSSSSXXX')
         if not res['tz_marker']:
             raise ValueError('dateTimeStamp must have timezone marker')
@@ -409,7 +413,7 @@ class _time(dateTime):
     example = '20:20:20'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         return dt_format_and_regex(datatype.format or 'HH:mm:ss', no_date=True)
 
     @staticmethod
@@ -442,7 +446,7 @@ class duration(anyAtomicType):
     example = 'P3Y6M4DT12H30M5S'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         return {'format': datatype.format}
 
     @staticmethod
@@ -517,7 +521,7 @@ class decimal(anyAtomicType):
     _reverse_special = {v: k for k, v in _special.items()}
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         if datatype.format:
             return datatype.format if isinstance(datatype.format, dict) \
                 else {'pattern': datatype.format}
@@ -820,7 +824,7 @@ class _float(anyAtomicType):
     example = '5.3'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         if datatype.format:
             return datatype.format if isinstance(datatype.format, dict) \
                 else {'pattern': datatype.format}
@@ -987,7 +991,7 @@ class json(string):
     example = '{"a": [1,2]}'
 
     @staticmethod
-    def derived_description(datatype):
+    def derived_description(datatype: "csvw.Datatype") -> dict:
         if datatype.format:
             try:
                 schema = _json.loads(datatype.format)
