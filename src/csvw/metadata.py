@@ -177,7 +177,7 @@ def json_open(filename, mode='r', encoding='utf-8'):
     return io.open(filename, mode, encoding=encoding)
 
 
-def get_json(fname):
+def get_json(fname) -> typing.Union[list, dict]:
     fname = str(fname)
     if is_url(fname):
         return requests.get(fname).json(object_pairs_hook=collections.OrderedDict)
@@ -238,13 +238,13 @@ def uri_template_property():
         converter=converter_uriTemplate)
 
 
-class Link(object):
+class Link:
     """
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#link-properties
     """
 
-    def __init__(self, string):
+    def __init__(self, string: typing.Union[str, pathlib.Path]):
         if not isinstance(string, (str, pathlib.Path)):
             raise ValueError('Invalid value for link property')
         self.string = string
@@ -393,7 +393,7 @@ def valid_common_property(v):
 
 
 @attr.s
-class DescriptionBase(object):
+class DescriptionBase:
     """Container for
     - common properties (see http://w3c.github.io/csvw/metadata/#common-properties)
     - @-properties.
@@ -403,7 +403,10 @@ class DescriptionBase(object):
     at_props = attr.ib(default=attr.Factory(dict))
 
     @classmethod
-    def partition_properties(cls, d, type_name=None, strict=True):
+    def partition_properties(cls,
+                             d: typing.Union[dict, typing.Any],
+                             type_name: typing.Optional[str] = None,
+                             strict=True) -> typing.Union[dict, None]:
         if d and not isinstance(d, dict):
             return
         fields = attr.fields_dict(cls)
@@ -426,7 +429,7 @@ class DescriptionBase(object):
         return dict(common_props=c, at_props=a, **dd)
 
     @classmethod
-    def fromvalue(cls, d):
+    def fromvalue(cls, d: dict):
         return cls(**cls.partition_properties(d))
 
     def _iter_dict_items(self, omit_defaults):
@@ -448,7 +451,7 @@ class DescriptionBase(object):
             if k not in ('common_props', 'at_props'):
                 yield k, _asdict_multiple(v)
 
-    def asdict(self, omit_defaults=True):
+    def asdict(self, omit_defaults=True) -> dict:
         # Note: The `null` property is the only inherited, list-valued property where the default
         # is not the empty list. Thus, to allow setting it to empty, we must treat `null` as
         # special case here.
@@ -817,7 +820,7 @@ def column_reference():
 
 
 @attr.s
-class Reference(object):
+class Reference:
 
     resource = link_property()
     schemaReference = link_property()
@@ -829,7 +832,7 @@ class Reference(object):
 
 
 @attr.s
-class ForeignKey(object):
+class ForeignKey:
 
     columnReference = column_reference()
     reference = attr.ib(default=None)
@@ -1231,7 +1234,7 @@ class Table(TableLike):
             fpath.unlink()
         return rowcount
 
-    def check_primary_key(self, log=None, items=None):
+    def check_primary_key(self, log=None, items=None) -> bool:
         success = True
         if items is not None:
             warnings.warn('the items argument of check_primary_key '
