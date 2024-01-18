@@ -335,6 +335,15 @@ class TestTableGroup(object):
             for r1, r2 in zip(t.tabledict[tname].__iter__(), t2.tabledict[tname].__iter__()):
                 assert r1 == r2
 
+    def test_write_strict(self, tmp_path):
+        t = self._make_tablegroup(tmp_path)
+        tmp_path.joinpath('x').mkdir()
+        nmd = tmp_path.joinpath('x', 'cldf-metadata.json')
+        t.write(nmd, **{'csv.txt': [{'ID': '5', 'other': 'x'}]})
+        with pytest.raises(ValueError):
+            t.write(nmd, strict=True, **{'csv.txt': [{'ID': '5', 'other': 'x'}]})
+
+
     def test_all(self, tmp_path):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")

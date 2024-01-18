@@ -1171,19 +1171,26 @@ class Table(TableLike):
             raise ValueError('url property is required for Tables')
 
     @property
-    def local_name(self):
+    def local_name(self) -> typing.Union[str, None]:
         return self.url.string if self.url else None
 
-    def _get_dialect(self):
+    def _get_dialect(self) -> Dialect:
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()
 
-    def write(self, items: typing.Iterable[dict], fname=DEFAULT, base=None, _zipped=False):
+    def write(self,
+              items: typing.Iterable[typing.Union[dict, list, tuple]],
+              fname: typing.Optional[typing.Union[str, pathlib.Path]] = DEFAULT,
+              base: typing.Optional[typing.Union[str, pathlib.Path]] = None,
+              strict: typing.Optional[bool] = False,
+              _zipped: typing.Optional[bool] = False) -> typing.Union[str, int]:
         """
         Write row items to a CSV file according to the table schema.
 
         :param items: Iterator of `dict` storing the data per row.
         :param fname: Name of the file to which to write the data.
         :param base: Base directory relative to which to interpret table urls.
+        :param strict: Flag signaling to use strict mode when writing. This will raise `ValueError`\
+        if any row (dict) passed in `items` contains unspecified fieldnames.
         :param _zipped: Flag signaling whether the resulting data file should be zipped.
         :return: The CSV content if `fname==None` else the number of rows written.
         """
@@ -1200,9 +1207,14 @@ class Table(TableLike):
                 if isinstance(item, (list, tuple)):
                     row = [col.write(item[i]) for i, col in enumerate(non_virtual_cols)]
                 else:
+                    if strict:
+                        add = set(item.keys()) - {'{}'.format(col) for col in non_virtual_cols}
+                        if add:
+                            raise ValueError("dict contains fields not in fieldnames: {}".format(
+                                ', '.join("'{}'".format(field) for field in add)))
                     row = [
                         col.write(item.get(
-                            col.header, item.get('{0}'.format(col))))
+                            col.header, item.get('{}'.format(col))))
                         for col in non_virtual_cols]
                 rowcount += 1
                 writer.writerow(row)
@@ -1444,20 +1456,24 @@ class TableGroup(TableLike):
         """
         return {tname: list(t.iterdicts()) for tname, t in self.tabledict.items()}
 
-    def write(self, fname, _zipped=False, **items):
+    def write(self,
+              fname: typing.Union[str, pathlib.Path],
+              strict: typing.Optional[bool] = False,
+              _zipped: typing.Optional[bool] = False,
+              **items: typing.Iterable[typing.Union[list, tuple, dict]]):
         """
         Write a TableGroup's data and metadata to files.
 
-        :param fname:
-        :param items:
-        :return:
+        :param fname: Filename for the metadata file.
+        :param items: Keyword arguments are used to pass iterables of rows per table, where the \
+        table URL is specified as keyword.
         """
         fname = pathlib.Path(fname)
         for tname, rows in items.items():
-            self.tabledict[tname].write(rows, base=fname.parent, _zipped=_zipped)
+            self.tabledict[tname].write(rows, base=fname.parent, strict=strict, _zipped=_zipped)
         self.to_file(fname)
 
-    def copy(self, dest):
+    def copy(self, dest: typing.Union[pathlib.Path, str]):
         """
         Write a TableGroup's data and metadata to files relative to `dest`, adapting the `base`
         attribute.
@@ -1472,10 +1488,10 @@ class TableGroup(TableLike):
         self.to_file(self._fname)
 
     @property
-    def tabledict(self):
+    def tabledict(self) -> typing.Dict[str, Table]:
         return {t.local_name: t for t in self.tables}
 
-    def foreign_keys(self):
+    def foreign_keys(self) -> typing.List[typing.Tuple[Table, list, Table, list]]:
         return [
             (
                 self.tabledict[fk.reference.resource.string],

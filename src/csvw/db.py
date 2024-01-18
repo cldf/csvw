@@ -71,12 +71,12 @@ TYPE_MAP = {
 
 class SchemaTranslator(typing.Protocol):
     def __call__(self, table: str, column: typing.Optional[str] = None) -> str:
-        ...
+        ...  # pragma: no cover
 
 
 class ColumnTranslator(typing.Protocol):
     def __call__(self, column: str) -> str:
-        ...
+        ...  # pragma: no cover
 
 
 def quoted(*names):
