@@ -1,8 +1,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+Version 3.3.0
+-------------
 
 - Fixed handling of null values for list-valued columns when reading from sqlite db.
 - Added flag to force writing CSVW data in "strict" mode, see https://github.com/cldf/csvw/issues/57
