@@ -2,12 +2,11 @@ Changelog
 =========
 
 
-Unreleased
-----------
+Version 3.3.1
+-------------
 
 - Made sure the `_parent` attribute is excluded for equality comparisons of `Description` objects
   in order to stay compatible with attrs >= 24.1.
-
 
 
 Version 3.3.0
