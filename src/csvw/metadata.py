@@ -662,8 +662,10 @@ class Description(DescriptionBase):
     """
 
     # To be able to resolve inheritance chains, we also provide a place to store a
-    # reference to the containing object:
-    _parent = attr.ib(default=None, repr=False)
+    # reference to the containing object. Note that this attribute is ignored when judging
+    # equality between objects. Thus, identically specified columns of different tables will be
+    # considered equal.
+    _parent = attr.ib(default=None, repr=False, eq=False)
 
     aboutUrl = uri_template_property()
     datatype = attr.ib(

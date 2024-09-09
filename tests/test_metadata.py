@@ -41,6 +41,22 @@ def test_Link(link, base, res):
     assert csvw.Link(link).resolve(base) == res
 
 
+class TestColumnEquality(object):
+
+    def test_get_column(self):
+        t1 = csvw.Table.fromvalue({
+            "url": '1.csv',
+            "tableSchema": {"columns": [{"name": "col1", "datatype": "string"}]}
+        })
+        t2 = csvw.Table.fromvalue({
+            "url": '2.csv',
+            "tableSchema": {"columns": [{"name": "col1", "datatype": "string"}]}
+        })
+        # Columns derived from identical specifications are considered equal even if they are used
+        # in different tables:
+        assert t1.tableSchema.columns[0] == t2.tableSchema.columns[0]
+
+
 class TestColumnAccess(object):
 
     def test_get_column(self):
@@ -342,7 +358,6 @@ class TestTableGroup(object):
         t.write(nmd, **{'csv.txt': [{'ID': '5', 'other': 'x'}]})
         with pytest.raises(ValueError):
             t.write(nmd, strict=True, **{'csv.txt': [{'ID': '5', 'other': 'x'}]})
-
 
     def test_all(self, tmp_path):
         with warnings.catch_warnings():
