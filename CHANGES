@@ -7,6 +7,7 @@ unreleased
 
 - Improve compatibility with frictionless framework.
 - Added experimental csvw2sqlite command.
+- Test on python 3.13.
 
 
 Version 3.3.1
