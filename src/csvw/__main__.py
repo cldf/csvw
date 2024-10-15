@@ -123,5 +123,25 @@ def csvw2json(args=None, test=False):
     return exit(0, test=test)
 
 
+def csvw2sqlite(args=None, test=False):  # pragma: no cover
+    args = parsed_args(
+        "Convert CSVW to JSON, see https://w3c.github.io/csvw/csv2json/",
+        args,
+        (
+            ['url'],
+            dict(help='URL or local path to CSVW metadata file describing a TableGroup.\n\n'
+                      'Note that not all valid CSVW datasets can be converted to SQLite. One '
+                      'limitation is that all tables which are referenced by foreign keys must '
+                      'have a primary key.')),
+        (
+            ['output'],
+            dict(help='Path for the generated SQLite database file.')),
+    )
+    tg = TableGroup.from_file(args.url)
+    db = Database(tg, args.output)
+    db.write_from_tg(_force=True)
+    return exit(0, test=test)
+
+
 if __name__ == '__main__':  # pragma: no cover
     csvw2json()

@@ -236,7 +236,7 @@ class TableSpec(object):
                             fk.reference.columnReference,
                             fk.reference.resource)
                     assert spec.primary_key and len(spec.primary_key) == 1, \
-                        'Table {0} with list-valued foreign must have non-composite ' \
+                        'Table {0} referenced by list-valued foreign key must have non-composite ' \
                         'primary key'.format(spec.name)
                     spec.many_to_many[fk.columnReference[0]] = TableSpec.association_table(
                         spec.name,

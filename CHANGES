@@ -6,6 +6,7 @@ unreleased
 ----------
 
 - Improve compatibility with frictionless framework.
+- Added experimental csvw2sqlite command.
 
 
 Version 3.3.1
