@@ -130,6 +130,9 @@ def convert_dialect(rsc):
     https://specs.frictionlessdata.io/csv-dialect/
     """
     d = rsc.get('dialect', {})
+    # Work around https://github.com/frictionlessdata/frictionless-py/issues/1506
+    if 'csv' in d:
+        d = d['csv']
     res = {}
     if d.get('delimiter'):
         res['delimiter'] = d['delimiter']
