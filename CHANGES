@@ -2,8 +2,8 @@ Changelog
 =========
 
 
-unreleased
-----------
+Version 3.4.0
+-------------
 
 - Improve compatibility with frictionless framework.
 - Added experimental csvw2sqlite command.
