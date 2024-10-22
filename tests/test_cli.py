@@ -6,7 +6,7 @@ import argparse
 
 import pytest
 
-from csvw.__main__ import csvw2json, csvw2datasette, csvwdescribe, csvwvalidate
+from csvw.__main__ import csvw2json, csvw2datasette, csvwdescribe, csvwvalidate, csvw2markdown
 
 
 def relpath(fname):
@@ -28,6 +28,11 @@ def mdname():
     return relpath('csv.txt-metadata.json')
 
 
+@pytest.fixture
+def multitable_mdname():
+    return relpath('multitable/metadata.json')
+
+
 def run(func, **kw):
     return func(argparse.Namespace(**kw), test=True)
 
@@ -42,6 +47,16 @@ def test_csvw2json(csvname, mdname, capsys):
     run(csvw2json, url=relpath('no-metadata.csv'))
     out, _ = capsys.readouterr()
     assert json.loads(out)
+
+
+def test_csvw2markdown(mdname, multitable_mdname, capsys):
+    assert run(csvw2markdown, url=mdname) == 0
+    out, _ = capsys.readouterr()
+    assert 'Described by' in out
+
+    assert run(csvw2markdown, url=multitable_mdname) == 0
+    out, _ = capsys.readouterr()
+    assert 'References' in out
 
 
 def test_csvwvalidate(mdname, tmp_path):

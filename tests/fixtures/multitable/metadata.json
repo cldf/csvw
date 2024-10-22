@@ -1,0 +1,60 @@
+{
+    "@context": [
+        "http://www.w3.org/ns/csvw",
+        {
+            "@language": "en"
+        }
+    ],
+    "dc:title": "the data",
+    "dc:description": "desc",
+    "dc:format": "example",
+    "dc:dunno": [{"dc:stuff":  "https://example.org", "key2":  3}],
+    "dc:extent": "",
+    "https://schema.org/image": {
+      "https://schema.org/contentUrl": "fig.png",
+      "https://schema.org/caption": "Sample record."
+    },
+    "dialect": {
+        "header": false,
+        "encoding": "utf-8-sig"
+    },
+    "tables": [
+        {
+            "url": "t1.csv",
+            "tableSchema": {
+                "columns": [
+                    {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
+                    {"datatype": "string", "separator":  ";"},
+                    {"name":  "int", "datatype":  {"base": "integer", "minimum":  3, "maximum":  5}},
+                    {"name": "choice", "datatype": {"base": "string", "format": "a|b|c"}},
+                    {"name": "regex", "datatype": {"base": "string", "format": "[0-9]+"}},
+                    {"name":  "FK"}
+                ],
+                "primaryKey": ["ID"],
+                "foreignKeys": [
+                   {
+                        "columnReference": [
+                            "FK"
+                        ],
+                        "reference": {
+                            "resource": "t2.csv",
+                            "columnReference": [
+                                "ID"
+                            ]
+                        }
+                   }
+                ]
+            }
+        },
+      {
+        "url": "t2.csv",
+        "tableSchema": {
+          "columns": [
+            {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
+            {"datatype": "string"}
+          ],
+          "primaryKey": ["ID"]
+        }
+      }
+    ]
+}

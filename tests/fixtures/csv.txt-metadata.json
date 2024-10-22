@@ -6,6 +6,11 @@
         }
     ],
     "dc:title": "the data",
+    "dc:description": "desc",
+    "https://schema.org/image": {
+      "https://schema.org/contentUrl": "fig.png",
+      "https://schema.org/caption": "Sample record."
+    },
     "dialect": {
         "header": false,
         "encoding": "utf-8-sig"
@@ -17,7 +22,8 @@
                 "columns": [
                     {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
                     {"datatype": "string"}
-                ]
+                ],
+                "primaryKey": ["ID"]
             }
         }
     ]

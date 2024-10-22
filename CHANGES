@@ -2,6 +2,12 @@ Changelog
 =========
 
 
+unreleased
+----------
+
+- Added csvw2markdown command.
+
+
 Version 3.4.0
 -------------
 
