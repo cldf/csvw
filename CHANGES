@@ -2,10 +2,11 @@ Changelog
 =========
 
 
-unreleased
-----------
+Version 3.5.0
+-------------
 
 - Added csvw2markdown command.
+- Added support for py3.13, dropped support for py3.8.
 
 
 Version 3.4.0
