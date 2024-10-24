@@ -2,6 +2,12 @@ Changelog
 =========
 
 
+Version 3.5.1
+-------------
+
+Re-instate support for py3.8, since it's still supported on Ubuntu 20.04 lts.
+
+
 Version 3.5.0
 -------------
 
