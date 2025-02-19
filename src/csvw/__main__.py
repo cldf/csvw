@@ -5,7 +5,7 @@ import pathlib
 import argparse
 import subprocess
 
-from colorama import init, Fore, Style
+from termcolor import colored
 
 from csvw import CSVW, TableGroup
 from csvw.db import Database
@@ -61,7 +61,6 @@ def csvwdescribe(args=None, test=False):
 
 
 def csvwvalidate(args=None, test=False):
-    init()
     args = parsed_args(
         "Validate a (set of) CSV file(s) described by CSVW metadata.",
         args,
@@ -72,18 +71,18 @@ def csvwvalidate(args=None, test=False):
     try:
         csvw = CSVW(args.url, validate=True)
         if csvw.is_valid:
-            print(Style.BRIGHT + Fore.GREEN + 'OK')
+            print(colored('OK', 'green', attrs=['bold']))
         else:
             ret = 1
-            print(Style.BRIGHT + Fore.RED + 'FAIL')
+            print(colored('FAIL', 'red', attrs=['bold']))
             if args.verbose:
                 for w in csvw.warnings:
-                    print(Style.DIM + str(w.message))
+                    print(colored(str(w.message), 'blue'))
     except ValueError as e:
         ret = 2
-        print(Style.BRIGHT + Fore.RED + 'FAIL')
+        print(colored('FAIL', 'red', attrs=['bold']))
         if args.verbose:
-            print(Style.DIM + Fore.BLUE + str(e))
+            print(colored(str(e), 'blue'))
     return exit(ret, test=test)
 
 
