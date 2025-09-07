@@ -49,6 +49,7 @@ def test_datatypes(tg, datatype):
     data = db.read()['data']
     assert data[0]['v1'] == v
     assert data[0]['v2'] is None
+    db._connection.close()
 
 
 def test_list_valued(tg, translate):
@@ -62,6 +63,7 @@ def test_list_valued(tg, translate):
     assert data[0]['vv'] == ['a', 'b', ' c']
     assert data[1]['vv'] == []
     db.write(data=[{'v': ['a', 'b', None]}])
+    db._connection.close()
 
 
 def test_list_valued_non_text(tg, translate):
@@ -72,6 +74,7 @@ def test_list_valued_non_text(tg, translate):
     data = db.read()['data']
     assert data[0]['vv'] == [1, 2, 3]
     assert data[1]['vv'] is None
+    db._connection.close()
 
 
 def test_required(tg):
@@ -79,6 +82,7 @@ def test_required(tg):
     db = Database(tg)
     with pytest.raises(sqlite3.IntegrityError):
         db.write(data=[{'v': None}])
+    db._connection.close()
 
 
 @pytest.mark.parametrize(
@@ -106,6 +110,7 @@ def test_constraints(tg, datatype, value, error):
             db.write(data=[{'v': value}])
     else:
         db.write(data=[{'v': value}])
+    db._connection.close()
 
 
 def test_file(tmp_path, tg):
@@ -163,6 +168,7 @@ def test_foreign_keys(tg, translate):
     db.write(ref=[{'ref': 'x'}], data=[{'v': 'x'}])
     # 'vv' is used as column name as specified by the translate fixture:
     assert 'vv' in db.read()['data'][0]
+    db._connection.close()
 
 
 def test_self_referential_foreign_keys(tg):
@@ -177,13 +183,16 @@ def test_self_referential_foreign_keys(tg):
     db = Database(tg)
     db.write(data=[{'id': '1', 'ref': '2'}, {'id': '2', 'ref': None}])
     assert len(db.read()['data']) == 2
+    db._connection.close()
 
     db = Database(tg, drop_self_referential_fks=False)
     with pytest.raises(sqlite3.IntegrityError):
         db.write(data=[{'id': '1', 'ref': '2'}, {'id': '2', 'ref': None}])
+    db._connection.close()
 
     db = Database(tg, drop_self_referential_fks=False)
     db.write(data=[{'id': '2', 'ref': None}, {'id': '1', 'ref': '2'}])
+    db._connection.close()
 
 
 @pytest.fixture
@@ -232,6 +241,7 @@ def test_many_to_many(tg_with_foreign_keys):
     # Associations between the same pair of tables are grouped by foreign key column:
     assert res['ref1'] == ['y', 'x']
     assert res['ref2'] == []
+    db._connection.close()
 
 
 def test_many_to_many_no_context(tg_with_foreign_keys):
@@ -249,6 +259,7 @@ def test_many_to_many_no_context(tg_with_foreign_keys):
     res = db.read()['ref'][0]
     # The context will then be returned for **each** foreign key column!
     assert res['ref2'] == [('y', '1234'), ('x', '1234')]
+    db._connection.close()
 
 
 def test_many_to_many_self_referential(tg):
@@ -267,6 +278,7 @@ def test_many_to_many_self_referential(tg):
         db.write(data=[{'v': 'x', 'ref': ['y']}])
     db.write(data=[{'v': 'x', 'ref': []}, {'v': 'y', 'ref': ['x', 'y']}])
     assert db.read()['data'][1]['ref'] == ['x', 'y']
+    db._connection.close()
 
 
 def test_integration():
@@ -278,6 +290,7 @@ def test_integration():
         db.write_from_tg()
         for table, items in db.read().items():
             assert items == orig[table]
+        db._connection.close()
 
 
 def test_write_file_exists(tmp_path):
