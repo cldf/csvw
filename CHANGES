@@ -2,8 +2,8 @@ Changelog
 =========
 
 
-unreleased
-----------
+Version 3.6.0
+-------------
 
 - Switch dependency from colorama to termcolor, which seems to be better maintained.
 - Enhanced `dsv.UnicodeWriter.writerows` to allow simpler writing of CSV rows from `dict` objects.
