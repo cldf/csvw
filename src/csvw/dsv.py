@@ -88,6 +88,7 @@ class UnicodeWriter:
                 return row
         self._escapedoubled = _escapedoubled
         self._close = False
+        self._rows_written = 0
 
     def __enter__(self):
         if isinstance(self.f, (str, pathlib.Path)):
@@ -116,11 +117,27 @@ class UnicodeWriter:
         if self._close:
             self.f.close()
 
-    def writerow(self, row: typing.Union[tuple, list]):
+    def writerow(self, row: typing.Iterable[typing.Union[str, None]]):
         self.writer.writerow(self._escapedoubled(row))
+        self._rows_written += 1
 
-    def writerows(self, rows: typing.Iterable[typing.Union[tuple, list]]):
-        for row in rows:
+    def writerows(self, rows: typing.Iterable[typing.Union[tuple, list, dict]]):
+        """
+        Writes each row in `rows` formatted as CSV row. This behaves as
+        [`csvwriter.writerows`](https://docs.python.org/3/library/csv.html#csv.csvwriter.writerows)
+        except when an iterable of `dict` objects is passed. In that case, it is assumed that all
+        items in `rows` are `dict`s and all have the same keys in the same order (as what would
+        be read by `UnicodeDictReader`). Then, the keys of the first item are written as header row
+        and the values of each row are written as subsequent rows.
+
+        :param rows: The data to be written.
+        """
+        for i, row in enumerate(rows):
+            if isinstance(row, dict):
+                if i == 0 and not self._rows_written:
+                    # We write a header row.
+                    self.writerow(row.keys())
+                row = row.values()
             self.writerow(row)
 
 
@@ -284,7 +301,7 @@ class UnicodeDictReader(UnicodeReader):
                 warnings.warn('Duplicate column names!')
         return self._fieldnames
 
-    def __next__(self):
+    def __next__(self) -> collections.OrderedDict:
         if self.line_num == 0:
             # Used only for its side effect.
             self.fieldnames
@@ -298,7 +315,7 @@ class UnicodeDictReader(UnicodeReader):
             row = super(UnicodeDictReader, self).__next__()
         return self.item(row)
 
-    def item(self, row):
+    def item(self, row) -> collections.OrderedDict:
         d = collections.OrderedDict((k, v) for k, v in zip(self.fieldnames, row))
         lf = len(self.fieldnames)
         lr = len(row)

@@ -8,7 +8,7 @@ from collections import OrderedDict
 import pytest
 
 from csvw.dsv import (iterrows, UnicodeReader, UnicodeDictReader, UnicodeWriter, rewrite,
-    Dialect, add_rows, filter_rows_as_dict, UnicodeReaderWithLineNumber)
+    Dialect, add_rows, filter_rows_as_dict, UnicodeReaderWithLineNumber, reader)
 
 TESTDIR = pathlib.Path(__file__).parent / 'fixtures'
 
@@ -221,3 +221,27 @@ def test_UnicodeReader_R_encodings(tmp_path):
     with UnicodeWriter(p, dialect=Dialect(encoding='UTF-8-BOM')) as w:
         w.writerows([['col1', 'col2'], ['val1', 'val2']])
     assert p.read_bytes()[:4] == b'\xef\xbb\xbfc'
+
+
+def test_roundtrip_dicts(tmp_path):
+    p = tmp_path / 'test.csv'
+    text = 'cöl1,col2\r\nväl1,val2\r\n'
+    p.write_text(text, encoding='utf8')
+
+    def modify(d):
+        d['col2'] = 'x'
+        return d
+
+    with UnicodeWriter() as w:
+        w.writerows(modify(d) for d in reader(p, dicts=True))
+        assert w.read().decode('utf8') == text.replace('val2', 'x')
+
+
+def test_roundtrip_dicts_only_one_header(tmp_path):
+    p = tmp_path / 'test2.csv'
+    rows = [dict(a='1', b='2')]
+    with UnicodeWriter(p) as w:
+        w.writerows(rows)
+        w.writerows(rows)
+
+    assert len(list(reader(p, dicts=True))) == 2, 'Header lines should only be written once!'
