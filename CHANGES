@@ -5,6 +5,8 @@ unreleased
 ----------
 
 - fixed expanding of URLs to account for QNames used as URI template.
+- adapted `metadata.NAMESPACES` to contain the prefixes defined in the RDFa
+  core initial context (https://www.w3.org/2011/rdfa-context/rdfa-1.1).
 
 
 
