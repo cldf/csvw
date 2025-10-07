@@ -1,6 +1,12 @@
 Changelog
 =========
 
+unreleased
+----------
+
+- fixed expanding of URLs to account for QNames used as URI template.
+
+
 
 Version 3.6.0
 -------------

@@ -1098,7 +1098,7 @@ class TableLike(Description):
         return self._parent._fname.parent if (self._parent and self._parent._fname) else \
             (self._fname.parent if self._fname else None)
 
-    def expand(self, tmpl: URITemplate, row: dict, _row, _name=None, qname=False, uri=False) -> str:
+    def expand(self, tmpl: URITemplate, row: dict, _row, _name=None, qname=False) -> str:
         """
         Expand a `URITemplate` using `row`, `_row` and `_name` as context and resolving the result
         against `TableLike.url`.
@@ -1113,25 +1113,28 @@ class TableLike(Description):
             'https://raw.githubusercontent.com/path?1#2'
 
         """
-        assert not (qname and uri)
         if tmpl is INVALID:
             return self.url.resolve(self.base)
-        res = Link(
-            tmpl.expand(
-                _row=_row, _name=_name, **{_k: _v for _k, _v in row.items() if isinstance(_k, str)}
-            )).resolve(self.url.resolve(self.base) if self.url else self.base)
+
+        for prefix, url in NAMESPACES.items():
+            if tmpl.uri.startswith(prefix + ':'):
+                # If the URI Template is a QName, we expand it to a URL to prevent `Link.resolve`
+                # from turning it into a local path.
+                res = '{}{}'.format(url, tmpl.uri.split(':')[1])
+                break
+        else:
+            res = Link(
+                tmpl.expand(
+                    _row=_row,
+                    _name=_name,
+                    **{_k: _v for _k, _v in row.items() if isinstance(_k, str)}
+                )).resolve(self.url.resolve(self.base) if self.url else self.base)
         if not isinstance(res, pathlib.Path):
             if qname:
                 for prefix, url in NAMESPACES.items():
                     if res.startswith(url):
                         res = res.replace(url, prefix + ':')
                         break
-            if uri:
-                if res != 'rdf:type':
-                    for prefix, url in NAMESPACES.items():
-                        if res.startswith(prefix + ':'):
-                            res = res.replace(prefix + ':', url)
-                            break
         return res
 
 

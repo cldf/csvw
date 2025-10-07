@@ -79,8 +79,7 @@ class Triple:
         is_type = prop == 'rdf:type'
         valueUrl = col.valueUrl if col else table.inherit('valueUrl')
         if valueUrl:
-            val = table.expand(
-                valueUrl, row, _row=rownum, _name=_name, qname=is_type, uri=not is_type)
+            val = table.expand(valueUrl, row, _row=rownum, _name=_name, qname=is_type)
         val = format_value(val, col)
         s = None
         aboutUrl = col.aboutUrl if col else None

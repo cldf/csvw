@@ -12,7 +12,7 @@
     "url": "csv.txt",
     "tableSchema": {
         "columns": [
-            {"name": "ID", "datatype": {"base": "string", "minLength": 3}},
+            {"name": "ID", "propertyUrl": "dc:identifier","datatype": {"base": "string", "minLength": 3}},
             {"datatype": "string"}
         ]
     }
