@@ -1,8 +1,8 @@
 Changelog
 =========
 
-unreleased
-----------
+Version 3.7.0
+-------------
 
 - fixed expanding of URLs to account for QNames used as URI template.
 - adapted `metadata.NAMESPACES` to contain the prefixes defined in the RDFa
