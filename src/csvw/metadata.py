@@ -7,7 +7,6 @@ This module implements (partially) the W3C recommendation
 
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
-import datetime
 import io
 import re
 import json
@@ -16,6 +15,7 @@ import decimal
 import pathlib
 from typing import Optional, Union, Any, Literal
 import zipfile
+import datetime
 import operator
 import warnings
 import functools
@@ -695,8 +695,8 @@ class Description(DescriptionBase):
         if not all(isinstance(vv, str) for vv in self.null):
             warnings.warn('Invalid null property')
             self.null = [""]
-        self.ordered = utils.converter( bool, False, self.ordered, allow_none=True)
-        self.separator = utils.converter( str, None, self.separator, allow_none=True)
+        self.ordered = utils.converter(bool, False, self.ordered, allow_none=True)
+        self.separator = utils.converter(str, None, self.separator, allow_none=True)
         self.textDirection = utils.converter(
             str,
             None,
@@ -740,8 +740,8 @@ class Column(Description):
 
     def __post_init__(self):
         super().__post_init__()
-        self.name = utils.converter( str, None, self.name, allow_none=True)
-        self.suppressOutput = utils.converter( bool, False, self.suppressOutput)
+        self.name = utils.converter(str, None, self.name, allow_none=True)
+        self.suppressOutput = utils.converter(bool, False, self.suppressOutput)
 
         if self.titles is not None:
             try:
@@ -750,7 +750,7 @@ class Column(Description):
                 warnings.warn('Invalid titles property')
                 self.titles = None
 
-        self.virtual = utils.converter( bool, False, self.virtual)
+        self.virtual = utils.converter(bool, False, self.virtual)
 
     def __str__(self):
         return self.name or \
@@ -928,7 +928,6 @@ class Schema(Description):
                     names.add(col.name)
                 seen.add(col.header)
             col._parent = self
-            #col._number = i + 1
         for colref in self.primaryKey or []:
             col = self.columndict.get(colref)
             if col and not col.name:
@@ -1523,7 +1522,6 @@ class TableGroup(TableLike):
     def validate_schema(self, strict=False):
         try:
             for st, sc, tt, tc in self.foreign_keys():
-                print(sc, tc)
                 if len(sc) != len(tc):
                     raise ValueError(
                         'Foreign key error: non-matching number of columns in source and target')
@@ -1561,54 +1559,83 @@ class TableGroup(TableLike):
         except ValueError as e:
             success = False
             log_or_raise(str(e), log=log, level='error')
-        fkeys = self.foreign_keys()
+        fkeys = [ForeignKeyInstance(*fk) for fk in self.foreign_keys()]
         # FIXME: We only support Foreign Key references between tables!
-        fkeys = sorted(fkeys, key=lambda x: (x[0].local_name, x[1], x[2].local_name))
+        fkeys = sorted(
+            fkeys,
+            key=lambda x: (x.source_table.local_name, x.source_colref, x.target_table.local_name))
         # Grouping by local_name of tables - even though we'd like to have the table objects
         # around, too. This it to prevent going down the rabbit hole of comparing table objects
         # for equality, when comparison of the string names is enough.
-        for _, grp in itertools.groupby(fkeys, lambda x: x[0].local_name):
-            grp = list(grp)
-            table = grp[0][0]
-            t_fkeys = [(key, [(child, ref) for _, _, child, ref in kgrp])
-                       for key, kgrp in itertools.groupby(grp, lambda x: x[1])]
-            get_seen = [(operator.itemgetter(*key), set()) for key, _ in t_fkeys]
-            for row in table.iterdicts(log=log):
-                for get, seen in get_seen:
-                    if get(row) in seen:
-                        # column references for a foreign key are not unique!
-                        if strict:
-                            success = False
-                    seen.add(get(row))
-            for (key, children), (_, seen) in zip(t_fkeys, get_seen):
-                single_column = (len(key) == 1)
-                for child, ref in children:
-                    get_ref = operator.itemgetter(*ref)
-                    for fname, lineno, item in child.iterdicts(log=log, with_metadata=True):
-                        colref = get_ref(item)
-                        if colref is None:
-                            continue
-                        elif single_column and isinstance(colref, list):
-                            # We allow list-valued columns as foreign key columns in case
-                            # it's not a composite key. If a foreign key is list-valued, we
-                            # check for a matching row for each of the values in the list.
-                            colrefs = colref
-                        else:
-                            colrefs = [colref]
-                        for colref in colrefs:
-                            if not single_column and None in colref:  # pragma: no cover
-                                # TODO: raise if any(c is not None for c in colref)?
-                                continue
-                            elif colref not in seen:
-                                log_or_raise(
-                                    '{0}:{1} Key `{2}` not found in table {3}'.format(
-                                        fname,
-                                        lineno,
-                                        colref,
-                                        table.url.string),
-                                    log=log)
-                                success = False
+        for _, grp in itertools.groupby(fkeys, lambda x: x.source_table.local_name):
+            success = self._check_group(success, list(grp), strict, log)
         return success
+
+    def _check_group(self, success, grp: list['ForeignKeyInstance'], strict, log):
+        """Check all foreign keys defined on one table."""
+        t_fkeys = [(key, [(fk.target_table, fk.target_colref) for fk in kgrp])
+                   for key, kgrp in itertools.groupby(grp, lambda x: x.source_colref)]
+        get_seen = [(operator.itemgetter(*key), set()) for key, _ in t_fkeys]
+        for row in grp[0].source_table.iterdicts(log=log):
+            for get, seen in get_seen:
+                if get(row) in seen:
+                    # column references for a foreign key are not unique!
+                    # https://w3c.github.io/csvw/tests/#manifest-validation#test258
+                    if strict:
+                        success = False
+                seen.add(get(row))
+        for (key, children), (_, seen) in zip(t_fkeys, get_seen):
+            for child, ref in children:
+                for fname, lineno, item in child.iterdicts(log=log, with_metadata=True):
+                    item = RowItem(
+                        table=grp[0].source_table,
+                        fname=fname,
+                        lineno=lineno,
+                        item=item,
+                        colref=operator.itemgetter(*ref)(item))
+                    success = self._check_item(success, item, seen, len(key) == 1, log)
+        return success
+
+    def _check_item(self, success, item, seen, single_column, log):  # pylint: disable=R0913,R0917
+        if item.colref is None:
+            return success
+        if single_column and isinstance(item.colref, list):
+            # We allow list-valued columns as foreign key columns in case
+            # it's not a composite key. If a foreign key is list-valued, we
+            # check for a matching row for each of the values in the list.
+            colrefs = item.colref
+        else:
+            colrefs = [item.colref]
+        for colref in colrefs:
+            if not single_column and None in colref:  # pragma: no cover
+                # TODO: raise if any(c is not None for c in colref)?
+                continue
+            if colref not in seen:
+                log_or_raise(f'{item} not found in table {item.table.url.string}', log=log)
+                success = False
+        return success
+
+
+@dataclasses.dataclass(frozen=True)
+class ForeignKeyInstance:
+    """Simple structure holding the specification of a foreign key."""
+    source_table: Table
+    source_colref: list[str]
+    target_table: Table
+    target_colref: list[str]
+
+
+@dataclasses.dataclass(frozen=True)
+class RowItem:
+    """Bundle properties of a table row for simpler checking."""
+    table: Table
+    fname: str
+    lineno: int
+    item: dict
+    colref: Union[str, list[str]]
+
+    def __str__(self):
+        return f'{self.fname}:{self.lineno} Key `{self.colref}`'
 
 
 class CSVW:
@@ -1634,24 +1661,7 @@ class CSVW:
             self.no_metadata = set(md.keys()) == {'@context', 'url'}
             if "http://www.w3.org/ns/csvw" not in md.get('@context', ''):
                 raise ValueError('Invalid or no @context')
-            if 'tables' in md:
-                if not md['tables'] or not isinstance(md['tables'], list):
-                    raise ValueError('Invalid TableGroup with empty tables property')
-                if is_url(url):
-                    self.t = TableGroup.from_url(url, data=md)
-                    self.t.validate_schema(strict=True)
-                else:
-                    self.t = TableGroup.from_file(url, data=md)
-            else:
-                if is_url(url):
-                    self.t = Table.from_url(url, data=md)
-                    if no_header:
-                        if self.t.dialect:
-                            self.t.dialect.header = False  # pragma: no cover
-                        else:
-                            self.t.dialect = Dialect(header=False)
-                else:
-                    self.t = Table.from_file(url, data=md)
+            self._set_tables(md, url, no_header)
             self.tables = self.t.tables if isinstance(self.t, TableGroup) else [self.t]
             for table in self.tables:
                 for col in table.tableSchema.columns:
@@ -1660,6 +1670,26 @@ class CSVW:
             self.common_props = self.t.common_props
         if w:
             self.warnings.extend(w)
+
+    def _set_tables(self, md, url, no_header):
+        if 'tables' in md:
+            if not md['tables'] or not isinstance(md['tables'], list):
+                raise ValueError('Invalid TableGroup with empty tables property')
+            if is_url(url):
+                self.t = TableGroup.from_url(url, data=md)
+                self.t.validate_schema(strict=True)
+            else:
+                self.t = TableGroup.from_file(url, data=md)
+        else:
+            if is_url(url):
+                self.t = Table.from_url(url, data=md)
+                if no_header:
+                    if self.t.dialect:
+                        self.t.dialect.header = False  # pragma: no cover
+                    else:
+                        self.t.dialect = Dialect(header=False)
+            else:
+                self.t = Table.from_file(url, data=md)
 
     @property
     def is_valid(self) -> bool:
@@ -1686,7 +1716,8 @@ class CSVW:
         return not bool(self.warnings)
 
     @property
-    def tablegroup(self):
+    def tablegroup(self) -> TableGroup:
+        """The table spec."""
         return self.t if isinstance(self.t, TableGroup) else \
             TableGroup(at_props={'base': self.t.base}, tables=self.tables)
 
@@ -1708,7 +1739,7 @@ class CSVW:
         if url and is_url(url):
             # §5.2 Link Header
             # https://w3c.github.io/csvw/syntax/#link-header
-            res = requests.head(url)
+            res = requests.head(url, timeout=10)
             no_header = bool(re.search(r'header\s*=\s*absent', res.headers.get('content-type', '')))
             desc = res.links.get('describedby')
             if desc and desc['type'] in [
@@ -1716,16 +1747,15 @@ class CSVW:
                 md = get_json(Link(desc['url']).resolve(url))
                 if describes(md, url):
                     return md, no_header
-                else:
-                    warnings.warn('Ignoring linked metadata because it does not reference the data')
+                warnings.warn('Ignoring linked metadata because it does not reference the data')
 
             # §5.3 Default Locations and Site-wide Location Configuration
             # https://w3c.github.io/csvw/syntax/
             # #default-locations-and-site-wide-location-configuration
-            res = requests.get(Link('/.well-known/csvm').resolve(url))
+            res = requests.get(Link('/.well-known/csvm').resolve(url), timeout=10)
             locs = res.text if res.status_code == 200 else '{+url}-metadata.json\ncsv-metadata.json'
             for line in locs.split('\n'):
-                res = requests.get(Link(URITemplate(line).expand(url=url)).resolve(url))
+                res = requests.get(Link(URITemplate(line).expand(url=url)).resolve(url), timeout=10)
                 if res.status_code == 200:
                     try:
                         md = res.json()
@@ -1793,14 +1823,14 @@ class CSVW:
             for rownum, (_, rowsourcenum, row) in enumerate(
                 table.iterdicts(with_metadata=True, strict=False), start=1)
         ]
-        if table._comments:
-            res['rdfs:comment'] = [c[1] for c in table._comments]
+        if table._comments:  # pylint: disable=W0212
+            res['rdfs:comment'] = [c[1] for c in table._comments]  # pylint: disable=W0212
         res['row'] = row
         return res
 
-    def _row_to_json(self, table, cols, row, rownum, rowsourcenum):
+    def _row_to_json(self, table, cols, row, rownum, rowsourcenum):  # pylint: disable=R0913,R0917
         res = collections.OrderedDict()
-        res['url'] = '{}#row={}'.format(table.url.resolve(table.base), rowsourcenum)
+        res['url'] = f'{table.url.resolve(table.base)}#row={rowsourcenum}'
         res['rownum'] = rownum
         if table.tableSchema.rowTitles:
             res['titles'] = [
@@ -1816,7 +1846,7 @@ class CSVW:
     def _describes(self, table, cols, row, rownum):
         triples = []
 
-        aboutUrl = table.tableSchema.inherit('aboutUrl')
+        aboutUrl = table.tableSchema.inherit('aboutUrl')  # pylint: disable=invalid-name
         if aboutUrl:
             triples.append(jsonld.Triple(
                 about=None, property='@id', value=table.expand(aboutUrl, row, _row=rownum)))
@@ -1828,16 +1858,14 @@ class CSVW:
 
             # Skip null values:
             null = col.inherit_null() if col else table.inherit_null()
-            if (null and v in null) or v == "" or (v is None) or \
-                    (col and col.separator and v == []):
+            if any([null and v in null, v == "", v is None, col and col.separator and v == []]):
                 continue
 
             triples.append(jsonld.Triple.from_col(
                 table,
                 col,
                 row,
-                '_col.{}'.format(i)
-                if (not table.tableSchema.columns and not self.no_metadata) else k,
+                f'_col.{i}' if (not table.tableSchema.columns and not self.no_metadata) else k,
                 v,
                 rownum))
 

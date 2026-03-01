@@ -69,7 +69,9 @@ class Dialect:
         self.skipColumns = utils.converter(int, 0, self.skipColumns, cond=lambda s: s >= 0)
         self.skipBlankRows = utils.converter(bool, False, self.skipBlankRows)
         self.skipInitialSpace = utils.converter(bool, False, self.skipInitialSpace)
-        self.trim = utils.converter((str, bool), 'false', str(self.trim).lower() if isinstance(self.trim, bool) else self.trim)
+        self.trim = utils.converter(
+            (str, bool), 'false', str(self.trim).lower()
+            if isinstance(self.trim, bool) else self.trim)
         assert self.trim in ['true', 'false', 'start', 'end'], 'invalid trim'
 
     def updated(self, **kw):

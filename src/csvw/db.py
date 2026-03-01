@@ -197,7 +197,8 @@ class TableSpec:
     name: str
     columns: list[ColSpec] = dataclasses.field(default_factory=list)
     foreign_keys: list = dataclasses.field(default_factory=list)
-    many_to_many: collections.OrderedDict = dataclasses.field(default_factory=collections.OrderedDict)
+    many_to_many: collections.OrderedDict = dataclasses.field(
+        default_factory=collections.OrderedDict)
     primary_key: Optional[list[str]] = None
 
     @classmethod
@@ -442,7 +443,8 @@ FROM {2} {3} GROUP BY {0}""".format(
                 for col in table.columns:
                     convert[self.translate(tname, col.name)] = [col.name, identity]
                     if col.csvw_type in TYPE_MAP:
-                        convert[self.translate(tname, col.name)][1] = TYPE_MAP[col.csvw_type].convert
+                        convert[self.translate(tname, col.name)][1] = \
+                            TYPE_MAP[col.csvw_type].convert
                     else:
                         convert[self.translate(tname, col.name)][1] = \
                             DATATYPES[col.csvw_type].to_python
