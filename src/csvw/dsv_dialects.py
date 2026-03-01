@@ -9,9 +9,10 @@ for the basic formatting parameters, CSVW recognizes a couple more, like `skipCo
     - `<https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`_
     - `<https://specs.frictionlessdata.io/csv-dialect/>`_
 """
-import attr
+import typing
 import warnings
 import functools
+import dataclasses
 
 from . import utils
 
@@ -20,15 +21,6 @@ __all__ = ['Dialect']
 ENCODING_MAP = {
     'UTF-8-BOM': 'utf-8-sig',  # Recognize the name of this encoding in R.
 }
-
-
-# FIXME: replace with attrs.validators.ge(0) from attrs 21.3.0
-def _non_negative(instance, attribute, value):
-    if value < 0:  # pragma: no cover
-        raise ValueError('{0} is not a valid {1}'.format(value, attribute.name))
-
-
-non_negative_int = [attr.validators.instance_of(int), _non_negative]
 
 
 def convert_encoding(s):
@@ -41,82 +33,47 @@ def convert_encoding(s):
         return 'utf-8'
 
 
-@attr.s
-class Dialect(object):
+@dataclasses.dataclass
+class Dialect:
     """
     A CSV dialect specification.
 
     .. seealso:: `<https://www.w3.org/TR/2015/REC-tabular-metadata-20151217/#dialect-descriptions>`_
     """
 
-    encoding = attr.ib(
-        default='utf-8',
-        converter=convert_encoding,
-        validator=attr.validators.instance_of(str))
+    encoding: str = 'utf-8'
+    lineTerminators: list[str] = dataclasses.field(default_factory=lambda: ['\r\n', '\n'])
+    quoteChar: str = '"'
+    doubleQuote: bool = True
+    skipRows: int = 0
+    commentPrefix: str = '#'
+    header: bool = True
+    headerRowCount: int = 1
+    delimiter: str = ','
+    skipColumns: int = 0
+    skipBlankRows: bool = False
+    skipInitialSpace: bool = False
+    trim: typing.Literal['true', 'false', 'start', 'end'] = 'false'
 
-    lineTerminators = attr.ib(
-        converter=functools.partial(utils.converter, list, ['\r\n', '\n']),
-        default=attr.Factory(lambda: ['\r\n', '\n']))
-
-    quoteChar = attr.ib(
-        converter=functools.partial(utils.converter, str, '"', allow_none=True),
-        default='"',
-    )
-
-    doubleQuote = attr.ib(
-        default=True,
-        converter=functools.partial(utils.converter, bool, True),
-        validator=attr.validators.instance_of(bool))
-
-    skipRows = attr.ib(
-        default=0,
-        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >= 0),
-        validator=non_negative_int)
-
-    commentPrefix = attr.ib(
-        default='#',
-        converter=functools.partial(utils.converter, str, '#', allow_none=True),
-        validator=attr.validators.optional(attr.validators.instance_of(str)))
-
-    header = attr.ib(
-        default=True,
-        converter=functools.partial(utils.converter, bool, True),
-        validator=attr.validators.instance_of(bool))
-
-    headerRowCount = attr.ib(
-        default=1,
-        converter=functools.partial(utils.converter, int, 1, cond=lambda s: s >= 0),
-        validator=non_negative_int)
-
-    delimiter = attr.ib(
-        default=',',
-        converter=functools.partial(utils.converter, str, ','),
-        validator=attr.validators.instance_of(str))
-
-    skipColumns = attr.ib(
-        default=0,
-        converter=functools.partial(utils.converter, int, 0, cond=lambda s: s >= 0),
-        validator=non_negative_int)
-
-    skipBlankRows = attr.ib(
-        default=False,
-        converter=functools.partial(utils.converter, bool, False),
-        validator=attr.validators.instance_of(bool))
-
-    skipInitialSpace = attr.ib(
-        default=False,
-        converter=functools.partial(utils.converter, bool, False),
-        validator=attr.validators.instance_of(bool))
-
-    trim = attr.ib(
-        default='false',
-        validator=attr.validators.in_(['true', 'false', 'start', 'end']),
-        converter=lambda v: functools.partial(
-            utils.converter,
-            (str, bool), 'false')('{0}'.format(v).lower() if isinstance(v, bool) else v))
+    def __post_init__(self):
+        self.encoding = convert_encoding(self.encoding)
+        self.line_terminators = utils.converter(list, ['\r\n', '\n'], self.line_terminators)
+        self.quoteChar = utils.converter(str, '"', self.quoteChar, allow_none=True)
+        self.doubleQuote = utils.converter(bool, True, self.doubleQuote)
+        self.skipRows = utils.converter(int, 0, self.skipRows, cond=lambda s: s >= 0)
+        self.commentPrefix = utils.converter(str, '#', self.commentPrefix, allow_none=True)
+        self.header = utils.converter(bool, True, self.header)
+        self.headerRowCount = utils.converter(
+            int, 1, self.headerRowCount, cond=lambda s: s >= 0)
+        self.delimiter = utils.converter(str, ',', self.delimiter)
+        self.skipColumns = utils.converter(int, 0, self.skipColumns, cond=lambda s: s >= 0)
+        self.skipBlankRows = utils.converter(bool, False, self.skipBlankRows)
+        self.skipInitialSpace = utils.converter(bool, False, self.skipInitialSpace)
+        self.trim = utils.converter((str, bool), 'false', str(self.trim).lower() if isinstance(self.trim, bool) else self.trim)
+        assert self.trim in ['true', 'false', 'start', 'end'], 'invalid trim'
 
     def updated(self, **kw):
-        res = self.__class__(**attr.asdict(self))
+        res = self.__class__(**dataclasses.asdict(self))
         for k, v in kw.items():
             setattr(res, k, v)
         return res
@@ -133,7 +90,9 @@ class Dialect(object):
     @functools.cached_property
     def trimmer(self):
         return {
+            True: lambda s: s.strip(),
             'true': lambda s: s.strip(),
+            False: lambda s: s,
             'false': lambda s: s,
             'start': lambda s: s.lstrip(),
             'end': lambda s: s.rstrip()

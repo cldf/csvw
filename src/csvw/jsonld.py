@@ -6,8 +6,8 @@ import decimal
 import pathlib
 import datetime
 import collections
+import dataclasses
 
-import attr
 from rdflib import Graph, URIRef, Literal
 from rfc3986 import URIReference
 from isodate.duration import Duration
@@ -50,14 +50,14 @@ def format_value(value, col):
     return value
 
 
-@attr.s
+@dataclasses.dataclass
 class Triple:
     """
     A table cell's data as RDF triple.
     """
-    about = attr.ib()
-    property = attr.ib()
-    value = attr.ib()
+    about: str
+    property: str
+    value: str
 
     def as_rdflib_triple(self):
         return (

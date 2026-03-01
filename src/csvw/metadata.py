@@ -7,13 +7,14 @@ This module implements (partially) the W3C recommendation
 
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
+import datetime
 import io
 import re
 import json
 import shutil
 import decimal
 import pathlib
-import typing
+from typing import Optional, Union, Any, Literal
 import zipfile
 import operator
 import warnings
@@ -21,10 +22,11 @@ import functools
 import itertools
 import contextlib
 import collections
+from collections.abc import Iterable, Generator
+import dataclasses
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from language_tags import tags
-import attr
 import requests
 import uritemplate
 
@@ -175,6 +177,9 @@ valueUrl
 virtual""".split()
 is_url = utils.is_url
 
+OrderedType = Union[
+    int, float, decimal.Decimal, datetime.date, datetime.datetime, datetime.timedelta]
+
 
 class Invalid:
     pass
@@ -183,7 +188,7 @@ class Invalid:
 INVALID = Invalid()
 
 
-@attr.s
+@dataclasses.dataclass
 class Dialect(BaseDialect):
     """
     The spec is ambiguous regarding a default for the commentPrefix property:
@@ -204,10 +209,7 @@ class Dialect(BaseDialect):
     So, in order to pass the number formatting tests, with column names like `##.#`, we chose
     the second reading - i.e. by default no rows are treated as comments.
     """
-    commentPrefix = attr.ib(
-        default=None,
-        converter=functools.partial(utils.converter, str, None, allow_none=True),
-        validator=attr.validators.optional(attr.validators.instance_of(str)))
+    commentPrefix: str = None
 
 
 def json_open(filename, mode='r', encoding='utf-8'):
@@ -215,7 +217,7 @@ def json_open(filename, mode='r', encoding='utf-8'):
     return io.open(filename, mode, encoding=encoding)
 
 
-def get_json(fname) -> typing.Union[list, dict]:
+def get_json(fname) -> Union[list, dict]:
     fname = str(fname)
     if is_url(fname):
         return requests.get(fname).json(object_pairs_hook=collections.OrderedDict)
@@ -254,26 +256,13 @@ class URITemplate(uritemplate.URITemplate):
         return '{}'.format(self)
 
 
-def uri_template_property():
-    """
-
-    Note: We do not currently provide support for supplying the "_" variables like "_row"
-    when expanding a URI template.
-
-    .. seealso:: http://w3c.github.io/csvw/metadata/#uri-template-properties
-    """
-    def converter_uriTemplate(v):
-        if v is None:
-            return None
-        if not isinstance(v, str):
-            warnings.warn('Invalid value for aboutUrl property')
-            return INVALID
-        return URITemplate(v)
-
-    return attr.ib(
-        default=None,
-        validator=attr.validators.optional(attr.validators.instance_of((URITemplate, Invalid))),
-        converter=converter_uriTemplate)
+def convert_uri_template(v):
+    if v is None:
+        return None
+    if not isinstance(v, str):
+        warnings.warn('Invalid value for Url property')
+        return INVALID
+    return URITemplate(v)
 
 
 class Link:
@@ -282,7 +271,7 @@ class Link:
     .. seealso:: http://w3c.github.io/csvw/metadata/#link-properties
     """
 
-    def __init__(self, string: typing.Union[str, pathlib.Path]):
+    def __init__(self, string: Union[str, pathlib.Path]):
         if not isinstance(string, (str, pathlib.Path)):
             raise ValueError('Invalid value for link property')
         self.string = string
@@ -310,13 +299,6 @@ class Link:
                 return self.string
             return (base if base.is_dir() else base.parent) / self.string
         return urljoin(base, self.string)
-
-
-def link_property(required=False):
-    return attr.ib(
-        default=None,
-        validator=attr.validators.optional(attr.validators.instance_of(Link)),
-        converter=lambda v: v if v is None else Link(v))
 
 
 class NaturalLanguage(collections.OrderedDict):
@@ -430,24 +412,26 @@ def valid_common_property(v):
     return v
 
 
-@attr.s
+@dataclasses.dataclass
 class DescriptionBase:
     """Container for
     - common properties (see http://w3c.github.io/csvw/metadata/#common-properties)
     - @-properties.
     """
 
-    common_props = attr.ib(default=attr.Factory(dict))
-    at_props = attr.ib(default=attr.Factory(dict))
+    common_props: dict[str, Any] = dataclasses.field(default_factory=dict)
+    at_props: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @classmethod
-    def partition_properties(cls,
-                             d: typing.Union[dict, typing.Any],
-                             type_name: typing.Optional[str] = None,
-                             strict=True) -> typing.Union[dict, None]:
+    def partition_properties(
+            cls,
+            d: Union[dict, Any],
+            type_name: Optional[str] = None,
+            strict=True
+    ) -> Union[dict, None]:
         if d and not isinstance(d, dict):
             return
-        fields = attr.fields_dict(cls)
+        fields = {f.name: f for f in dataclasses.fields(cls)}
         type_name = type_name or cls.__name__
         c, a, dd = {}, {}, {}
         for k, v in (d or {}).items():
@@ -499,14 +483,7 @@ class DescriptionBase:
             if (k == 'null' or (v not in ([], {}))))
 
 
-def optional_int():
-    return attr.ib(
-        default=None,
-        validator=attr.validators.optional(attr.validators.instance_of(int)),
-        converter=lambda v: v if v is None else int(v))
-
-
-@attr.s
+@dataclasses.dataclass
 class Datatype(DescriptionBase):
     """
     A datatype description
@@ -517,44 +494,27 @@ class Datatype(DescriptionBase):
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#datatypes>`_
     """
 
-    base = attr.ib(
-        default=None,
-        converter=functools.partial(
+    base: str = None
+    format: Optional[str] = None
+    length: Optional[int] = None
+    minLength: Optional[int] = None
+    maxLength: Optional[int] = None
+    minimum: OrderedType = None
+    maximum: OrderedType = None
+    minInclusive: Optional[bool] = None
+    maxInclusive: Optional[bool] = None
+    minExclusive: Optional[bool] = None
+    maxExclusive: Optional[bool] = None
+
+    def __post_init__(self):
+        self.base = functools.partial(
             utils.converter,
-            str, 'string', allow_none=True, cond=lambda ss: ss is None or ss in DATATYPES),
-        validator=attr.validators.optional(attr.validators.in_(DATATYPES)))
-    format = attr.ib(default=None)
-    length = optional_int()
-    minLength = optional_int()
-    maxLength = optional_int()
-    minimum = attr.ib(default=None)
-    maximum = attr.ib(default=None)
-    minInclusive = attr.ib(default=None)
-    maxInclusive = attr.ib(default=None)
-    minExclusive = attr.ib(default=None)
-    maxExclusive = attr.ib(default=None)
-
-    @classmethod
-    def fromvalue(cls, v: typing.Union[str, dict, 'Datatype']) -> 'Datatype':
-        """
-        :param v: Initialization data for `cls`; either a single string that is the main datatype \
-        of the values of the cell or a datatype description object, i.e. a `dict` or a `cls` \
-        instance.
-        :return: An instance of `cls`
-        """
-        if isinstance(v, str):
-            return cls(base=v)
-
-        if isinstance(v, dict):
-            v.setdefault('base', 'string')
-            return cls(**cls.partition_properties(v))
-
-        if isinstance(v, cls):
-            return v
-
-        raise ValueError(v)
-
-    def __attrs_post_init__(self):
+            str,
+            'string',
+            allow_none=True,
+            cond=lambda ss: ss is None or ss in DATATYPES)(self.base)
+        for att in ('length', 'maxLength', 'minLength'):
+            setattr(self, att, utils.optional(int)(getattr(self, att)))
         for attr_ in [
             'minimum', 'maximum', 'minInclusive', 'maxInclusive', 'minExclusive', 'maxExclusive'
         ]:
@@ -618,6 +578,26 @@ class Datatype(DescriptionBase):
                 self.format = None
                 warnings.warn('Invalid number pattern')
 
+    @classmethod
+    def fromvalue(cls, v: Union[str, dict, 'Datatype']) -> 'Datatype':
+        """
+        :param v: Initialization data for `cls`; either a single string that is the main datatype \
+        of the values of the cell or a datatype description object, i.e. a `dict` or a `cls` \
+        instance.
+        :return: An instance of `cls`
+        """
+        if isinstance(v, str):
+            return cls(base=v)
+
+        if isinstance(v, dict):
+            v.setdefault('base', 'string')
+            return cls(**cls.partition_properties(v))
+
+        if isinstance(v, cls):
+            return v
+
+        raise ValueError(v)
+
     def asdict(self, omit_defaults=True):
         res = DescriptionBase.asdict(self, omit_defaults=omit_defaults)
         for attr_ in [
@@ -677,22 +657,7 @@ class Datatype(DescriptionBase):
         return self.validate(self.parse(v))
 
 
-def converter_null(v):
-    res = [] if v is None else (v if isinstance(v, list) else [v])
-    if not all(isinstance(vv, str) for vv in res):
-        warnings.warn('Invalid null property')
-        return [""]
-    return res
-
-
-def converter_lang(v):
-    if not tags.check(v):
-        warnings.warn('Invalid language tag')
-        return 'und'
-    return v
-
-
-@attr.s
+@dataclasses.dataclass
 class Description(DescriptionBase):
     """Adds support for inherited properties.
 
@@ -703,35 +668,44 @@ class Description(DescriptionBase):
     # reference to the containing object. Note that this attribute is ignored when judging
     # equality between objects. Thus, identically specified columns of different tables will be
     # considered equal.
-    _parent = attr.ib(default=None, repr=False, eq=False)
+    _parent: Optional[DescriptionBase] = None
 
-    aboutUrl = uri_template_property()
-    datatype = attr.ib(
-        default=None,
-        converter=lambda v: v if not v else Datatype.fromvalue(v))
-    default = attr.ib(
-        default="",
-        converter=functools.partial(utils.converter, str, "", allow_list=False),
-    )
-    lang = attr.ib(default="und", converter=converter_lang)
-    null = attr.ib(default=attr.Factory(lambda: [""]), converter=converter_null)
-    ordered = attr.ib(
-        default=None,
-        converter=functools.partial(utils.converter, bool, False, allow_none=True),
-    )
-    propertyUrl = uri_template_property()
-    required = attr.ib(default=None)
-    separator = attr.ib(
-        converter=functools.partial(utils.converter, str, None, allow_none=True),
-        default=None,
-    )
-    textDirection = attr.ib(
-        default=None,
-        converter=functools.partial(
-            utils.converter,
-            str, None, allow_none=True, cond=lambda v: v in [None, "ltr", "rtl", "auto", "inherit"])
-    )
-    valueUrl = uri_template_property()
+    aboutUrl: Optional[Union[URITemplate, Invalid]] = None
+    datatype: Optional[Datatype] = None
+    default: Optional[Union[str, list[str]]] = ""
+    lang: str = "und"
+    null: list[str] = dataclasses.field(default_factory=lambda: [""])
+    ordered: Optional[bool] = None
+    propertyUrl: Optional[Union[URITemplate, Invalid]] = None
+    required: Optional[bool] = None
+    separator: Optional[str] = None
+    textDirection: Optional[Literal["ltr", "rtl", "auto", "inherit"]] = None
+    valueUrl: Optional[Union[URITemplate, Invalid]] = None
+
+    def __post_init__(self):
+        if self.datatype is not None:
+            self.datatype = Datatype.fromvalue(self.datatype)
+        self.default = utils.converter(str, "", self.default, allow_list=False)
+        if not tags.check(self.lang):
+            warnings.warn('Invalid language tag')
+            self.lang = 'und'
+
+        self.null = [] if self.null is None else \
+            (self.null if isinstance(self.null, list) else [self.null])
+        if not all(isinstance(vv, str) for vv in self.null):
+            warnings.warn('Invalid null property')
+            self.null = [""]
+        self.ordered = utils.converter( bool, False, self.ordered, allow_none=True)
+        self.separator = utils.converter( str, None, self.separator, allow_none=True)
+        self.textDirection = utils.converter(
+            str,
+            None,
+            self.textDirection,
+            allow_none=True,
+            cond=lambda v: v in [None, "ltr", "rtl", "auto", "inherit"])
+        for att in ('valueUrl', 'aboutUrl', 'propertyUrl'):
+            if getattr(self, att) is not None:
+                setattr(self, att, convert_uri_template(getattr(self, att)))
 
     def inherit(self, attr):
         v = getattr(self, attr)
@@ -747,15 +721,7 @@ class Description(DescriptionBase):
         return self.null
 
 
-def converter_titles(v):
-    try:
-        return v if v is None else NaturalLanguage(v)
-    except ValueError:
-        warnings.warn('Invalid titles property')
-        return None
-
-
-@attr.s
+@dataclasses.dataclass
 class Column(Description):
     """
     A column description is an object that describes a single column.
@@ -766,24 +732,33 @@ class Column(Description):
 
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#columns>`_
     """
-    name = attr.ib(
-        default=None,
-        converter=functools.partial(utils.converter, str, None, allow_none=True)
-    )
-    suppressOutput = attr.ib(
-        default=False,
-        converter=functools.partial(utils.converter, bool, False))
-    titles = attr.ib(
-        default=None,
-        validator=attr.validators.optional(attr.validators.instance_of(NaturalLanguage)),
-        converter=converter_titles)
-    virtual = attr.ib(default=False, converter=functools.partial(utils.converter, bool, False))
-    _number = attr.ib(default=None, repr=False)
+    name: str = None
+    suppressOutput: bool = False
+    titles: Optional[NaturalLanguage] = None
+    virtual: bool = False
+    _number: Optional[int] = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.name = utils.converter( str, None, self.name, allow_none=True)
+        self.suppressOutput = utils.converter( bool, False, self.suppressOutput)
+
+        if self.titles is not None:
+            try:
+                self.titles = NaturalLanguage(self.titles)
+            except ValueError:
+                warnings.warn('Invalid titles property')
+                self.titles = None
+
+        self.virtual = utils.converter( bool, False, self.virtual)
 
     def __str__(self):
         return self.name or \
             (self.titles and self.titles.getfirst()) or \
             '_col.{}'.format(self._number)
+
+    def __eq__(self, other):
+        return self.asdict() == other.asdict()
 
     def has_title(self, v):
         if self.name and self.name == v:
@@ -852,30 +827,33 @@ class Column(Description):
         return fmt(v)
 
 
-def column_reference():
-    return attr.ib(
-        default=None,
-        validator=attr.validators.optional(attr.validators.instance_of(list)),
-        converter=lambda v: v if isinstance(v, list) or v is None else [v])
-
-
-@attr.s
+@dataclasses.dataclass
 class Reference:
+    resource: Optional[Link] = None
+    schemaReference: Optional[Link] = None
+    columnReference: Optional[list[str]] = None
 
-    resource = link_property()
-    schemaReference = link_property()
-    columnReference = column_reference()
+    def __post_init__(self):
+        if self.resource is not None:
+            if self.schemaReference is not None:
+                raise ValueError(self)
+            self.resource = Link(self.resource)
 
-    def __attrs_post_init__(self):
-        if self.resource is not None and self.schemaReference is not None:
-            raise ValueError(self)
+        if self.schemaReference is not None:
+            self.schemaReference = Link(self.schemaReference)
+
+        if isinstance(self.columnReference, str):
+            self.columnReference = [self.columnReference]
 
 
-@attr.s
+@dataclasses.dataclass
 class ForeignKey:
+    columnReference: Optional[list[str]] = None
+    reference: Optional[Reference] = None
 
-    columnReference = column_reference()
-    reference = attr.ib(default=None)
+    def __post_init__(self):
+        if isinstance(self.columnReference, str):
+            self.columnReference = [self.columnReference]
 
     @classmethod
     def fromdict(cls, d):
@@ -895,17 +873,7 @@ class ForeignKey:
         return res
 
 
-def converter_foreignKeys(v):
-    res = []
-    for d in functools.partial(utils.converter, dict, None)(v):
-        try:
-            res.append(ForeignKey.fromdict(d))
-        except TypeError:
-            warnings.warn('Invalid foreignKeys spec')
-    return res
-
-
-@attr.s
+@dataclasses.dataclass
 class Schema(Description):
     """
     A schema description is an object that encodes the information about a schema, which describes
@@ -916,21 +884,33 @@ class Schema(Description):
 
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#schemas>`_
     """
-    columns = attr.ib(
-        default=attr.Factory(list),
-        converter=lambda v: [
-            Column.fromvalue(c) for c in functools.partial(utils.converter, dict, None)(
-                functools.partial(utils.converter, list, [])(v))])
-    foreignKeys = attr.ib(
-        default=attr.Factory(list),
-        converter=lambda v: [] if v is None else converter_foreignKeys(v))
-    primaryKey = column_reference()
-    rowTitles = attr.ib(
-        default=attr.Factory(list),
-        converter=lambda v: v if isinstance(v, list) else [v],
-    )
+    columns: list[Column] = dataclasses.field(default_factory=list)
+    foreignKeys: list[ForeignKey] = dataclasses.field(default_factory=list)
+    primaryKey: Optional[list[str]] = None
+    rowTitles: list[str] = dataclasses.field(default_factory=list)
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
+        super().__post_init__()
+        self.columns = [
+            Column.fromvalue(c) for c in
+            utils.converter(dict, None, utils.converter(list, [], self.columns))]
+        for i, col in enumerate(self.columns):
+            col._number = i + 1
+        if self.foreignKeys is None:
+            self.foreignKeys = []
+        else:
+            res = []
+            for d in utils.converter(dict, None, self.foreignKeys):
+                try:
+                    res.append(ForeignKey.fromdict(d))
+                except TypeError:
+                    warnings.warn('Invalid foreignKeys spec')
+            self.foreignKeys = res
+
+        if self.primaryKey is not None and not isinstance(self.primaryKey, list):
+            self.primaryKey = [self.primaryKey]
+        self.rowTitles = self.rowTitles if isinstance(self.rowTitles, list) else [self.rowTitles]
+
         virtual, seen, names = False, set(), set()
         for i, col in enumerate(self.columns):
             if col.name and (col.name.startswith('_') or re.search(r'\s', col.name)):
@@ -948,7 +928,7 @@ class Schema(Description):
                     names.add(col.name)
                 seen.add(col.header)
             col._parent = self
-            col._number = i + 1
+            #col._number = i + 1
         for colref in self.primaryKey or []:
             col = self.columndict.get(colref)
             if col and not col.name:
@@ -997,14 +977,7 @@ def dialect_props(d):
     return partitioned
 
 
-def valid_transformations(instance, attribute, value):
-    if not isinstance(value, list):
-        warnings.warn('Invalid transformations property')
-    for tr in value:
-        Description.partition_properties(tr, type_name='Template')
-
-
-@attr.s
+@dataclasses.dataclass
 class TableLike(Description):
     """
     A CSVW description object as encountered "in the wild", i.e. identified by URL on the web or
@@ -1031,29 +1004,32 @@ class TableLike(Description):
     and `URI template properties <https://www.w3.org/TR/tabular-metadata/#uri-template-properties>`_
     (see :meth:`~TableLike.expand`).
     """
-    dialect = attr.ib(
-        default=None,
-        converter=lambda v: v if (v is None or isinstance(v, str))
-        else Dialect(**dialect_props(v)))
-    notes = attr.ib(default=attr.Factory(list))
-    tableDirection = attr.ib(
-        default='auto',
-        converter=functools.partial(
-            utils.converter, str, 'auto', cond=lambda s: s in ['rtl', 'ltr', 'auto']),
-        validator=attr.validators.in_(['rtl', 'ltr', 'auto']))
-    tableSchema = attr.ib(
-        default=None,
-        converter=lambda v: Schema.fromvalue(v))
-    transformations = attr.ib(
-        validator=valid_transformations,
-        default=attr.Factory(list),
-    )
-    url = link_property()
-    _fname = attr.ib(default=None)  # The path of the metadata file.
+    dialect: Optional[Union[str, Dialect]] = None
+    notes: list[str] = dataclasses.field(default_factory=list)
+    tableDirection: Literal['rtl', 'ltr', 'auto'] = 'auto'
+    tableSchema: Optional[Schema] = None
+    transformations: list = dataclasses.field(default_factory=list)
+    url: Optional[Link] = None
+    _fname: Union[str, pathlib.Path] = None  # The path of the metadata file.
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
+        super().__post_init__()
         if isinstance(self.dialect, str):
             self.dialect = Dialect(**dialect_props(get_json(Link(self.dialect).resolve(self.base))))
+        elif self.dialect is not None:
+            self.dialect = Dialect(**dialect_props(self.dialect))
+
+        self.tableDirection = utils.converter(
+            str, 'auto', self.tableDirection, cond=lambda s: s in ['rtl', 'ltr', 'auto'])
+        self.tableSchema = Schema.fromvalue(self.tableSchema)
+
+        if not isinstance(self.transformations, list):
+            warnings.warn('Invalid transformations property')
+        for tr in self.transformations:
+            Description.partition_properties(tr, type_name='Template')
+        if self.url is not None:
+            self.url = Link(self.url)
+
         if self.tableSchema and not (isinstance(self.tableSchema, str)):
             self.tableSchema._parent = self
         if 'id' in self.at_props and self.at_props['id'] is None:
@@ -1078,7 +1054,7 @@ class TableLike(Description):
         return self.tableSchema.get_column(spec) if self.tableSchema else None
 
     @classmethod
-    def from_file(cls, fname: typing.Union[str, pathlib.Path], data=None) -> 'TableLike':
+    def from_file(cls, fname: Union[str, pathlib.Path], data=None) -> 'TableLike':
         """
         Instantiate a CSVW Table or TableGroup description from a metadata file.
         """
@@ -1102,7 +1078,7 @@ class TableLike(Description):
         res = cls.fromvalue(data)
         return res
 
-    def to_file(self, fname: typing.Union[str, pathlib.Path], omit_defaults=True) -> pathlib.Path:
+    def to_file(self, fname: Union[str, pathlib.Path], omit_defaults=True) -> pathlib.Path:
         """
         Write a CSVW Table or TableGroup description as JSON object to a local file.
 
@@ -1117,7 +1093,7 @@ class TableLike(Description):
         return fname
 
     @property
-    def base(self) -> typing.Union[str, pathlib.Path]:
+    def base(self) -> Union[str, pathlib.Path]:
         """
         The "base" to resolve relative links against.
         """
@@ -1176,7 +1152,7 @@ class TableLike(Description):
         return res
 
 
-@attr.s
+@dataclasses.dataclass
 class Table(TableLike):
     """
     A table description is an object that describes a table within a CSV file.
@@ -1191,7 +1167,7 @@ class Table(TableLike):
 
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#tables>`_
     """
-    suppressOutput = attr.ib(default=False)
+    suppressOutput: bool = False
     _comments = []
 
     def add_foreign_key(self, colref, ref_resource, ref_colref):
@@ -1211,24 +1187,24 @@ class Table(TableLike):
             'reference': {'resource': ref_resource, 'columnReference': ref_colref}
         }))
 
-    def __attrs_post_init__(self):
-        TableLike.__attrs_post_init__(self)
+    def __post_init__(self):
+        TableLike.__post_init__(self)
         if not self.url:
             raise ValueError('url property is required for Tables')
 
     @property
-    def local_name(self) -> typing.Union[str, None]:
+    def local_name(self) -> Union[str, None]:
         return self.url.string if self.url else None
 
     def _get_dialect(self) -> Dialect:
         return self.dialect or (self._parent and self._parent.dialect) or Dialect()
 
     def write(self,
-              items: typing.Iterable[typing.Union[dict, list, tuple]],
-              fname: typing.Optional[typing.Union[str, pathlib.Path]] = DEFAULT,
-              base: typing.Optional[typing.Union[str, pathlib.Path]] = None,
-              strict: typing.Optional[bool] = False,
-              _zipped: typing.Optional[bool] = False) -> typing.Union[str, int]:
+              items: Iterable[Union[dict, list, tuple]],
+              fname: Optional[Union[str, pathlib.Path]] = DEFAULT,
+              base: Optional[Union[str, pathlib.Path]] = None,
+              strict: Optional[bool] = False,
+              _zipped: Optional[bool] = False) -> Union[str, int]:
         """
         Write row items to a CSV file according to the table schema.
 
@@ -1307,7 +1283,7 @@ class Table(TableLike):
             fname=None,
             _Row=collections.OrderedDict,
             strict=True,
-    ) -> typing.Generator[dict, None, None]:
+    ) -> Generator[dict, None, None]:
         """Iterate over the rows of the table
 
         Create an iterator that maps the information in each row to a `dict` whose keys are
@@ -1460,17 +1436,7 @@ class Table(TableLike):
         self._comments = reader.comments
 
 
-def converter_tables(v):
-    res = []
-    for vv in v:
-        if not isinstance(vv, (dict, Table)):
-            warnings.warn('Invalid value for Table spec')
-        else:
-            res.append(Table.fromvalue(vv) if isinstance(vv, dict) else vv)
-    return res
-
-
-@attr.s
+@dataclasses.dataclass
 class TableGroup(TableLike):
     """
     A table group description is an object that describes a group of tables.
@@ -1485,10 +1451,17 @@ class TableGroup(TableLike):
 
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#table-groups>`_
     """
-    tables = attr.ib(repr=False, default=attr.Factory(list), converter=converter_tables)
+    tables: list[Table] = dataclasses.field(default_factory=list)
 
-    def __attrs_post_init__(self):
-        TableLike.__attrs_post_init__(self)
+    def __post_init__(self):
+        res = []
+        for vv in self.tables:
+            if not isinstance(vv, (dict, Table)):
+                warnings.warn('Invalid value for Table spec')
+            else:
+                res.append(Table.fromvalue(vv) if isinstance(vv, dict) else vv)
+        self.tables = res
+        super().__post_init__()
         for table in self.tables:
             table._parent = self
 
@@ -1503,10 +1476,10 @@ class TableGroup(TableLike):
         return {tname: list(t.iterdicts()) for tname, t in self.tabledict.items()}
 
     def write(self,
-              fname: typing.Union[str, pathlib.Path],
-              strict: typing.Optional[bool] = False,
-              _zipped: typing.Optional[bool] = False,
-              **items: typing.Iterable[typing.Union[list, tuple, dict]]):
+              fname: Union[str, pathlib.Path],
+              strict: Optional[bool] = False,
+              _zipped: Optional[bool] = False,
+              **items: Iterable[Union[list, tuple, dict]]):
         """
         Write a TableGroup's data and metadata to files.
 
@@ -1519,7 +1492,7 @@ class TableGroup(TableLike):
             self.tabledict[tname].write(rows, base=fname.parent, strict=strict, _zipped=_zipped)
         self.to_file(fname)
 
-    def copy(self, dest: typing.Union[pathlib.Path, str]):
+    def copy(self, dest: Union[pathlib.Path, str]):
         """
         Write a TableGroup's data and metadata to files relative to `dest`, adapting the `base`
         attribute.
@@ -1534,10 +1507,10 @@ class TableGroup(TableLike):
         self.to_file(self._fname)
 
     @property
-    def tabledict(self) -> typing.Dict[str, Table]:
+    def tabledict(self) -> dict[str, Table]:
         return {t.local_name: t for t in self.tables}
 
-    def foreign_keys(self) -> typing.List[typing.Tuple[Table, list, Table, list]]:
+    def foreign_keys(self) -> list[tuple[Table, list, Table, list]]:
         return [
             (
                 self.tabledict[fk.reference.resource.string],
@@ -1550,6 +1523,7 @@ class TableGroup(TableLike):
     def validate_schema(self, strict=False):
         try:
             for st, sc, tt, tc in self.foreign_keys():
+                print(sc, tc)
                 if len(sc) != len(tc):
                     raise ValueError(
                         'Foreign key error: non-matching number of columns in source and target')
@@ -1641,7 +1615,7 @@ class CSVW:
     """
     Python API to read CSVW described data and convert it to JSON.
     """
-    def __init__(self, url: str, md_url: typing.Optional[str] = None, validate: bool = False):
+    def __init__(self, url: str, md_url: Optional[str] = None, validate: bool = False):
         self.warnings = []
         w = None
         with contextlib.ExitStack() as stack:
@@ -1717,7 +1691,7 @@ class CSVW:
             TableGroup(at_props={'base': self.t.base}, tables=self.tables)
 
     @staticmethod
-    def locate_metadata(url=None) -> typing.Tuple[dict, bool]:
+    def locate_metadata(url=None) -> tuple[dict, bool]:
         """
         Implements metadata discovery as specified in
         `§5. Locating Metadata <https://w3c.github.io/csvw/syntax/#locating-metadata>`_

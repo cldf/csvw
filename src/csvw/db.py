@@ -26,69 +26,62 @@ SQLite support has the following limitations:
   not enforced by the database.
 """
 import json
-import typing
+from typing import Optional, Union, Protocol, Callable, Any
 import decimal
 import pathlib
 import sqlite3
 import functools
 import contextlib
 import collections
-
-import attr
+from collections.abc import Sequence
+import dataclasses
 
 import csvw
 from csvw.datatypes import DATATYPES
 from csvw.metadata import TableGroup
+from .utils import optional
 
 
 def identity(s):
     return s
 
 
+@dataclasses.dataclass
+class DBType:
+    name: str
+    convert: Callable[[Any], Any] = identity
+    read: Callable[[Any], Any] = identity
+
+
 TYPE_MAP = {
-    'string': (
-        'TEXT',
-        identity,
-        identity),
-    'integer': (
-        'INTEGER',
-        identity,
-        identity),
-    'boolean': (
-        'INTEGER',
-        lambda s: s if s is None else int(s),
-        lambda s: s if s is None else bool(s)),
-    'decimal': (
-        'REAL',
-        lambda s: s if s is None else float(s),
-        lambda s: s if s is None else decimal.Decimal(s)),
-    'hexBinary': (
-        'BLOB',
-        identity,
-        identity),
+    'string': DBType('TEXT'),
+    'integer': DBType('INTEGER'),
+    'boolean': DBType('INTEGER', optional(int), optional(bool)),
+    'decimal': DBType('REAL', optional(float), optional(decimal.Decimal)),
+    'hexBinary': DBType('BLOB'),
 }
 
 
-class SchemaTranslator(typing.Protocol):
-    def __call__(self, table: str, column: typing.Optional[str] = None) -> str:
+class SchemaTranslator(Protocol):
+    def __call__(self, table: str, column: Optional[str] = None) -> str:
         ...  # pragma: no cover
 
 
-class ColumnTranslator(typing.Protocol):
+class ColumnTranslator(Protocol):
     def __call__(self, column: str) -> str:
         ...  # pragma: no cover
 
 
-def quoted(*names):
-    return ','.join('`{0}`'.format(name) for name in names)
+def quoted(*names: str) -> str:
+    return ','.join(f'`{name}`' for name in names)
 
 
 def insert(db: sqlite3.Connection,
            translate: SchemaTranslator,
            table: str,
-           keys: typing.Sequence[str],
+           keys: Sequence[str],
            *rows: list,
-           single: typing.Optional[bool] = False):
+           single: Optional[bool] = False):
     """
     Insert a sequence of rows into a table.
 
@@ -117,37 +110,35 @@ def insert(db: sqlite3.Connection,
                 raise
 
 
-def select(db: sqlite3.Connection, table: str) -> typing.Tuple[typing.List[str], typing.Sequence]:
-    cu = db.execute("SELECT * FROM {0}".format(quoted(table)))
+def select(db: sqlite3.Connection, table: str) -> tuple[list[str], Sequence]:
+    cu = db.execute(f"SELECT * FROM {quoted(table)}")
     cols = [d[0] for d in cu.description]
     return cols, list(cu.fetchall())
 
 
-@attr.s
+@dataclasses.dataclass
 class ColSpec:
     """
     A `ColSpec` captures sufficient information about a :class:`csvw.Column` for the DB schema.
     """
-    name = attr.ib()
-    csvw_type = attr.ib(default='string', converter=lambda s: s if s else 'string')
-    separator = attr.ib(default=None)
-    db_type = attr.ib(default=None)
-    convert = attr.ib(default=None)
-    read = attr.ib(default=None)
-    required = attr.ib(default=False)
-    csvw = attr.ib(default=None)
+    name: str
+    csvw_type: str = 'string'
+    separator: str = None
+    db_type: DBType = None
+    required: bool = False
+    csvw: str = None
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
+        self.csvw_type = self.csvw_type or 'string'
         if self.csvw_type in TYPE_MAP:
-            self.db_type, self.convert, self.read = TYPE_MAP[self.csvw_type]
+            self.db_type = TYPE_MAP[self.csvw_type]
         else:
-            self.db_type = 'TEXT'
-            self.convert = DATATYPES[self.csvw_type].to_string
-            self.read = DATATYPES[self.csvw_type].to_python
+            self.db_type = DBType(
+                'TEXT', DATATYPES[self.csvw_type].to_string, DATATYPES[self.csvw_type].to_python)
         if self.separator and self.db_type != 'TEXT':
-            self.db_type = 'TEXT'
+            self.db_type = DBType('TEXT', self.db_type.convert, self.db_type.read)
 
-    def check(self, translate: ColumnTranslator) -> typing.Optional[str]:
+    def check(self, translate: ColumnTranslator) -> Optional[str]:
         """
         We try to convert as many data constraints as possible into SQLite CHECK constraints.
 
@@ -184,15 +175,13 @@ class ColSpec:
 
     def sql(self, translate: ColumnTranslator) -> str:
         _check = self.check(translate)
-        return '`{0}` {1}{2}{3}'.format(
-            translate(self.name),
-            self.db_type,
-            ' NOT NULL' if self.required else '',
-            ' CHECK ({0})'.format(_check) if _check else '')
+        null_constraint = ' NOT NULL' if self.required else ''
+        check_constraint = f' CHECK ({_check})' if _check else ''
+        return f'`{translate(self.name)}` {self.db_type.name}{null_constraint}{check_constraint}'
 
 
-@attr.s
-class TableSpec(object):
+@dataclasses.dataclass
+class TableSpec:
     """
     A `TableSpec` captures sufficient information about a :class:`csvw.Table` for the DB schema.
 
@@ -205,16 +194,16 @@ class TableSpec(object):
 
         .. seealso:: `<https://en.wikipedia.org/wiki/Associative_entity>`_
     """
-    name = attr.ib()
-    columns = attr.ib(default=attr.Factory(list))
-    foreign_keys = attr.ib(default=attr.Factory(list))
-    many_to_many = attr.ib(default=attr.Factory(collections.OrderedDict))
-    primary_key = attr.ib(default=None)
+    name: str
+    columns: list[ColSpec] = dataclasses.field(default_factory=list)
+    foreign_keys: list = dataclasses.field(default_factory=list)
+    many_to_many: collections.OrderedDict = dataclasses.field(default_factory=collections.OrderedDict)
+    primary_key: Optional[list[str]] = None
 
     @classmethod
     def from_table_metadata(cls,
                             table: csvw.Table,
-                            drop_self_referential_fks: typing.Optional[bool] = True) -> 'TableSpec':
+                            drop_self_referential_fks: Optional[bool] = True) -> 'TableSpec':
         """
         Create a `TableSpec` from the schema description of a `csvw.metadata.Table`.
 
@@ -305,7 +294,7 @@ class TableSpec(object):
 
 
 def schema(tg: csvw.TableGroup,
-           drop_self_referential_fks: typing.Optional[bool] = True) -> typing.List[TableSpec]:
+           drop_self_referential_fks: Optional[bool] = True) -> list[TableSpec]:
     """
     Convert the table and column descriptions of a `TableGroup` into specifications for the
     DB schema.
@@ -365,9 +354,9 @@ class Database(object):
     def __init__(
             self,
             tg: TableGroup,
-            fname: typing.Optional[typing.Union[pathlib.Path, str]] = None,
-            translate: typing.Optional[SchemaTranslator] = None,
-            drop_self_referential_fks: typing.Optional[bool] = True,
+            fname: Optional[Union[pathlib.Path, str]] = None,
+            translate: Optional[SchemaTranslator] = None,
+            drop_self_referential_fks: Optional[bool] = True,
     ):
         self.translate = translate or Database.name_translator
         self.fname = pathlib.Path(fname) if fname else None
@@ -380,11 +369,11 @@ class Database(object):
             self.tg, drop_self_referential_fks=drop_self_referential_fks) if self.tg else []
 
     @property
-    def tdict(self) -> typing.Dict[str, TableSpec]:
+    def tdict(self) -> dict[str, TableSpec]:
         return {t.name: t for t in self.tables}
 
     @staticmethod
-    def name_translator(table: str, column: typing.Optional[str] = None) -> str:
+    def name_translator(table: str, column: Optional[str] = None) -> str:
         """
         A callable with this signature can be passed into DB creation to control the names
         of the schema objects.
@@ -396,7 +385,7 @@ class Database(object):
         # By default, no translation is done:
         return column or table
 
-    def connection(self) -> typing.Union[sqlite3.Connection, contextlib.closing]:
+    def connection(self) -> Union[sqlite3.Connection, contextlib.closing]:
         if self.fname:
             return contextlib.closing(sqlite3.connect(str(self.fname)))
         if not self._connection:
@@ -420,7 +409,7 @@ FROM {2} {3} GROUP BY {0}""".format(
             r[0]: [(k, v) if context is None else k
                    for k, v in zip(r[1].split(), r[2].split('||'))] for r in cu.fetchall()}
 
-    def separator(self, tname: str, cname: str) -> typing.Optional[str]:
+    def separator(self, tname: str, cname: str) -> Optional[str]:
         """
         :return: separator for the column specified by db schema names `tname` and `cname`.
         """
@@ -430,11 +419,11 @@ FROM {2} {3} GROUP BY {0}""".format(
                     if self.translate(name, col.name) == cname:
                         return col.separator
 
-    def split_value(self, tname, cname, value) -> typing.Union[typing.List[str], str, None]:
+    def split_value(self, tname, cname, value) -> Union[list[str], str, None]:
         sep = self.separator(tname, cname)
         return (value or '').split(sep) if sep else value
 
-    def read(self) -> typing.Dict[str, typing.List[typing.OrderedDict]]:
+    def read(self) -> dict[str, list[collections.OrderedDict]]:
         """
         :return: A `dict` where keys are SQL table names corresponding to CSVW tables and values \
         are lists of rows, represented as dicts where keys are the SQL column names.
@@ -453,7 +442,7 @@ FROM {2} {3} GROUP BY {0}""".format(
                 for col in table.columns:
                     convert[self.translate(tname, col.name)] = [col.name, identity]
                     if col.csvw_type in TYPE_MAP:
-                        convert[self.translate(tname, col.name)][1] = TYPE_MAP[col.csvw_type][2]
+                        convert[self.translate(tname, col.name)][1] = TYPE_MAP[col.csvw_type].convert
                     else:
                         convert[self.translate(tname, col.name)][1] = \
                             DATATYPES[col.csvw_type].to_python
@@ -564,11 +553,11 @@ FROM {2} {3} GROUP BY {0}""".format(
                                 # Note: This assumes list-valued columns are of datatype string!
                                 if col.csvw_type == 'string':
                                     v = (col.separator or ';').join(
-                                        col.convert(vv) or '' for vv in v)
+                                        col.db_type.convert(vv) or '' for vv in v)
                                 else:
                                     v = json.dumps(v)
                             else:
-                                v = col.convert(v) if v is not None else None
+                                v = col.db_type.convert(v) if v is not None else None
                             if i == 0:
                                 keys.append(col.name)
                             values.append(v)

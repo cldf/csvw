@@ -8,8 +8,11 @@ import pathlib
 import warnings
 import collections
 import unicodedata
+from typing import Callable, Any
 
-import attr
+
+def optional(type_: type) -> Callable[[Any], Any]:
+    return lambda v: v if v is None else type_(v)
 
 
 def is_url(s):
@@ -35,23 +38,15 @@ def ensure_path(fname):
     return fname
 
 
-def attr_defaults(cls):
-    res = collections.OrderedDict()
-    for field in attr.fields(cls):
-        default = field.default
-        if isinstance(default, attr.Factory):
-            default = default.factory()
-        res[field.name] = default
-    return res
-
-
 def attr_asdict(obj, omit_defaults=True, omit_private=True):
-    defs = attr_defaults(obj.__class__)
+    import dataclasses
+
     res = collections.OrderedDict()
-    for field in attr.fields(obj.__class__):
+    for field in dataclasses.fields(obj):
+        default = field.default_factory() if callable(field.default_factory) else field.default
         if not (omit_private and field.name.startswith('_')):
             value = getattr(obj, field.name)
-            if not (omit_defaults and value == defs[field.name]):
+            if not (omit_defaults and value == default):
                 if hasattr(value, 'asdict'):
                     value = value.asdict(omit_defaults=True)
                 res[field.name] = value
