@@ -22,10 +22,12 @@ import collections
 
 import isodate
 import rfc3986
-import dateutil.parser
 import babel.numbers
 import babel.dates
 import jsonschema
+import dateutil.parser
+
+from ._compat import fromisoformat
 
 if typing.TYPE_CHECKING:  # pragma: no cover
     import csvw
@@ -329,7 +331,6 @@ class dateTime(anyAtomicType):
                 comps[a] = getattr(d, a)
         res = cls(**{k: int(v) for k, v in comps.items() if v is not None})
         if tz_marker:
-            # Let dateutils take care of parsing the timezone info:
             res = res.replace(tzinfo=dateutil.parser.parse(v).tzinfo)
         return res
 
@@ -340,7 +341,7 @@ class dateTime(anyAtomicType):
             if not match:
                 raise ValueError('{} -- {} -- {}'.format(pattern, v, regex))  # pragma:
         try:
-            return dateutil.parser.isoparse(v)
+            return fromisoformat(v)
         except ValueError:
             return dateTime._parse(v, datetime.datetime, regex, tz_marker=tz_marker)
 
@@ -1061,7 +1062,6 @@ def dt_format_and_regex(fmt, no_date=False):
         "MM.dd.yyyy",  # e.g., 03.22.2015
         "M.d.yyyy",  # e.g., 3.22.2015
     }
-
     time_patterns = {"HH:mm:ss", "HHmmss", "HH:mm", "HHmm"}
 
     # We map dateTime component markers to corresponding fromat specs and regular
