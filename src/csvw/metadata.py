@@ -100,7 +100,7 @@ class URITemplate(uritemplate.URITemplate):
 
 def convert_uri_template(v):
     if v is None:
-        return None
+        return None  # pragma: no cover
     if not isinstance(v, str):
         warnings.warn('Invalid value for Url property')
         return INVALID
@@ -121,7 +121,7 @@ class Link:
     @classmethod
     def from_value(cls, v: Union['Link', str, pathlib.Path]):
         if isinstance(v, Link):
-            return v
+            return v  # pragma: no cover
         return cls(v)
 
     def __str__(self):

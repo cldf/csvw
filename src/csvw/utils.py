@@ -1,4 +1,5 @@
 import io
+import logging
 import re
 import copy
 import html
@@ -10,12 +11,16 @@ import warnings
 import collections
 import unicodedata
 from types import MethodType
-from typing import Callable, Any, Union
+from typing import Callable, Any, Union, Optional
 
 import requests
 
 
-def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
+def log_or_raise(
+        msg: str,
+        log: Optional[logging.Logger] = None,
+        level: str = 'warning',
+        exception_cls: type = ValueError):
     if log:
         getattr(log, level)(msg)
     else:
@@ -23,7 +28,7 @@ def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
 
 
 def nolog(level='warning'):
-    class Log(object):
+    class Log:
         pass
 
     log = Log()
@@ -144,8 +149,8 @@ def metadata2markdown(tg, link_files=False) -> str:
         url = qname2url(qname)
         if url:
             if html:
-                return '<a href="{}">{}</a>'.format(url, qname)
-            return '[{}]({})'.format(qname, url)
+                return f'<a href="{url}">{qname}</a>'
+            return f'[{qname}]({url})'
         return qname
 
     def htmlify(obj, key=None):
@@ -209,15 +214,11 @@ def metadata2markdown(tg, link_files=False) -> str:
                 fks[col.name][1], fks[col.name][0], slug(fks[col.name][1]))
 
         return ' | '.join([
-            '[{}]({})'.format(col.name, col.propertyUrl)
-            if col.propertyUrl else '`{}`'.format(col.name),
-            dt,
-            desc,
-        ])
+            f'[{col.name}]({col.propertyUrl})' if col.propertyUrl else f'`{col.name}`', dt, desc])
 
     res = ['# {}\n'.format(tg.common_props.get('dc:title', 'Dataset'))]
     if tg._fname and link_files:
-        res.append('> [!NOTE]\n> Described by [{0}]({0}).\n'.format(tg._fname.name))
+        res.append(f'> [!NOTE]\n> Described by [{tg._fname.name}]({tg._fname.name}).\n')
 
     res.append(properties({k: v for k, v in tg.common_props.items() if k != 'dc:title'}))
 
@@ -225,16 +226,16 @@ def metadata2markdown(tg, link_files=False) -> str:
         fks = {
             fk.columnReference[0]: (fk.reference.columnReference[0], fk.reference.resource.string)
             for fk in table.tableSchema.foreignKeys if len(fk.columnReference) == 1}
-        header = '## <a name="table-{}"></a>Table '.format(slug(table.url.string))
+        header = f'## <a name="table-{slug(table.url.string)}"></a>Table '
         if link_files and tg._fname and tg._fname.parent.joinpath(table.url.string).exists():
-            header += '[{0}]({0})\n'.format(table.url.string)
+            header += f'[{table.url.string}]({table.url.string})\n'
         else:  # pragma: no cover
             header += table.url.string
         res.append('\n' + header + '\n')
         res.append(properties(table.common_props))
         dialect = table.inherit('dialect')
         if dialect.asdict():
-            res.append('\n**CSV dialect**: `{}`\n'.format(json.dumps(dialect.asdict())))
+            res.append(f'\n**CSV dialect**: `{json.dumps(dialect.asdict())}`\n')
         res.append('\n### Columns\n')
         res.append('Name/Property | Datatype | Description')
         res.append(' --- | --- | --- ')
