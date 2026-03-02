@@ -8,6 +8,7 @@ This module implements (partially) the W3C recommendation
 .. seealso:: https://www.w3.org/TR/tabular-metadata/
 """
 import io
+import logging
 import re
 import json
 import shutil
@@ -179,6 +180,7 @@ is_url = utils.is_url
 
 OrderedType = Union[
     int, float, decimal.Decimal, datetime.date, datetime.datetime, datetime.timedelta]
+ColRefType = tuple[str]
 
 
 class Invalid:
@@ -1509,33 +1511,20 @@ class TableGroup(TableLike):
     def tabledict(self) -> dict[str, Table]:
         return {t.local_name: t for t in self.tables}
 
-    def foreign_keys(self) -> list[tuple[Table, list, Table, list]]:
+    def foreign_keys(self) -> list[tuple[Table, ColRefType, Table, ColRefType]]:
         return [
             (
                 self.tabledict[fk.reference.resource.string],
-                fk.reference.columnReference,
+                tuple(fk.reference.columnReference),
                 t,
-                fk.columnReference)
+                tuple(fk.columnReference))
             for t in self.tables for fk in t.tableSchema.foreignKeys
             if not fk.reference.schemaReference]
 
     def validate_schema(self, strict=False):
         try:
-            for st, sc, tt, tc in self.foreign_keys():
-                if len(sc) != len(tc):
-                    raise ValueError(
-                        'Foreign key error: non-matching number of columns in source and target')
-                for scol, tcol in zip(sc, tc):
-                    scolumn = st.tableSchema.get_column(scol, strict=strict)
-                    tcolumn = tt.tableSchema.get_column(tcol, strict=strict)
-                    if not (scolumn and tcolumn):
-                        raise ValueError(
-                            'Foregin key error: missing column "{}" or "{}"'.format(scol, tcol))
-                    if scolumn.datatype and tcolumn.datatype and \
-                            scolumn.datatype.base != tcolumn.datatype.base:
-                        raise ValueError(
-                            'Foregin key error: non-matching datatype "{}:{}" or "{}:{}"'.format(
-                                scol, scolumn.datatype.base, tcol, tcolumn.datatype.base))
+            for fki in [ForeignKeyInstance(*fk) for fk in self.foreign_keys()]:
+                fki.validate(strict=strict)
         except (KeyError, AssertionError) as e:
             raise ValueError('Foreign key error: missing table "{}" referenced'.format(e))
 
@@ -1559,83 +1548,152 @@ class TableGroup(TableLike):
         except ValueError as e:
             success = False
             log_or_raise(str(e), log=log, level='error')
+
         fkeys = [ForeignKeyInstance(*fk) for fk in self.foreign_keys()]
         # FIXME: We only support Foreign Key references between tables!
-        fkeys = sorted(
-            fkeys,
-            key=lambda x: (x.source_table.local_name, x.source_colref, x.target_table.local_name))
+        # We group foreign key constraints by target table, because we only want to read the
+        # available primary keys once and then check all tables referencing the target table in
+        # a loop.
+        #
         # Grouping by local_name of tables - even though we'd like to have the table objects
         # around, too. This it to prevent going down the rabbit hole of comparing table objects
         # for equality, when comparison of the string names is enough.
-        for _, grp in itertools.groupby(fkeys, lambda x: x.source_table.local_name):
-            success = self._check_group(success, list(grp), strict, log)
+        fkeys = sorted(
+            fkeys,
+            key=lambda x: (x.target_table.local_name, x.pk, x.source_table.local_name))
+        for _, grp in itertools.groupby(fkeys, lambda x: x.target_table.local_name):
+            grp = list(grp)
+            target_table = grp[0].target_table
+            fks = collections.OrderedDict()
+            for pk, kgrp in itertools.groupby(grp, lambda x: x.pk):
+                fks[tuple(pk)] = [(fk.source_table, tuple(fk.fk)) for fk in kgrp]
+            success = self._check_fks_referencing_table(success, target_table, fks, strict, log)
         return success
 
-    def _check_group(self, success, grp: list['ForeignKeyInstance'], strict, log):
-        """Check all foreign keys defined on one table."""
-        t_fkeys = [(key, [(fk.target_table, fk.target_colref) for fk in kgrp])
-                   for key, kgrp in itertools.groupby(grp, lambda x: x.source_colref)]
-        get_seen = [(operator.itemgetter(*key), set()) for key, _ in t_fkeys]
-        for row in grp[0].source_table.iterdicts(log=log):
-            for get, seen in get_seen:
-                if get(row) in seen:
-                    # column references for a foreign key are not unique!
+    @staticmethod
+    def _check_fks_referencing_table(
+            success: bool,
+            target_table: Table,
+            fks: collections.OrderedDict[ColRefType, list[tuple[Table, ColRefType]]],
+            strict: bool,
+            log: logging.Logger,
+    ) -> bool:
+        """Check all foreign keys referencing the same table."""
+        target_table = ReferencedTable(
+            target_table, collections.OrderedDict((fk, len(fk) == 1) for fk in fks), log)
+        # Now read the available primary keys for each foreign key constraint to the table.
+        success = target_table.get_pks(success, strict)
+        for pk, source_tables in fks.items():
+            # For each foreign key constraint referencing `target_table` we check the fk values.
+            for source_table, fk in source_tables:
+                success = target_table.check_fks(success, pk, source_table, fk)
+        return success
+
+
+@dataclasses.dataclass
+class ReferencedTable:
+    """
+    Wraps a Table object to simplify checking of foreign key references.
+    """
+    table: Table
+    # The colrefs which are referenced in foreign keys to the table mapped to whether they are a
+    # single column or a composite key:
+    pks: collections.OrderedDict[ColRefType, bool]
+    log: logging.Logger
+    # We store values in table rows for each pk colref:
+    refs: dict[ColRefType, set] = dataclasses.field(
+        default_factory=lambda: collections.defaultdict(set))
+
+    def get_pks(self, success: bool, strict: bool) -> bool:
+        """Read the actual fk values in the table."""
+        itemgetters = {pk: operator.itemgetter(*pk) for pk in self.pks}
+        for row in self.table.iterdicts(log=self.log):
+            for pk in self.pks:
+                vals = itemgetters[pk](row)
+                if vals in self.refs[pk]:
+                    # Values for a primary key are not unique!
                     # https://w3c.github.io/csvw/tests/#manifest-validation#test258
                     if strict:
                         success = False
-                seen.add(get(row))
-        for (key, children), (_, seen) in zip(t_fkeys, get_seen):
-            for child, ref in children:
-                for fname, lineno, item in child.iterdicts(log=log, with_metadata=True):
-                    item = RowItem(
-                        table=grp[0].source_table,
-                        fname=fname,
-                        lineno=lineno,
-                        item=item,
-                        colref=operator.itemgetter(*ref)(item))
-                    success = self._check_item(success, item, seen, len(key) == 1, log)
+                self.refs[pk].add(vals)
         return success
 
-    def _check_item(self, success, item, seen, single_column, log):  # pylint: disable=R0913,R0917
-        if item.colref is None:
+    def _check_item(self, success: bool, ref: 'RefValues', pk: ColRefType) -> bool:
+        """
+        We check if the value for the foreign key are available in the referenced table.
+        """
+        pks = self.refs[pk]
+        single_column = self.pks[pk]
+        if ref.values is None:  # null-valued foreign key.
             return success
-        if single_column and isinstance(item.colref, list):
-            # We allow list-valued columns as foreign key columns in case
-            # it's not a composite key. If a foreign key is list-valued, we
-            # check for a matching row for each of the values in the list.
-            colrefs = item.colref
+        if single_column and isinstance(ref.values, list):
+            # We allow list-valued columns as foreign key columns in case it's not a composite key.
+            # If a foreign key is list-valued, we check for a matching row for each of the values
+            # in the list.
+            refs = ref.values
         else:
-            colrefs = [item.colref]
-        for colref in colrefs:
-            if not single_column and None in colref:  # pragma: no cover
-                # TODO: raise if any(c is not None for c in colref)?
+            refs = [ref.values]
+        for ref in refs:
+            if not single_column and None in ref:  # pragma: no cover
+                # A composite key and one component of the fk is null?
+                # TODO: raise if any(c is not None for c in values)?
                 continue
-            if colref not in seen:
-                log_or_raise(f'{item} not found in table {item.table.url.string}', log=log)
+            if ref not in pks:
+                log_or_raise(f'{ref} not found in table {self.table.url.string}', log=self.log)
                 success = False
+        return success
+
+    def check_fks(
+            self,
+            success: bool,
+            pk: ColRefType,
+            source_table: Table,
+            fk: ColRefType,
+    ) -> bool:
+        """
+        Check one fk constraint, i.e. whether the fk values in self.table actually can be found
+        in `target_table`.
+        """
+        for fname, lineno, item in source_table.iterdicts(log=self.log, with_metadata=True):
+            item = RefValues(fname=fname, lineno=lineno, values=operator.itemgetter(*fk)(item))
+            success = self._check_item(success, item, pk)
         return success
 
 
 @dataclasses.dataclass(frozen=True)
 class ForeignKeyInstance:
     """Simple structure holding the specification of a foreign key."""
-    source_table: Table
-    source_colref: list[str]
     target_table: Table
-    target_colref: list[str]
+    pk: tuple[str]
+    source_table: Table
+    fk: tuple[str]
+
+    def validate(self, strict: bool):
+        if len(self.fk) != len(self.pk):
+            raise ValueError(
+                'Foreign key error: non-matching number of columns in source and target')
+        for scol, tcol in zip(self.fk, self.pk):
+            scolumn = self.source_table.tableSchema.get_column(scol, strict=strict)
+            tcolumn = self.target_table.tableSchema.get_column(tcol, strict=strict)
+            if not (scolumn and tcolumn):
+                raise ValueError(
+                    f'Foreign key error: missing column "{scol}" or "{tcol}"')
+            if scolumn.datatype and tcolumn.datatype and \
+                    scolumn.datatype.base != tcolumn.datatype.base:
+                raise ValueError(
+                    'Foregin key error: non-matching datatype "{}:{}" or "{}:{}"'.format(
+                        scol, scolumn.datatype.base, tcol, tcolumn.datatype.base))
 
 
 @dataclasses.dataclass(frozen=True)
-class RowItem:
+class RefValues:
     """Bundle properties of a table row for simpler checking."""
-    table: Table
     fname: str
     lineno: int
-    item: dict
-    colref: Union[str, list[str]]
+    values: Union[str, list[str]]
 
     def __str__(self):
-        return f'{self.fname}:{self.lineno} Key `{self.colref}`'
+        return f'{self.fname}:{self.lineno} Key `{self.values}`'
 
 
 class CSVW:
