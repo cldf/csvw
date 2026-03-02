@@ -8,6 +8,7 @@ a basic datatype and additional behaviour.
 
 .. seealso:: http://w3c.github.io/csvw/metadata/#datatypes
 """
+import functools
 import re
 import json as _json
 import math
@@ -49,7 +50,7 @@ def to_binary(s, encoding='utf-8'):
 
 
 @register
-class anyAtomicType:
+class anyAtomicType:  # pylint: disable=invalid-name
     """
     A basic datatype consists of
 
@@ -66,7 +67,7 @@ class anyAtomicType:
 
     @classmethod
     def value_error(cls, v):
-        raise ValueError('invalid lexical value for {}: {}'.format(cls.name, v))
+        raise ValueError(f'invalid lexical value for {cls.name}: {v}')
 
     def __str__(self) -> str:
         return self.name
@@ -85,7 +86,7 @@ class anyAtomicType:
 
 
 @register
-class string(anyAtomicType):
+class string(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `str`.
 
@@ -113,7 +114,7 @@ class string(anyAtomicType):
 
 
 @register
-class anyURI(string):
+class anyURI(string):  # pylint: disable=invalid-name
     """
     Maps to `rfc3986.URIReference`.
 
@@ -148,7 +149,7 @@ class anyURI(string):
 
 
 @register
-class NMTOKEN(string):
+class NMTOKEN(string):  # pylint: disable=invalid-name
     """
     Maps to `str`
 
@@ -174,7 +175,7 @@ class NMTOKEN(string):
 
 
 @register
-class base64Binary(anyAtomicType):
+class base64Binary(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `bytes`
     """
@@ -199,7 +200,7 @@ class base64Binary(anyAtomicType):
 
 
 @register
-class _binary(base64Binary):
+class _binary(base64Binary):  # pylint: disable=invalid-name
     """
     Maps to `bytes`. Alias for :class:`base64Binary`
     """
@@ -207,7 +208,7 @@ class _binary(base64Binary):
 
 
 @register
-class hexBinary(anyAtomicType):
+class hexBinary(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `bytes`.
 
@@ -237,7 +238,7 @@ class hexBinary(anyAtomicType):
 
 
 @register
-class boolean(anyAtomicType):
+class boolean(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `bool`.
 
@@ -290,7 +291,7 @@ def with_tz(v, func, args, kw):
         tz = tz.groups()[0]
     res = func(v, *args, **kw)
     if tz:
-        dt = dateutil.parser.parse('{}{}'.format(datetime.datetime.now(), tz))
+        dt = dateutil.parser.parse(f'{datetime.datetime.now()}{tz}')
         res = datetime.datetime(
             res.year, res.month, res.day, res.hour, res.minute, res.second, res.microsecond,
             dt.tzinfo)
@@ -298,7 +299,7 @@ def with_tz(v, func, args, kw):
 
 
 @register
-class dateTime(anyAtomicType):
+class dateTime(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `datetime.datetime`.
     """
@@ -339,7 +340,7 @@ class dateTime(anyAtomicType):
         if pattern and regex:
             match = regex.match(v)
             if not match:
-                raise ValueError('{} -- {} -- {}'.format(pattern, v, regex))  # pragma:
+                raise ValueError(f'{pattern} -- {v} -- {regex}')  # pragma:
         try:
             return fromisoformat(v)
         except ValueError:
@@ -353,7 +354,7 @@ class dateTime(anyAtomicType):
 
 
 @register
-class _dateTime(dateTime):
+class _dateTime(dateTime):  # pylint: disable=invalid-name
     """
     Maps to `datetime.datetime`. Alias for :class:`dateTime`
     """
@@ -361,7 +362,7 @@ class _dateTime(dateTime):
 
 
 @register
-class date(dateTime):
+class date(dateTime):  # pylint: disable=invalid-name
     """
     Maps to `datetime.datetime` (in order to be able to preserve timezone information).
     """
@@ -390,7 +391,7 @@ class date(dateTime):
 
 
 @register
-class dateTimeStamp(dateTime):
+class dateTimeStamp(dateTime):  # pylint: disable=invalid-name
     """
     Maps to `datetime.datetime`.
     """
@@ -406,7 +407,7 @@ class dateTimeStamp(dateTime):
 
 
 @register
-class _time(dateTime):
+class _time(dateTime):  # pylint: disable=invalid-name
     """
     Maps to `datetime.datetime` (in order to be able to preserve timezone information).
     """
@@ -430,7 +431,7 @@ class _time(dateTime):
 
 
 @register
-class duration(anyAtomicType):
+class duration(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `datetime.timedelta`.
 
@@ -462,7 +463,7 @@ class duration(anyAtomicType):
 
 
 @register
-class dayTimeDuration(duration):
+class dayTimeDuration(duration):  # pylint: disable=invalid-name
     """
     Maps to `datetime.timedelta`.
     """
@@ -470,7 +471,7 @@ class dayTimeDuration(duration):
 
 
 @register
-class yearMonthDuration(duration):
+class yearMonthDuration(duration):  # pylint: disable=invalid-name
     """
     Maps to `datetime.timedelta`.
     """
@@ -478,7 +479,7 @@ class yearMonthDuration(duration):
 
 
 @register
-class decimal(anyAtomicType):
+class decimal(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `decimal.Decimal`.
 
@@ -605,7 +606,7 @@ class decimal(anyAtomicType):
 
 
 @register
-class integer(decimal):
+class integer(decimal):  # pylint: disable=invalid-name
     """
     Maps to `int`.
     """
@@ -617,7 +618,7 @@ class integer(decimal):
         res = decimal.to_python(v, **kw)
         numerator, denominator = res.as_integer_ratio()
         if denominator == 1:
-            if cls.range and not (cls.range[0] <= numerator <= cls.range[1]):
+            if cls.range and not cls.range[0] <= numerator <= cls.range[1]:
                 raise ValueError("{} must be an integer between {} and {}, but got ".format(
                     cls.name, cls.range[0], cls.range[1]), v)
             return numerator
@@ -625,7 +626,7 @@ class integer(decimal):
 
 
 @register
-class _int(integer):
+class _int(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`. Alias for :class:`integer`.
     """
@@ -633,7 +634,7 @@ class _int(integer):
 
 
 @register
-class unsignedInt(integer):
+class unsignedInt(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
 
@@ -652,7 +653,7 @@ class unsignedInt(integer):
 
 
 @register
-class unsignedShort(integer):
+class unsignedShort(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
 
@@ -671,7 +672,7 @@ class unsignedShort(integer):
 
 
 @register
-class unsignedLong(integer):
+class unsignedLong(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
 
@@ -690,7 +691,7 @@ class unsignedLong(integer):
 
 
 @register
-class unsignedByte(integer):
+class unsignedByte(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
 
@@ -712,7 +713,7 @@ class unsignedByte(integer):
 
 
 @register
-class short(integer):
+class short(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
 
@@ -731,7 +732,7 @@ class short(integer):
 
 
 @register
-class long(integer):
+class long(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
 
@@ -751,7 +752,7 @@ class long(integer):
 
 
 @register
-class byte(integer):
+class byte(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
 
@@ -771,7 +772,7 @@ class byte(integer):
 
 
 @register
-class nonNegativeInteger(integer):
+class nonNegativeInteger(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
     """
@@ -780,7 +781,7 @@ class nonNegativeInteger(integer):
 
 
 @register
-class positiveInteger(integer):
+class positiveInteger(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
     """
@@ -789,7 +790,7 @@ class positiveInteger(integer):
 
 
 @register
-class nonPositiveInteger(integer):
+class nonPositiveInteger(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
     """
@@ -799,7 +800,7 @@ class nonPositiveInteger(integer):
 
 
 @register
-class negativeInteger(integer):
+class negativeInteger(integer):  # pylint: disable=invalid-name
     """
     Maps to `int`.
     """
@@ -809,7 +810,7 @@ class negativeInteger(integer):
 
 
 @register
-class _float(anyAtomicType):
+class _float(anyAtomicType):  # pylint: disable=invalid-name
     """
     Maps to `float`.
 
@@ -848,7 +849,7 @@ class _float(anyAtomicType):
 
 
 @register
-class number(_float):
+class number(_float):  # pylint: disable=invalid-name
     """
     Maps to `float`.
     """
@@ -856,7 +857,7 @@ class number(_float):
 
 
 @register
-class double(_float):
+class double(_float):  # pylint: disable=invalid-name
     """
     Maps to `float`.
     """
@@ -864,7 +865,7 @@ class double(_float):
 
 
 @register
-class normalizedString(string):
+class normalizedString(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
 
@@ -899,7 +900,7 @@ class QName(string):
 
 
 @register
-class gDay(string):
+class gDay(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
     """
@@ -907,7 +908,7 @@ class gDay(string):
 
 
 @register
-class gMonth(string):
+class gMonth(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
     """
@@ -915,7 +916,7 @@ class gMonth(string):
 
 
 @register
-class gMonthDay(string):
+class gMonthDay(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
     """
@@ -923,7 +924,7 @@ class gMonthDay(string):
 
 
 @register
-class gYear(string):
+class gYear(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
     """
@@ -931,7 +932,7 @@ class gYear(string):
 
 
 @register
-class gYearMonth(string):
+class gYearMonth(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
     """
@@ -939,7 +940,7 @@ class gYearMonth(string):
 
 
 @register
-class xml(string):
+class xml(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
     """
@@ -947,7 +948,7 @@ class xml(string):
 
 
 @register
-class html(string):
+class html(string):  # pylint: disable=invalid-name
     """
     Maps to `str`.
     """
@@ -955,7 +956,7 @@ class html(string):
 
 
 @register
-class json(string):
+class json(string):  # pylint: disable=invalid-name
     """
     Maps to `str`, `list` or `dict`, i.e. to the result of `json.loads`.
 
@@ -1010,7 +1011,7 @@ class json(string):
     # FIXME: ignored **kw?
     # why not just to_python = staticmethod(_json.loads)?
     @staticmethod
-    def to_python(v, schema=None, **kw):
+    def to_python(v, schema=None, **_):  # pylint: disable=W0237
         res = _json.loads(v, object_pairs_hook=collections.OrderedDict)
         if schema:
             try:
@@ -1022,6 +1023,13 @@ class json(string):
     @staticmethod
     def to_string(v, **kw):
         return _json.dumps(v)
+
+
+def _get_sep(dfmt, options):
+    for d_sep in options:  # Determine the separator used for date components.
+        if d_sep in dfmt:
+            return d_sep
+    return None
 
 
 def dt_format_and_regex(fmt, no_date=False):
@@ -1063,28 +1071,10 @@ def dt_format_and_regex(fmt, no_date=False):
         "M.d.yyyy",  # e.g., 3.22.2015
     }
     time_patterns = {"HH:mm:ss", "HHmmss", "HH:mm", "HHmm"}
-
-    # We map dateTime component markers to corresponding fromat specs and regular
-    # expressions used for formatting and parsing.
-    translate = {
-        'yyyy': ('{dt.year:04d}', '(?P<year>[0-9]{4})'),
-        'MM': ('{dt.month:02d}', '(?P<month>[0-9]{2})'),
-        'dd': ('{dt.day:02d}', '(?P<day>[0-9]{2})'),
-        'M': ('{dt.month}', '(?P<month>[0-9]{1,2})'),
-        'd': ('{dt.day}', '(?P<day>[0-9]{1,2})'),
-        'HH': ('{dt.hour:02d}', '(?P<hour>[0-9]{2})'),
-        'mm': ('{dt.minute:02d}', '(?P<minute>[0-9]{2})'),
-        'ss': ('{dt.second:02d}', '(?P<second>[0-9]{2})'),
-    }
-
-    for dt_sep in ' T':  # Only a single space or "T" may separate date and time format.
-        # Since space or "T" isn't allowed anywhere else in the format, checking whether
-        # we are dealing with a date or dateTime format is simple:
-        if dt_sep in fmt:
-            break
-    else:
-        dt_sep = None
-
+    # Only a single space or "T" may separate date and time format.
+    # Since space or "T" isn't allowed anywhere else in the format, checking whether
+    # we are dealing with a date or dateTime format is simple:
+    dt_sep = _get_sep(fmt, ' T')
     if dt_sep:
         dfmt, tfmt = fmt.split(dt_sep)
     elif no_date:
@@ -1103,50 +1093,51 @@ def dt_format_and_regex(fmt, no_date=False):
     if (dfmt and dfmt not in date_patterns) or (tfmt and tfmt not in time_patterns):
         raise ValueError(fmt)
 
-    regex, format = '', ''  # Initialize the output.
+    regex, format = _get_regex_and_format(dfmt, tfmt, dt_sep, msecs)  # pylint: disable=W0622
+    return {'regex': re.compile(regex), 'fmt': format, 'tz_marker': tz_marker, 'pattern': pattern}
+
+
+def _get_regex_and_format(dfmt, tfmt, dt_sep, msecs):
+    def _add_chars(fmt, ff, rr, sep=None):
+        if sep:
+            for i, part in enumerate(fmt.split(sep)):
+                if i > 0:
+                    ff += sep
+                    rr += re.escape(sep)
+                f, r = translate[part]
+                ff += f
+                rr += r
+        else:
+            for _, chars in itertools.groupby(fmt, lambda k: k):
+                f, r = translate[''.join(chars)]
+                ff += f
+                rr += r
+        return ff, rr
+
+    # We map dateTime component markers to corresponding fromat specs and regular
+    # expressions used for formatting and parsing.
+    translate = {
+        'yyyy': ('{dt.year:04d}', '(?P<year>[0-9]{4})'),
+        'MM': ('{dt.month:02d}', '(?P<month>[0-9]{2})'),
+        'dd': ('{dt.day:02d}', '(?P<day>[0-9]{2})'),
+        'M': ('{dt.month}', '(?P<month>[0-9]{1,2})'),
+        'd': ('{dt.day}', '(?P<day>[0-9]{1,2})'),
+        'HH': ('{dt.hour:02d}', '(?P<hour>[0-9]{2})'),
+        'mm': ('{dt.minute:02d}', '(?P<minute>[0-9]{2})'),
+        'ss': ('{dt.second:02d}', '(?P<second>[0-9]{2})'),
+    }
+
+    regex, format = '', ''  # Initialize the output.  pylint: disable=redefined-builtin
 
     if dfmt:
-        for d_sep in '.-/':  # Determine the separator used for date components.
-            if d_sep in dfmt:
-                break
-        else:
-            d_sep = None
-
-        if d_sep:
-            # Iterate over date components, converting them to string format specs and regular
-            # expressions.
-            for i, part in enumerate(dfmt.split(d_sep)):
-                if i > 0:
-                    format += d_sep
-                    regex += re.escape(d_sep)
-                f, r = translate[part]
-                format += f
-                regex += r
-        else:
-            for _, chars in itertools.groupby(dfmt, lambda k: k):
-                f, r = translate[''.join(chars)]
-                format += f
-                regex += r
+        format, regex = _add_chars(dfmt, format, regex, _get_sep(dfmt, '.-/'))
 
     if dt_sep:
         format += dt_sep
         regex += re.escape(dt_sep)
 
     if tfmt:
-        # For time components the only valid separator is ":".
-        if ':' in tfmt:
-            for i, part in enumerate(tfmt.split(':')):
-                if i > 0:
-                    format += ':'
-                    regex += re.escape(':')
-                f, r = translate[part]
-                format += f
-                regex += r
-        else:
-            for _, chars in itertools.groupby(tfmt, lambda k: k):
-                f, r = translate[''.join(chars)]
-                format += f
-                regex += r
+        format, regex = _add_chars(tfmt, format, regex, ':' if ':' in tfmt else None)
 
     # Fractions of seconds are a bit of a problem, because datetime objects only offer
     # microseconds.
@@ -1154,8 +1145,7 @@ def dt_format_and_regex(fmt, no_date=False):
         format += '.{microsecond:.%s}' % msecs
         regex += r'(\.(?P<microsecond>[0-9]{1,%s})(?![0-9]))?' % msecs
         regex += r'(\.(?P<extramicroseconds>[0-9]{%s,})(?![0-9]))?' % (msecs + 1,)
-
-    return {'regex': re.compile(regex), 'fmt': format, 'tz_marker': tz_marker, 'pattern': pattern}
+    return regex, format
 
 
 class NumberPattern:
@@ -1167,36 +1157,51 @@ class NumberPattern:
     The number of # placeholder characters before the decimal do not matter, since no limit is
     placed on the maximum number of digits. There should, however, be at least one zero someplace
     in the pattern.
-    """
 
+    Example: #,##0.##
+
+    .. seealso:: `<https://www.unicode.org/reports/tr35/tr35-numbers.html#Number_Format_Patterns>`_
+    """
     def __init__(self, pattern):
         assert pattern.count(';') <= 1
         self.positive, _, self.negative = pattern.partition(';')
         if not self.negative:
             self.negative = '-' + self.positive.replace('+', '')
 
-    @property
-    def primary_grouping_size(self):
+    @functools.cached_property
+    def primary_grouping_size(self) -> int:
+        """
+        Number of digits in the primary grouping, i.e. the size of the chunk between the
+        secondary grouping character and the decimal point.
+        """
         comps = self.positive.split('.')[0].split(',')
         if len(comps) > 1:
             return comps[-1].count('#') + comps[-1].count('0')
+        return 0
 
-    @property
-    def secondary_grouping_size(self):
+    @functools.cached_property
+    def secondary_grouping_size(self) -> int:
+        """
+        Number of digits in the secondary grouping, i.e. the size of the chunk between two
+        secondary grouping characters.
+        """
         comps = self.positive.split('.')[0].split(',')
         if len(comps) > 2:
             return comps[1].count('#') + comps[1].count('0')
         return self.primary_grouping_size
 
-    @property
-    def min_digits_before_decimal_point(self):
+    @functools.cached_property
+    def min_digits_before_decimal_point(self) -> int:
+        """Number of 0s before the decimal point in the pattern."""
         integral_part = self.positive.split('.')[0]
         match = re.search('([0]+)$', integral_part)
         if match:
             return len(match.groups()[0])
+        return 0
 
-    @property
-    def exponent_digits(self):
+    @functools.cached_property
+    def exponent_digits(self) -> int:
+        """Number of digits in the exponent in the pattern."""
         _, _, exponent = self.positive.lower().partition('e')
         i = 0
         for c in exponent:
@@ -1208,8 +1213,9 @@ class NumberPattern:
                 break
         return i
 
-    @property
-    def decimal_digits(self):
+    @functools.cached_property
+    def decimal_digits(self) -> int:
+        """Number of decimal digits in the pattern."""
         i = 0
         _, _, decimal_part = self.positive.partition('.')
         for c in decimal_part:
@@ -1219,8 +1225,9 @@ class NumberPattern:
                 break
         return i
 
-    @property
-    def significant_decimal_digits(self):
+    @functools.cached_property
+    def significant_decimal_digits(self) -> int:
+        """Number of *significant* decimal digits in the pattern, i.e. 0 counts, # does not."""
         i = 0
         _, _, decimal_part = self.positive.partition('.')
         for c in decimal_part:
@@ -1230,14 +1237,10 @@ class NumberPattern:
                 break
         return i
 
-    def is_valid(self, s):
-        def digits(ss):
-            return [c for c in ss if c not in '.,E+-%‰']
-
-        integral_part, _, decimal_part = s.partition('.')
-        decimal_part, _, exponent = decimal_part.lower().partition('e')
-        groups = integral_part.split(',')
+    @staticmethod
+    def _get_significant(groups):
         significant, leadingzero, skip = [], False, True
+
         for c in ''.join(groups):
             if c in ['+', '-', '%',  # fixme: permil
                      ]:
@@ -1250,14 +1253,47 @@ class NumberPattern:
             significant.append(c)
         if not significant and leadingzero:
             significant = ['0']
-        if self.min_digits_before_decimal_point and \
-                len(significant) < self.min_digits_before_decimal_point:
+        return significant
+
+    def is_valid(self, s: str) -> bool:
+        """Validates a string representing a number against the pattern."""
+        def digits(ss):
+            return [c for c in ss if c not in '.,E+-%‰']
+
+        integral_part, _, decimal_part = s.partition('.')
+        decimal_part, _, _ = decimal_part.lower().partition('e')
+        groups = integral_part.split(',')
+        significant = self._get_significant(groups)
+
+        if any((
+            all((
+                self.min_digits_before_decimal_point,
+                len(significant) < self.min_digits_before_decimal_point)),
+            all((
+                self.primary_grouping_size,
+                groups,
+                len(digits(groups[-1])) > self.primary_grouping_size)),
+            all((
+                self.primary_grouping_size,
+                groups,
+                len(groups) > 1,
+                len(digits(groups[-1])) < self.primary_grouping_size)),
+            all((
+                decimal_part,
+                len(digits(decimal_part)) > self.decimal_digits,
+            )),
+            all((
+                self.significant_decimal_digits,
+                (not decimal_part) or (len(digits(decimal_part)) < self.significant_decimal_digits),
+            )),
+            all((
+                self.exponent_digits,
+                'e' in s.lower(),
+                len(digits(s.lower().split('e')[-1])) > self.exponent_digits
+            )),
+        )):
             return False
-        if self.primary_grouping_size and groups:
-            if len(digits(groups[-1])) > self.primary_grouping_size:
-                return False
-            if len(groups) > 1 and len(digits(groups[-1])) < self.primary_grouping_size:
-                return False
+
         if self.secondary_grouping_size and len(groups) > 1:
             for i, group in enumerate(groups[:-1]):
                 if i == 0:
@@ -1266,15 +1302,5 @@ class NumberPattern:
                 else:
                     if len(digits(group)) != self.secondary_grouping_size:
                         return False
-        if decimal_part:
-            if len(digits(decimal_part)) > self.decimal_digits:
-                return False
-        if self.significant_decimal_digits:
-            if (not decimal_part) or (len(digits(decimal_part)) < self.significant_decimal_digits):
-                return False
-
-        if self.exponent_digits and 'e' in s.lower():
-            if len(digits(s.lower().split('e')[-1])) > self.exponent_digits:
-                return False
 
         return True
