@@ -1,5 +1,4 @@
-# metadata.py
-
+# pylint: disable=too-many-lines
 """Functionality to read and write metadata for CSV files.
 
 This module implements (partially) the W3C recommendation
@@ -14,7 +13,7 @@ import json
 import shutil
 import decimal
 import pathlib
-from typing import Optional, Union, Any, Literal
+from typing import Optional, Union, Any, Literal, TypeVar
 import zipfile
 import datetime
 import operator
@@ -36,151 +35,23 @@ from .datatypes import DATATYPES
 from .dsv import Dialect as BaseDialect, UnicodeReaderWithLineNumber, UnicodeWriter
 from .frictionless import DataPackage
 from . import jsonld
+from .metadata_utils import DescriptionBase, dataclass_asdict, NAMESPACES, dialect_props, \
+    valid_context_property
 
 DEFAULT = object()
 
 __all__ = [
-    'TableGroup',
-    'Table', 'Column', 'ForeignKey',
-    'Link', 'NaturalLanguage',
-    'Datatype',
-    'is_url',
-    'CSVW',
+    'TableGroup', 'Table', 'Column', 'ForeignKey', 'Link', 'NaturalLanguage', 'Datatype',
+    'is_url', 'CSVW',
 ]
 
-NAMESPACES = {
-    'csvw': 'http://www.w3.org/ns/csvw#',
-    'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-    'rdfs': 'http://www.w3.org/2000/01/rdf-schema#',
-    'xsd': 'http://www.w3.org/2001/XMLSchema#',
-    'dc': 'http://purl.org/dc/terms/',
-    'dcat': 'http://www.w3.org/ns/dcat#',
-    'prov': 'http://www.w3.org/ns/prov#',
-    'schema': 'http://schema.org/',
-    "as": "https://www.w3.org/ns/activitystreams#",
-    "cc": "http://creativecommons.org/ns#",
-    "ctag": "http://commontag.org/ns#",
-    "dc11": "http://purl.org/dc/elements/1.1/",
-    "dctypes": "http://purl.org/dc/dcmitype/",
-    "dqv": "http://www.w3.org/ns/dqv#",
-    "duv": "https://www.w3.org/ns/duv#",
-    "foaf": "http://xmlns.com/foaf/0.1/",
-    "gr": "http://purl.org/goodrelations/v1#",
-    "grddl": "http://www.w3.org/2003/g/data-view#",
-    "ical": "http://www.w3.org/2002/12/cal/icaltzd#",
-    "jsonld": "http://www.w3.org/ns/json-ld#",
-    "ldp": "http://www.w3.org/ns/ldp#",
-    "ma": "http://www.w3.org/ns/ma-ont#",
-    "oa": "http://www.w3.org/ns/oa#",
-    "odrl": "http://www.w3.org/ns/odrl/2/",
-    "og": "http://ogp.me/ns#",
-    "org": "http://www.w3.org/ns/org#",
-    "owl": "http://www.w3.org/2002/07/owl#",
-    "qb": "http://purl.org/linked-data/cube#",
-    "rdfa": "http://www.w3.org/ns/rdfa#",
-    "rev": "http://purl.org/stuff/rev#",
-    "rif": "http://www.w3.org/2007/rif#",
-    "rr": "http://www.w3.org/ns/r2rml#",
-    "sd": "http://www.w3.org/ns/sparql-service-description#",
-    "sioc": "http://rdfs.org/sioc/ns#",
-    "skos": "http://www.w3.org/2004/02/skos/core#",
-    "skosxl": "http://www.w3.org/2008/05/skos-xl#",
-    "sosa": "http://www.w3.org/ns/sosa/",
-    "ssn": "http://www.w3.org/ns/ssn/",
-    "time": "http://www.w3.org/2006/time#",
-    "v": "http://rdf.data-vocabulary.org/#",
-    "vcard": "http://www.w3.org/2006/vcard/ns#",
-    "void": "http://rdfs.org/ns/void#",
-    "wdr": "http://www.w3.org/2007/05/powder#",
-    "wrds": "http://www.w3.org/2007/05/powder-s#",
-    "xhv": "http://www.w3.org/1999/xhtml/vocab#",
-    "xml": "http://www.w3.org/XML/1998/namespace",
-}
-CSVW_TERMS = """Cell
-Column
-Datatype
-Dialect
-Direction
-ForeignKey
-JSON
-NumericFormat
-Row
-Schema
-Table
-TableGroup
-TableReference
-Transformation
-aboutUrl
-base
-columnReference
-columns
-commentPrefix
-datatype
-decimalChar
-default
-delimiter
-describes
-dialect
-doubleQuote
-encoding
-foreignKeys
-format
-groupChar
-header
-headerRowCount
-json
-lang
-length
-lineTerminators
-maxExclusive
-maxInclusive
-maxLength
-maximum
-minExclusive
-minInclusive
-minLength
-minimum
-name
-notes
-null
-ordered
-pattern
-primaryKey
-propertyUrl
-quoteChar
-reference
-referencedRows
-required
-resource
-row
-rowTitles
-rownum
-schemaReference
-scriptFormat
-separator
-skipBlankRows
-skipColumns
-skipInitialSpace
-skipRows
-source
-suppressOutput
-tableDirection
-tableSchema
-tables
-targetFormat
-textDirection
-titles
-transformations
-trim
-uriTemplate
-url
-valueUrl
-virtual""".split()
 is_url = utils.is_url
 
 OrderedType = Union[
     int, float, decimal.Decimal, datetime.date, datetime.datetime, datetime.timedelta]
 ColRefType = tuple[str]
+RowType = collections.OrderedDict[str, Any]
+T = TypeVar('T')
 
 
 class Invalid:
@@ -214,37 +85,6 @@ class Dialect(BaseDialect):
     commentPrefix: str = None
 
 
-def json_open(filename, mode='r', encoding='utf-8'):
-    assert encoding == 'utf-8'
-    return io.open(filename, mode, encoding=encoding)
-
-
-def get_json(fname) -> Union[list, dict]:
-    fname = str(fname)
-    if is_url(fname):
-        return requests.get(fname).json(object_pairs_hook=collections.OrderedDict)
-    with json_open(fname) as f:
-        return json.load(f, object_pairs_hook=collections.OrderedDict)
-
-
-def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
-    if log:
-        getattr(log, level)(msg)
-    else:
-        raise exception_cls(msg)
-
-
-def nolog(level='warning'):
-    from types import MethodType
-
-    class Log(object):
-        pass
-
-    log = Log()
-    setattr(log, level, MethodType(lambda *args, **kw: None, log))
-    return log
-
-
 class URITemplate(uritemplate.URITemplate):
 
     def __eq__(self, other):
@@ -252,10 +92,10 @@ class URITemplate(uritemplate.URITemplate):
             return self.uri == other
         if not hasattr(other, 'uri'):
             return False
-        return super(URITemplate, self).__eq__(other)
+        return super().__eq__(other)
 
-    def asdict(self, **kw):
-        return '{}'.format(self)
+    def asdict(self, **_):
+        return f'{self}'
 
 
 def convert_uri_template(v):
@@ -278,14 +118,22 @@ class Link:
             raise ValueError('Invalid value for link property')
         self.string = string
 
+    @classmethod
+    def from_value(cls, v: Union['Link', str, pathlib.Path]):
+        if isinstance(v, Link):
+            return v
+        return cls(v)
+
     def __str__(self):
         return self.string
 
-    def asdict(self, omit_defaults=True):
+    def asdict(self, **_):
+        """Not really a dict, but at least a JSON-serializable datatype."""
         return self.string
 
     def __eq__(self, other):
-        # FIXME: Only naive, un-resolved comparison is supported at the moment.
+        # FIXME: pylint: disable=W0511
+        #  Only naive, un-resolved comparison is supported at the moment.
         return self.string == other.string if isinstance(other, Link) else False
 
     def resolve(self, base):
@@ -305,12 +153,14 @@ class Link:
 
 class NaturalLanguage(collections.OrderedDict):
     """
+    A natural language property holds a collection of string, optionally categorized into languages.
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#natural-language-properties
     """
-
-    def __init__(self, value):
-        super(NaturalLanguage, self).__init__()
+    def __init__(
+            self,
+            value: Union[str, list[str], tuple[str], dict[str, Union[str, list[str], tuple[str]]]]):
+        super().__init__()
         self.value = value
         if isinstance(self.value, str):
             self[None] = [self.value]
@@ -335,7 +185,8 @@ class NaturalLanguage(collections.OrderedDict):
         else:
             raise ValueError('invalid value type for NaturalLanguage')
 
-    def asdict(self, omit_defaults=True):
+    def asdict(self, **_):
+        """Serialize as dict."""
         if list(self) == [None]:
             if len(self[None]) == 1:
                 return self.getfirst()
@@ -344,149 +195,22 @@ class NaturalLanguage(collections.OrderedDict):
             ('und' if k is None else k, v[0] if len(v) == 1 else v)
             for k, v in self.items())
 
-    def add(self, string, lang=None):
+    def add(self, string: str, lang: Optional[str] = None) -> None:
+        """Add a string for a language."""
         if lang not in self:
             self[lang] = []
         self[lang].append(string)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.getfirst() or next(iter(self.values()))[0]
 
-    def getfirst(self, lang=None):
+    def getfirst(self, lang: Optional[str] = None) -> Optional[str]:
+        """Return the first string specified for the given language tag."""
         return self.get(lang, [None])[0]
 
 
-def valid_id_property(v):
-    if not isinstance(v, str):
-        warnings.warn('Inconsistent link property')
-        return None
-    if v.startswith('_'):
-        raise ValueError('Invalid @id property: {}'.format(v))
-    return v
-
-
-def valid_common_property(v):
-    if isinstance(v, dict):
-        if not {k[1:] for k in v if k.startswith('@')}.issubset(
-                {'id', 'language', 'type', 'value'}):
-            raise ValueError(
-                "Aside from @value, @type, @language, and @id, the properties used on an object "
-                "MUST NOT start with @.")
-        if '@value' in v:
-            if len(v) > 1:
-                if len(v) > 2 \
-                        or set(v.keys()) not in [{'@value', '@language'}, {'@value', '@type'}] \
-                        or not isinstance(v['@value'], (str, bool, int, decimal.Decimal)):
-                    raise ValueError(
-                        "If a @value property is used on an object, that object MUST NOT have "
-                        "any other properties aside from either @type or @language, and MUST "
-                        "NOT have both @type and @language as properties. The value of the "
-                        "@value property MUST be a string, number, or boolean value.")
-        if '@language' in v and '@value' not in v:
-            raise ValueError(
-                "A @language property MUST NOT be used on an object unless it also has a "
-                "@value property.")
-        if '@id' in v:
-            v['@id'] = valid_id_property(v['@id'])
-        if '@language' in v:
-            if not (isinstance(v['@language'], str) and tags.check(v['@language'])):
-                warnings.warn('Invalid language tag')
-                del v['@language']
-        if '@type' in v:
-            vv = v['@type']
-            if isinstance(vv, str):
-                if vv.startswith('_:'):
-                    raise ValueError(
-                        'The value of any @id or @type contained within a metadata document '
-                        'MUST NOT be a blank node.')
-                if not is_url(vv) and \
-                        not any(vv == ns or vv.startswith(ns + ':') for ns in NAMESPACES) and \
-                        vv not in CSVW_TERMS:
-                    raise ValueError(
-                        'The value of any member of @type MUST be either a term defined in '
-                        '[csvw-context], a prefixed name where the prefix is a term defined in '
-                        '[csvw-context], or an absolute URL.')
-            elif not isinstance(vv, (list, dict)):
-                raise ValueError('Invalid datatype for @type')
-        return {k: valid_common_property(vv) for k, vv in v.items()}
-    if isinstance(v, list):
-        return [valid_common_property(vv) for vv in v]
-    return v
-
-
 @dataclasses.dataclass
-class DescriptionBase:
-    """Container for
-    - common properties (see http://w3c.github.io/csvw/metadata/#common-properties)
-    - @-properties.
-    """
-
-    common_props: dict[str, Any] = dataclasses.field(default_factory=dict)
-    at_props: dict[str, Any] = dataclasses.field(default_factory=dict)
-
-    @classmethod
-    def partition_properties(
-            cls,
-            d: Union[dict, Any],
-            type_name: Optional[str] = None,
-            strict=True
-    ) -> Union[dict, None]:
-        if d and not isinstance(d, dict):
-            return
-        fields = {f.name: f for f in dataclasses.fields(cls)}
-        type_name = type_name or cls.__name__
-        c, a, dd = {}, {}, {}
-        for k, v in (d or {}).items():
-            if k.startswith('@'):
-                if k == '@id':
-                    v = valid_id_property(v)
-                if k == '@type' and v != type_name:
-                    raise ValueError('Invalid @type property {} for {}'.format(v, type_name))
-                a[k[1:]] = v
-            elif ':' in k:
-                c[k] = valid_common_property(v)
-            else:
-                if strict and (k not in fields):
-                    warnings.warn('Invalid property {} for {}'.format(k, type_name))
-                else:
-                    dd[k] = v
-        return dict(common_props=c, at_props=a, **dd)
-
-    @classmethod
-    def fromvalue(cls, d: dict):
-        return cls(**cls.partition_properties(d))
-
-    def _iter_dict_items(self, omit_defaults):
-        def _asdict_single(v):
-            return v.asdict(omit_defaults=omit_defaults) if hasattr(v, 'asdict') else v
-
-        def _asdict_multiple(v):
-            if isinstance(v, (list, tuple)):
-                return [_asdict_single(vv) for vv in v]
-            return _asdict_single(v)
-
-        for k, v in sorted(self.at_props.items()):
-            yield '@' + k, _asdict_multiple(v)
-
-        for k, v in sorted(self.common_props.items()):
-            yield k, _asdict_multiple(v)
-
-        for k, v in utils.attr_asdict(self, omit_defaults=omit_defaults).items():
-            if k not in ('common_props', 'at_props'):
-                yield k, _asdict_multiple(v)
-
-    def asdict(self, omit_defaults=True) -> dict:
-        # Note: The `null` property is the only inherited, list-valued property where the default
-        # is not the empty list. Thus, to allow setting it to empty, we must treat `null` as
-        # special case here.
-        # See also https://www.w3.org/TR/tabular-metadata/#dfn-inherited-property
-        return collections.OrderedDict(
-            (k, v) for k, v in self._iter_dict_items(omit_defaults)
-            if (k == 'null' or (v not in ([], {}))))
-
-
-@dataclasses.dataclass
-class Datatype(DescriptionBase):
+class Datatype(DescriptionBase):  # pylint: disable=too-many-instance-attributes
     """
     A datatype description
 
@@ -495,18 +219,17 @@ class Datatype(DescriptionBase):
 
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#datatypes>`_
     """
-
     base: str = None
     format: Optional[str] = None
     length: Optional[int] = None
-    minLength: Optional[int] = None
-    maxLength: Optional[int] = None
+    minLength: Optional[int] = None  # pylint: disable=C0103
+    maxLength: Optional[int] = None  # pylint: disable=C0103
     minimum: OrderedType = None
     maximum: OrderedType = None
-    minInclusive: Optional[bool] = None
-    maxInclusive: Optional[bool] = None
-    minExclusive: Optional[bool] = None
-    maxExclusive: Optional[bool] = None
+    minInclusive: Optional[bool] = None  # pylint: disable=C0103
+    maxInclusive: Optional[bool] = None  # pylint: disable=C0103
+    minExclusive: Optional[bool] = None  # pylint: disable=C0103
+    maxExclusive: Optional[bool] = None  # pylint: disable=C0103
 
     def __post_init__(self):
         self.base = functools.partial(
@@ -515,21 +238,20 @@ class Datatype(DescriptionBase):
             'string',
             allow_none=True,
             cond=lambda ss: ss is None or ss in DATATYPES)(self.base)
-        for att in ('length', 'maxLength', 'minLength'):
-            setattr(self, att, utils.optional(int)(getattr(self, att)))
-        for attr_ in [
-            'minimum', 'maximum', 'minInclusive', 'maxInclusive', 'minExclusive', 'maxExclusive'
-        ]:
-            if getattr(self, attr_) is not None:
-                setattr(self, attr_, self.parse(getattr(self, attr_)))
+        self._set_constraints()
+        self._validate_constraints()
+
+    def _validate_constraints(self):
+        def error_if(msg, *conditions):
+            if any(conditions):
+                raise ValueError(msg)
 
         if self.length is not None:
-            if self.minLength is not None and self.length < self.minLength:
-                raise ValueError('minLength > length')
-
-            if self.maxLength is not None:
-                if self.length > self.maxLength:
-                    raise ValueError('maxLength < length')
+            error_if(
+                'Length limits interfere',
+                self.minLength is not None and self.length < self.minLength,
+                self.maxLength is not None and self.length > self.maxLength,
+            )
 
         if self.minLength is not None and self.maxLength is not None \
                 and self.minLength > self.maxLength:
@@ -541,34 +263,35 @@ class Datatype(DescriptionBase):
         if not isinstance(
                 self.basetype(),
                 tuple((DATATYPES[name] for name in ['decimal', 'float', 'datetime', 'duration']))):
-            if any([getattr(self, at) for at in
-                    'minimum maximum minExclusive maxExclusive minInclusive maxInclusive'.split()]):
-                raise ValueError(
-                    'Applications MUST raise an error if minimum, minInclusive, maximum, '
-                    'maxInclusive, minExclusive, or maxExclusive are specified and the base '
-                    'datatype is not a numeric, date/time, or duration type.')
+            error_if(
+                'Applications MUST raise an error if minimum, minInclusive, maximum, '
+                'maxInclusive, minExclusive, or maxExclusive are specified and the base '
+                'datatype is not a numeric, date/time, or duration type.',
+                *[getattr(self, at) for at in
+                    'minimum maximum minExclusive maxExclusive minInclusive maxInclusive'.split()])
 
         if not isinstance(
                 self.basetype(),
                 (DATATYPES['string'], DATATYPES['base64Binary'], DATATYPES['hexBinary'])):
-            if self.length or self.minLength or self.maxLength:
-                raise ValueError(
-                    'Applications MUST raise an error if length, maxLength, or minLength are '
-                    'specified and the base datatype is not string or one of its subtypes, or a '
-                    'binary type.')
+            error_if(
+                'Applications MUST raise an error if length, maxLength, or minLength are '
+                'specified and the base datatype is not string or one of its subtypes, or a '
+                'binary type.',
+                self.length, self.minLength, self.maxLength)
 
-        if (self.minInclusive and self.minExclusive) or (self.maxInclusive and self.maxExclusive):
-            raise ValueError(
-                'Applications MUST raise an error if both minInclusive and minExclusive are '
-                'specified, or if both maxInclusive and maxExclusive are specified.')
-
-        if (self.minInclusive and self.maxExclusive and self.maxExclusive <= self.minInclusive) or \
-                (self.minInclusive and self.maxInclusive and self.maxInclusive < self.minInclusive):
-            raise ValueError('')
-
-        if (self.minExclusive and self.maxExclusive and self.maxExclusive <= self.minExclusive) or (
-                self.minExclusive and self.maxInclusive and self.maxInclusive <= self.minExclusive):
-            raise ValueError('')
+        error_if(
+            'Applications MUST raise an error if both minInclusive and minExclusive are '
+            'specified, or if both maxInclusive and maxExclusive are specified.',
+            self.minInclusive and self.minExclusive,
+            self.maxInclusive and self.maxExclusive,
+        )
+        error_if(
+            'Limits overlap',
+            self.minInclusive and self.maxExclusive and self.maxExclusive <= self.minInclusive,
+            self.minInclusive and self.maxInclusive and self.maxInclusive < self.minInclusive,
+            self.minExclusive and self.maxExclusive and self.maxExclusive <= self.minExclusive,
+            self.minExclusive and self.maxInclusive and self.maxInclusive <= self.minExclusive,
+        )
 
         if 'id' in self.at_props and any(
                 self.at_props['id'] == NAMESPACES['xsd'] + dt for dt in DATATYPES):
@@ -580,25 +303,34 @@ class Datatype(DescriptionBase):
                 self.format = None
                 warnings.warn('Invalid number pattern')
 
+    def _set_constraints(self):
+        for att in ('length', 'maxLength', 'minLength'):
+            setattr(self, att, utils.optional(int)(getattr(self, att)))
+        for attr_ in [
+            'minimum', 'maximum', 'minInclusive', 'maxInclusive', 'minExclusive', 'maxExclusive'
+        ]:
+            if getattr(self, attr_) is not None:
+                setattr(self, attr_, self.parse(getattr(self, attr_)))
+
     @classmethod
-    def fromvalue(cls, v: Union[str, dict, 'Datatype']) -> 'Datatype':
+    def fromvalue(cls, d: Union[str, dict, 'Datatype']) -> 'Datatype':
         """
         :param v: Initialization data for `cls`; either a single string that is the main datatype \
         of the values of the cell or a datatype description object, i.e. a `dict` or a `cls` \
         instance.
         :return: An instance of `cls`
         """
-        if isinstance(v, str):
-            return cls(base=v)
+        if isinstance(d, str):
+            return cls(base=d)
 
-        if isinstance(v, dict):
-            v.setdefault('base', 'string')
-            return cls(**cls.partition_properties(v))
+        if isinstance(d, dict):
+            d.setdefault('base', 'string')
+            return cls(**cls.partition_properties(d))
 
-        if isinstance(v, cls):
-            return v
+        if isinstance(d, cls):
+            return d
 
-        raise ValueError(v)
+        raise ValueError(d)
 
     def asdict(self, omit_defaults=True):
         res = DescriptionBase.asdict(self, omit_defaults=omit_defaults)
@@ -612,55 +344,59 @@ class Datatype(DescriptionBase):
         return res
 
     @property
-    def basetype(self):
+    def basetype(self) -> type:
         return DATATYPES[self.base]
 
     @property
-    def derived_description(self):
+    def derived_description(self) -> dict:
         return self.basetype.derived_description(self)
 
-    def formatted(self, v):
+    def formatted(self, v: Any) -> str:
+        """Format a value as string."""
         return self.basetype.to_string(v, **self.derived_description)
 
-    def parse(self, v):
+    def parse(self, v: str) -> Any:
+        """Parse a string value into a Python type."""
         if v is None:
             return v
         return self.basetype.to_python(v, **self.derived_description)
 
-    def validate(self, v):
+    def validate(self, v: T) -> T:
+        """Make sure the datatype-level constraints are met."""
         if v is None:
             return v
         try:
             l_ = len(v or '')
             if self.length is not None and l_ != self.length:
-                raise ValueError('value must have length {}'.format(self.length))
+                raise ValueError(f'value must have length {self.length}')
             if self.minLength is not None and l_ < self.minLength:
-                raise ValueError('value must have at least length {}'.format(self.minLength))
+                raise ValueError(f'value must have at least length {self.minLength}')
             if self.maxLength is not None and l_ > self.maxLength:
-                raise ValueError('value must have at most length {}'.format(self.maxLength))
+                raise ValueError(f'value must have at most length {self.maxLength}')
         except TypeError:
             pass
         if self.basetype.minmax:
             if self.minimum is not None and v < self.minimum:
-                raise ValueError('value must be >= {}'.format(self.minimum))
+                raise ValueError(f'value must be >= {self.minimum}')
             if self.minInclusive is not None and v < self.minInclusive:
-                raise ValueError('value must be >= {}'.format(self.minInclusive))
+                raise ValueError(f'value must be >= {self.minInclusive}')
             if self.minExclusive is not None and v <= self.minExclusive:
-                raise ValueError('value must be > {}'.format(self.minExclusive))
+                raise ValueError(f'value must be > {self.minExclusive}')
             if self.maximum is not None and v > self.maximum:
-                raise ValueError('value must be <= {}'.format(self.maximum))
+                raise ValueError(f'value must be <= {self.maximum}')
             if self.maxInclusive is not None and v > self.maxInclusive:
-                raise ValueError('value must be <= {}'.format(self.maxInclusive))
+                raise ValueError(f'value must be <= {self.maxInclusive}')
             if self.maxExclusive is not None and v >= self.maxExclusive:
-                raise ValueError('value must be < {}'.format(self.maxExclusive))
+                raise ValueError(f'value must be < {self.maxExclusive}')
         return v
 
-    def read(self, v):
+    def read(self, v: str) -> Any:
+        """Read a value according to the spec of the Datatype."""
         return self.validate(self.parse(v))
 
 
 @dataclasses.dataclass
-class Description(DescriptionBase):
+class Description(DescriptionBase):  # pylint: disable=R0902
     """Adds support for inherited properties.
 
     .. seealso:: http://w3c.github.io/csvw/metadata/#inherited-properties
@@ -672,17 +408,18 @@ class Description(DescriptionBase):
     # considered equal.
     _parent: Optional[DescriptionBase] = None
 
-    aboutUrl: Optional[Union[URITemplate, Invalid]] = None
+    aboutUrl: Optional[Union[URITemplate, Invalid]] = None  # pylint: disable=C0103
     datatype: Optional[Datatype] = None
     default: Optional[Union[str, list[str]]] = ""
     lang: str = "und"
     null: list[str] = dataclasses.field(default_factory=lambda: [""])
     ordered: Optional[bool] = None
-    propertyUrl: Optional[Union[URITemplate, Invalid]] = None
+    propertyUrl: Optional[Union[URITemplate, Invalid]] = None  # pylint: disable=C0103
     required: Optional[bool] = None
     separator: Optional[str] = None
-    textDirection: Optional[Literal["ltr", "rtl", "auto", "inherit"]] = None
-    valueUrl: Optional[Union[URITemplate, Invalid]] = None
+    textDirection: Optional[  # pylint: disable=C0103
+        Literal["ltr", "rtl", "auto", "inherit"]] = None
+    valueUrl: Optional[Union[URITemplate, Invalid]] = None  # pylint: disable=C0103
 
     def __post_init__(self):
         if self.datatype is not None:
@@ -709,14 +446,22 @@ class Description(DescriptionBase):
             if getattr(self, att) is not None:
                 setattr(self, att, convert_uri_template(getattr(self, att)))
 
-    def inherit(self, attr):
+    def inherit(self, attr) -> Optional[Any]:
+        """
+        The implementation of the inheritance mechanism.
+
+        The chain of inheritance is established by assigning a an object to `_parent`. If this
+        object has a method `inherit` as well (i.e. is derived from Description), the chain
+        may continue.
+        """
         v = getattr(self, attr)
         if v is None and self._parent:
             return self._parent.inherit(attr) if hasattr(self._parent, 'inherit') \
                 else getattr(self._parent, attr)
         return v
 
-    def inherit_null(self):
+    def inherit_null(self) -> list[str]:
+        """Inheritance of null is a special case due to the default value not being None."""
         if self.null == [""]:
             if self._parent and hasattr(self._parent, 'inherit_null'):
                 return self._parent.inherit_null()
@@ -735,7 +480,7 @@ class Column(Description):
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#columns>`_
     """
     name: str = None
-    suppressOutput: bool = False
+    suppressOutput: bool = False  # pylint: disable=C0103
     titles: Optional[NaturalLanguage] = None
     virtual: bool = False
     _number: Optional[int] = None
@@ -755,14 +500,17 @@ class Column(Description):
         self.virtual = utils.converter(bool, False, self.virtual)
 
     def __str__(self):
-        return self.name or \
-            (self.titles and self.titles.getfirst()) or \
-            '_col.{}'.format(self._number)
+        return self.name or (self.titles and self.titles.getfirst()) or f'_col.{self._number}'
 
     def __eq__(self, other):
         return self.asdict() == other.asdict()
 
-    def has_title(self, v):
+    def has_title(self, v) -> Union[str, bool]:
+        """
+        Check whether the name or a title of the column matches v.
+
+        If v matches a title, the associated language tag (or 'und') is returned.
+        """
         if self.name and self.name == v:
             return True
         for tag, titles in (self.titles or {}).items():
@@ -771,10 +519,11 @@ class Column(Description):
         return False
 
     @property
-    def header(self):
-        return '{}'.format(self)
+    def header(self) -> str:  # pylint: disable=missing-function-docstring
+        return f'{self}'
 
-    def read(self, v, strict=True):
+    def read(self, v: str, strict=True) -> Any:
+        """Convert a str to a Python object according to the spec for the column."""
         required = self.inherit('required')
         null = self.inherit_null()
         default = self.inherit('default')
@@ -789,18 +538,18 @@ class Column(Description):
                 warnings.warn('required column value is missing')
             raise ValueError('required column value is missing')
 
-        if separator:
+        if separator:  # A list-valued column.
             if not v:
-                v = []
+                v = []  # Empty string is interpreted as empty list.
             elif v in null:
-                v = None
+                v = None  # A null value is interpreted as missing data.
             else:
                 v = (vv or default for vv in v.split(separator))
                 v = [None if vv in null else vv for vv in v]
         elif v in null:
-            v = None
+            v = None  # A null value.
 
-        if datatype:
+        if datatype:  # Apply datatype conversion.
             if isinstance(v, list):
                 try:
                     return [datatype.read(vv) for vv in v]
@@ -812,7 +561,8 @@ class Column(Description):
             return datatype.read(v)
         return v
 
-    def write(self, v):
+    def write(self, v: Any) -> str:
+        """Convert v to a string according to the specifications for the column."""
         sep = self.inherit('separator')
         null = self.inherit_null()
         datatype = self.inherit('datatype')
@@ -831,18 +581,20 @@ class Column(Description):
 
 @dataclasses.dataclass
 class Reference:
+    """A reference specification as used to describe the targets of foreign keys."""
     resource: Optional[Link] = None
-    schemaReference: Optional[Link] = None
-    columnReference: Optional[list[str]] = None
+    schemaReference: Optional[Link] = None  # pylint: disable=C0103
+    columnReference: Optional[list[str]] = None  # pylint: disable=C0103
 
     def __post_init__(self):
         if self.resource is not None:
             if self.schemaReference is not None:
+                # Either a local resource may be referenced or a schema - not both.
                 raise ValueError(self)
-            self.resource = Link(self.resource)
+            self.resource = Link.from_value(self.resource)
 
         if self.schemaReference is not None:
-            self.schemaReference = Link(self.schemaReference)
+            self.schemaReference = Link.from_value(self.schemaReference)
 
         if isinstance(self.columnReference, str):
             self.columnReference = [self.columnReference]
@@ -850,7 +602,8 @@ class Reference:
 
 @dataclasses.dataclass
 class ForeignKey:
-    columnReference: Optional[list[str]] = None
+    """A specification of a foreign key."""
+    columnReference: Optional[list[str]] = None  # pylint: disable=C0103
     reference: Optional[Reference] = None
 
     def __post_init__(self):
@@ -859,19 +612,20 @@ class ForeignKey:
 
     @classmethod
     def fromdict(cls, d):
+        """Instantiate an object from a dict as returned by parsing the JSON metadata."""
         if isinstance(d, dict):
             try:
                 _ = Reference(**d['reference'])
-            except TypeError:
-                raise ValueError('Invalid reference property')
+            except TypeError as e:
+                raise ValueError('Invalid reference property') from e
             if not set(d.keys()).issubset({'columnReference', 'reference'}):
                 raise ValueError('Invalid foreignKey spec')
         kw = dict(d, reference=Reference(**d['reference']))
         return cls(**kw)
 
-    def asdict(self, **kw):
-        res = utils.attr_asdict(self, **kw)
-        res['reference'] = utils.attr_asdict(res['reference'], **kw)
+    def asdict(self, **kw) -> dict[str, Any]:  # pylint: disable=C0116
+        res = dataclass_asdict(self, **kw)
+        res['reference'] = dataclass_asdict(res['reference'], **kw)
         return res
 
 
@@ -887,9 +641,9 @@ class Schema(Description):
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#schemas>`_
     """
     columns: list[Column] = dataclasses.field(default_factory=list)
-    foreignKeys: list[ForeignKey] = dataclasses.field(default_factory=list)
-    primaryKey: Optional[list[str]] = None
-    rowTitles: list[str] = dataclasses.field(default_factory=list)
+    foreignKeys: list[ForeignKey] = dataclasses.field(default_factory=list)  # pylint: disable=C0103
+    primaryKey: Optional[list[str]] = None  # pylint: disable=C0103
+    rowTitles: list[str] = dataclasses.field(default_factory=list)  # pylint: disable=C0103
 
     def __post_init__(self):
         super().__post_init__()
@@ -897,7 +651,7 @@ class Schema(Description):
             Column.fromvalue(c) for c in
             utils.converter(dict, None, utils.converter(list, [], self.columns))]
         for i, col in enumerate(self.columns):
-            col._number = i + 1
+            col._number = i + 1  # pylint: disable=protected-access
         if self.foreignKeys is None:
             self.foreignKeys = []
         else:
@@ -915,48 +669,55 @@ class Schema(Description):
 
         virtual, seen, names = False, set(), set()
         for i, col in enumerate(self.columns):
-            if col.name and (col.name.startswith('_') or re.search(r'\s', col.name)):
-                warnings.warn('Invalid column name')
-            if col.virtual:  # first virtual column sets the flag
-                virtual = True
-            elif virtual:  # non-virtual column after virtual column!
-                raise ValueError('no non-virtual column allowed after virtual columns')
-            if not virtual:
-                if col.header in seen:
-                    warnings.warn('Duplicate column name!')
-                if col.name:
-                    if col.name in names:
-                        raise ValueError('Duplicate column name {}'.format(col.name))
-                    names.add(col.name)
-                seen.add(col.header)
-            col._parent = self
+            virtual = self._check_col(col, virtual, names, seen)
+            col._parent = self  # pylint: disable=protected-access
         for colref in self.primaryKey or []:
             col = self.columndict.get(colref)
             if col and not col.name:
                 warnings.warn('A primaryKey referenced column MUST have a `name` property')
                 self.primaryKey = None
 
+    def _check_col(self, col, virtual: bool, names: set[str], seen: set[str]) -> bool:
+        if col.name and (col.name.startswith('_') or re.search(r'\s', col.name)):
+            warnings.warn('Invalid column name')
+        if col.virtual:  # first virtual column sets the flag
+            virtual = True
+        elif virtual:  # non-virtual column after virtual column!
+            raise ValueError('no non-virtual column allowed after virtual columns')
+        if not virtual:
+            if col.header in seen:
+                warnings.warn('Duplicate column name!')
+            if col.name:
+                if col.name in names:
+                    raise ValueError(f'Duplicate column name {col.name}')
+                names.add(col.name)
+            seen.add(col.header)
+        return virtual
+
     @classmethod
-    def fromvalue(cls, v):
-        if isinstance(v, str):
+    def fromvalue(cls, d: Union[dict, str]) -> 'Schema':
+        """Instantiate a Schema from a dict or a URL to a JSON file."""
+        if isinstance(d, str):
             try:
                 # The schema is referenced with a URL
-                v = requests.get(v).json()
-            except:  # pragma: no cover # noqa: E722
-                return v
-        if not isinstance(v, dict):
-            if isinstance(v, int):
+                d = requests.get(d, timeout=10).json()
+            except:  # pragma: no cover # noqa: E722  # pylint: disable=W0702
+                return d
+        if not isinstance(d, dict):
+            if isinstance(d, int):
                 warnings.warn('Invalid value for tableSchema property')
-            v = {}
-        return cls(**cls.partition_properties(v))
+            d = {}
+        return cls(**cls.partition_properties(d))
 
     @property
-    def columndict(self):
+    def columndict(self) -> dict[str, Column]:
+        """A table's columns mapped by header, i.e. normalized name."""
         return {c.header: c for c in self.columns}
 
-    def get_column(self, name, strict=False):
+    def get_column(self, name: str, strict: bool = False) -> Optional[Column]:
+        """Resolve a Column by name, titles or propertyUrl."""
         col = self.columndict.get(name)
-        assert (not strict) or (col and col.name)
+        assert (not strict) or (col and col.name), name
         if not col:
             for c in self.columns:
                 if c.titles and c.titles.getfirst() == name:
@@ -964,18 +725,6 @@ class Schema(Description):
                 if c.propertyUrl and c.propertyUrl.uri == name:
                     return c
         return col
-
-
-def dialect_props(d):
-    if not isinstance(d, dict):
-        warnings.warn('Invalid dialect spec')
-        return {}
-    partitioned = Description.partition_properties(d, type_name='Dialect', strict=False)
-    del partitioned['at_props']
-    del partitioned['common_props']
-    if partitioned.get('headerRowCount'):
-        partitioned['header'] = True
-    return partitioned
 
 
 @dataclasses.dataclass
@@ -1007,8 +756,8 @@ class TableLike(Description):
     """
     dialect: Optional[Union[str, Dialect]] = None
     notes: list[str] = dataclasses.field(default_factory=list)
-    tableDirection: Literal['rtl', 'ltr', 'auto'] = 'auto'
-    tableSchema: Optional[Schema] = None
+    tableDirection: Literal['rtl', 'ltr', 'auto'] = 'auto'  # pylint: disable=invalid-name
+    tableSchema: Optional[Schema] = None  # pylint: disable=invalid-name
     transformations: list = dataclasses.field(default_factory=list)
     url: Optional[Link] = None
     _fname: Union[str, pathlib.Path] = None  # The path of the metadata file.
@@ -1016,7 +765,8 @@ class TableLike(Description):
     def __post_init__(self):
         super().__post_init__()
         if isinstance(self.dialect, str):
-            self.dialect = Dialect(**dialect_props(get_json(Link(self.dialect).resolve(self.base))))
+            self.dialect = Dialect(
+                **dialect_props(utils.get_json(Link(self.dialect).resolve(self.base))))
         elif self.dialect is not None:
             self.dialect = Dialect(**dialect_props(self.dialect))
 
@@ -1027,31 +777,17 @@ class TableLike(Description):
         if not isinstance(self.transformations, list):
             warnings.warn('Invalid transformations property')
         for tr in self.transformations:
-            Description.partition_properties(tr, type_name='Template')
+            DescriptionBase.partition_properties(tr, type_name='Template')
         if self.url is not None:
             self.url = Link(self.url)
 
-        if self.tableSchema and not (isinstance(self.tableSchema, str)):
-            self.tableSchema._parent = self
+        if self.tableSchema and not isinstance(self.tableSchema, str):
+            self.tableSchema._parent = self  # pylint: disable=protected-access
         if 'id' in self.at_props and self.at_props['id'] is None:
             self.at_props['id'] = self.base
-        ctx = self.at_props.get('context')
-        if isinstance(ctx, list):
-            for obj in ctx:
-                if (isinstance(obj, dict) and not set(obj.keys()).issubset({'@base', '@language'}))\
-                        or (isinstance(obj, str) and obj != 'http://www.w3.org/ns/csvw'):
-                    raise ValueError(
-                        'The @context MUST have one of the following values: An array composed '
-                        'of a string followed by an object, where the string is '
-                        'http://www.w3.org/ns/csvw and the object represents a local context '
-                        'definition, which is restricted to contain either or both of'
-                        '@base and @language.')
-                if isinstance(obj, dict) and '@language' in obj:
-                    if not tags.check(obj['@language']):
-                        warnings.warn('Invalid value for @language property')
-                        del obj['@language']
+        valid_context_property(self.at_props.get('context'))
 
-    def get_column(self, spec):
+    def get_column(self, spec: str) -> Optional[Column]:  # pylint: disable=C0116
         return self.tableSchema.get_column(spec) if self.tableSchema else None
 
     @classmethod
@@ -1061,7 +797,7 @@ class TableLike(Description):
         """
         if is_url(str(fname)):
             return cls.from_url(str(fname), data=data)
-        res = cls.fromvalue(data or get_json(fname))
+        res = cls.fromvalue(data or utils.get_json(fname))
         res._fname = pathlib.Path(fname)
         return res
 
@@ -1070,7 +806,7 @@ class TableLike(Description):
         """
         Instantiate a CSVW Table or TableGroup description from a metadata file specified by URL.
         """
-        data = data or get_json(url)
+        data = data or utils.get_json(url)
         url = urlparse(url)
         data.setdefault('@base', urlunparse((url.scheme, url.netloc, url.path, '', '', '')))
         for table in data.get('tables', [data]):
@@ -1089,7 +825,7 @@ class TableLike(Description):
         """
         fname = utils.ensure_path(fname)
         data = self.asdict(omit_defaults=omit_defaults)
-        with json_open(str(fname), 'w') as f:
+        with utils.json_open(str(fname), 'w') as f:
             json.dump(data, f, indent=4, separators=(',', ': '))
         return fname
 
@@ -1110,8 +846,9 @@ class TableLike(Description):
                 # **base URL** for other URLs in the metadata document.
                 return Link(ctxbase).resolve(at_props['base'])
             return at_props['base']
-        return self._parent._fname.parent if (self._parent and self._parent._fname) else \
-            (self._fname.parent if self._fname else None)
+        if self._parent and self._parent._fname:  # pylint: disable=protected-access
+            return self._parent._fname.parent  # pylint: disable=protected-access
+        return self._fname.parent if self._fname else None  # pylint: disable=protected-access
 
     def expand(self, tmpl: URITemplate, row: dict, _row, _name=None, qname=False) -> str:
         """
@@ -1135,7 +872,7 @@ class TableLike(Description):
             if tmpl.uri.startswith(prefix + ':'):
                 # If the URI Template is a QName, we expand it to a URL to prevent `Link.resolve`
                 # from turning it into a local path.
-                res = '{}{}'.format(url, tmpl.uri.split(':')[1])
+                res = f"{url}{tmpl.uri.split(':')[1]}"
                 break
         else:
             res = Link(
@@ -1150,6 +887,50 @@ class TableLike(Description):
                     if res.startswith(url):
                         res = res.replace(url, prefix + ':')
                         break
+        return res
+
+
+@dataclasses.dataclass(frozen=True)
+class CsvRow:
+    """A bag of attributes specifying a row in a CSV file."""
+    fname: str
+    lineno: int
+    row: list[str]
+
+
+@dataclasses.dataclass
+class RowParseSpec:
+    """A bag of attributes used when parsing a CSV row."""
+    strict: bool
+    log: Optional[logging.Logger]
+    row_implementation: type = collections.OrderedDict
+    error: bool = False
+
+    def log_error(self, msg: str):
+        """Log and record error."""
+        utils.log_or_raise(msg, log=self.log)
+        self.error = True
+
+
+@dataclasses.dataclass
+class TableParseSpec:
+    """Some metadata, categorizing columns in a table."""
+    colnames: list[str] = dataclasses.field(default_factory=list)
+    virtualcols: list[tuple[str, URITemplate]] = dataclasses.field(default_factory=list)
+    requiredcols: set[str] = dataclasses.field(default_factory=set)
+
+    @classmethod
+    def from_columns(cls, columns: Iterable[Column]) -> 'TableParseSpec':
+        """Initialize from columns (e.g. columns property of Schema)."""
+        res = cls()
+        for col in columns:
+            if col.virtual:
+                if col.valueUrl:
+                    res.virtualcols.append((col.header, col.valueUrl))
+            else:
+                res.colnames.append(col.header)
+            if col.required:
+                res.requiredcols.add(col.header)
         return res
 
 
@@ -1168,7 +949,7 @@ class Table(TableLike):
 
     .. seealso:: `<https://www.w3.org/TR/tabular-metadata/#tables>`_
     """
-    suppressOutput: bool = False
+    suppressOutput: bool = False  # pylint: disable=invalid-name
     _comments = []
 
     def add_foreign_key(self, colref, ref_resource, ref_colref):
@@ -1181,7 +962,7 @@ class Table(TableLike):
         """
         colref = [colref] if not isinstance(colref, (tuple, list)) else colref
         if not all(col in [c.name for c in self.tableSchema.columns] for col in colref):
-            raise ValueError('unknown column in foreignKey {0}'.format(colref))
+            raise ValueError(f'unknown column in foreignKey {colref}')
 
         self.tableSchema.foreignKeys.append(ForeignKey.fromdict({
             'columnReference': colref,
@@ -1195,6 +976,7 @@ class Table(TableLike):
 
     @property
     def local_name(self) -> Union[str, None]:
+        """The filename of a table."""
         return self.url.string if self.url else None
 
     def _get_dialect(self) -> Dialect:
@@ -1231,13 +1013,12 @@ class Table(TableLike):
                     row = [col.write(item[i]) for i, col in enumerate(non_virtual_cols)]
                 else:
                     if strict:
-                        add = set(item.keys()) - {'{}'.format(col) for col in non_virtual_cols}
+                        add = set(item.keys()) - {f'{col}' for col in non_virtual_cols}
                         if add:
-                            raise ValueError("dict contains fields not in fieldnames: {}".format(
-                                ', '.join("'{}'".format(field) for field in add)))
+                            add = ', '.join(f"'{field}'" for field in add)
+                            raise ValueError(f"dict contains fields not in fieldnames: {add}")
                     row = [
-                        col.write(item.get(
-                            col.header, item.get('{}'.format(col))))
+                        col.write(item.get(col.header, item.get(f'{col}')))
                         for col in non_virtual_cols]
                 rowcount += 1
                 writer.writerow(row)
@@ -1255,6 +1036,7 @@ class Table(TableLike):
         return rowcount
 
     def check_primary_key(self, log=None, items=None) -> bool:
+        """Make sure primary keys are unique."""
         success = True
         if items is not None:
             warnings.warn('the items argument of check_primary_key '
@@ -1263,12 +1045,10 @@ class Table(TableLike):
             get_pk = operator.itemgetter(*self.tableSchema.primaryKey)
             seen = set()
             # Read all rows in the table, ignoring errors:
-            for fname, lineno, row in self.iterdicts(log=nolog(), with_metadata=True):
+            for fname, lineno, row in self.iterdicts(log=utils.nolog(), with_metadata=True):
                 pk = get_pk(row)
                 if pk in seen:
-                    log_or_raise(
-                        '{0}:{1} duplicate primary key: {2}'.format(fname, lineno, pk),
-                        log=log)
+                    utils.log_or_raise(f'{fname}:{lineno} duplicate primary key: {pk}', log=log)
                     success = False
                 else:
                     seen.add(pk)
@@ -1277,14 +1057,123 @@ class Table(TableLike):
     def __iter__(self):
         return self.iterdicts()
 
-    def iterdicts(
+    def _get_csv_reader(self, fname, dialect, stack) -> UnicodeReaderWithLineNumber:
+        if is_url(fname):
+            handle = io.TextIOWrapper(
+                io.BytesIO(requests.get(str(fname), timeout=10).content), encoding=dialect.encoding)
+        else:
+            handle = fname
+            fpath = pathlib.Path(fname)
+            if not fpath.exists():
+                zipfname = fpath.parent.joinpath(fpath.name + '.zip')
+                if zipfname.exists():
+                    zipf = stack.enter_context(zipfile.ZipFile(zipfname))  # pylint: disable=R1732
+                    handle = io.TextIOWrapper(
+                        zipf.open([n for n in zipf.namelist() if n.endswith(fpath.name)][0]),
+                        encoding=dialect.encoding)
+
+        return stack.enter_context(UnicodeReaderWithLineNumber(handle, dialect=dialect))
+
+    def _validated_csv_header(self, header, strict) -> list[str]:
+        if not strict:
+            if self.tableSchema.columns and len(self.tableSchema.columns) < len(header):
+                warnings.warn('Column number mismatch')
+            for name, col in zip(header, self.tableSchema.columns):
+                res = col.has_title(name)
+                if (not col.name) and not res:
+                    warnings.warn('Incompatible table models')
+                if (isinstance(res, str) and  # noqa: W504
+                        res.split('-')[0] not in ['und', (self.lang or 'und').split('-')[0]]):
+                    warnings.warn('Incompatible column titles')
+        return header
+
+    def _read_row(
             self,
-            log=None,
-            with_metadata=False,
+            row: CsvRow,
+            parse_spec: RowParseSpec,
+            header_cols: list[tuple[int, str, Column]],
+            spec: TableParseSpec,
+    ) -> RowType:
+        required = {h: j for j, h, c in header_cols if c and c.required}
+        res = parse_spec.row_implementation()
+
+        for (j, k, col), v in zip(header_cols, row.row):
+            # see http://w3c.github.io/csvw/syntax/#parsing-cells
+            if col:
+                try:
+                    res[col.header] = col.read(v, strict=parse_spec.strict)
+                except ValueError as e:
+                    if not parse_spec.strict:
+                        warnings.warn(f'Invalid column value: {v} {col.datatype}; {e}')
+                        res[col.header] = v
+                    else:
+                        parse_spec.log_error(f'{row.fname}:{row.lineno}:{j + 1} {k}: {e}')
+                if k in required:
+                    del required[k]
+            else:
+                if parse_spec.strict:
+                    warnings.warn(f'Unspecified column "{k}" in table {self.local_name}')
+                res[k] = v
+
+        for k, j in required.items():
+            if k not in res:
+                parse_spec.log_error(
+                    f'{row.fname}:{row.lineno}:{j + 1} {k}: required column value is missing')
+
+        # Augment result with regular columns not provided in the data:
+        for key in spec.colnames:
+            res.setdefault(key, None)
+
+        # Augment result with virtual columns:
+        for key, value_url in spec.virtualcols:
+            res[key] = value_url.expand(**res)
+        return res
+
+    def _get_header_cols(
+            self,
+            header: list[str],
+            colnames: list[str],
+            strict: bool,
+            row: Iterable,
+    ) -> list[tuple[int, str, Column]]:
+        def default_col(index):
+            return Column.fromvalue({'name': f'_col.{index}'})
+
+        # If columns in the data are ordered as in the spec, we can match values to
+        # columns by index, rather than looking up columns by name.
+        if (header == colnames) or \
+                (len(self.tableSchema.columns) >= len(header) and not strict):
+            # Note that virtual columns are only allowed to come **after** regular ones,
+            # so we can simply zip the whole columns list, and silently ignore surplus
+            # virtual columns.
+            header_cols = list(zip(header, self.tableSchema.columns))
+        elif not strict and self.tableSchema.columns and \
+                (len(self.tableSchema.columns) < len(header)):
+            header_cols = []
+            for i, cname in enumerate(header):
+                try:
+                    header_cols.append((cname, self.tableSchema.columns[i]))
+                except IndexError:
+                    col = default_col(i + 1)
+                    header_cols.append((col.name, col))
+        else:
+            header_cols = [(h, self.tableSchema.get_column(h)) for h in header]
+
+        if not header_cols:
+            for i, _ in enumerate(row):
+                col = default_col(i + 1)
+                header_cols.append((col.name, col))
+
+        return [(j, h, c) for j, (h, c) in enumerate(header_cols)]
+
+    def iterdicts(  # pylint: disable=too-many-locals
+            self,
+            log: Optional[logging.Logger] = None,
+            with_metadata: bool = False,
             fname=None,
-            _Row=collections.OrderedDict,
+            _Row: type = collections.OrderedDict,  # pylint: disable=invalid-name
             strict=True,
-    ) -> Generator[dict, None, None]:
+    ) -> Generator[Union[dict[str, Any], tuple[str, int, dict[str, Any]]], None, None]:
         """Iterate over the rows of the table
 
         Create an iterator that maps the information in each row to a `dict` whose keys are
@@ -1307,134 +1196,68 @@ class Table(TableLike):
         """
         dialect = self._get_dialect()
         fname = fname or self.url.resolve(self.base)
-        colnames, virtualcols, requiredcols = [], [], set()
-        for col in self.tableSchema.columns:
-            if col.virtual:
-                if col.valueUrl:
-                    virtualcols.append((col.header, col.valueUrl))
-            else:
-                colnames.append(col.header)
-            if col.required:
-                requiredcols.add(col.header)
+
+        table_parse_spec = TableParseSpec.from_columns(self.tableSchema.columns)
 
         with contextlib.ExitStack() as stack:
-            if is_url(fname):
-                handle = io.TextIOWrapper(
-                    io.BytesIO(requests.get(str(fname)).content), encoding=dialect.encoding)
-            else:
-                handle = fname
-                fpath = pathlib.Path(fname)
-                if not fpath.exists():
-                    zipfname = fpath.parent.joinpath(fpath.name + '.zip')
-                    if zipfname.exists():
-                        zipf = stack.enter_context(zipfile.ZipFile(str(zipfname)))
-                        handle = io.TextIOWrapper(
-                            zipf.open([n for n in zipf.namelist() if n.endswith(fpath.name)][0]),
-                            encoding=dialect.encoding)
-
-            reader = stack.enter_context(UnicodeReaderWithLineNumber(handle, dialect=dialect))
-            reader = iter(reader)
+            reader = iter(self._get_csv_reader(fname, dialect, stack))
 
             # If the data file has a header row, this row overrides the header as
             # specified in the metadata.
             if dialect.header:
                 try:
-                    _, header = next(reader)
-                    if not strict:
-                        if self.tableSchema.columns and len(self.tableSchema.columns) < len(header):
-                            warnings.warn('Column number mismatch')
-                        for name, col in zip(header, self.tableSchema.columns):
-                            res = col.has_title(name)
-                            if (not col.name) and not res:
-                                warnings.warn('Incompatible table models')
-                            if isinstance(res, str) and res.split('-')[0] not in [
-                                    'und', (self.lang or 'und').split('-')[0]]:
-                                warnings.warn('Incompatible column titles')
+                    header = self._validated_csv_header(next(reader)[1], strict)
                 except StopIteration:  # pragma: no cover
                     return
             else:
-                header = colnames
+                header = table_parse_spec.colnames
 
-            # If columns in the data are ordered as in the spec, we can match values to
-            # columns by index, rather than looking up columns by name.
-            if (header == colnames) or \
-                    (len(self.tableSchema.columns) >= len(header) and not strict):
-                # Note that virtual columns are only allowed to come **after** regular ones,
-                # so we can simply zip the whole columns list, and silently ignore surplus
-                # virtual columns.
-                header_cols = list(zip(header, self.tableSchema.columns))
-            elif not strict and self.tableSchema.columns and \
-                    (len(self.tableSchema.columns) < len(header)):
-                header_cols = []
-                for i, cname in enumerate(header):
-                    try:
-                        header_cols.append((cname, self.tableSchema.columns[i]))
-                    except IndexError:
-                        header_cols.append((
-                            '_col.{}'.format(i + 1),
-                            Column.fromvalue({'name': '_col.{}'.format(i + 1)})))
-            else:
-                header_cols = [(h, self.tableSchema.get_column(h)) for h in header]
-            header_cols = [(j, h, c) for j, (h, c) in enumerate(header_cols)]
-            missing = requiredcols - set(c.header for j, h, c in header_cols if c)
-            if missing:
-                raise ValueError('{0} is missing required columns {1}'.format(fname, missing))
+            header_cols = None
+            for i, (lineno, row) in enumerate(reader):
+                if i == 0:
+                    header_cols = self._get_header_cols(
+                        header, table_parse_spec.colnames, strict, row)
+                    missing = table_parse_spec.requiredcols - \
+                        {c.header for j, h, c in header_cols if c}
+                    if missing:
+                        raise ValueError(f'{fname} is missing required columns {missing}')
 
-            for lineno, row in reader:
-                required = {h: j for j, h, c in header_cols if c and c.required}
-                res = _Row()
-                error = False
-                if (not header_cols) and row:
-                    header_cols = [
-                        (i,
-                         '_col.{}'.format(i + 1),
-                         Column.fromvalue({'name': '_col.{}'.format(i + 1)}))
-                        for i, _ in enumerate(row)]
-                for (j, k, col), v in zip(header_cols, row):
-                    # see http://w3c.github.io/csvw/syntax/#parsing-cells
-                    if col:
-                        try:
-                            res[col.header] = col.read(v, strict=strict)
-                        except ValueError as e:
-                            if not strict:
-                                warnings.warn(
-                                    'Invalid column value: {} {}; {}'.format(v, col.datatype, e))
-                                res[col.header] = v
-                            else:
-                                log_or_raise(
-                                    '{0}:{1}:{2} {3}: {4}'.format(fname, lineno, j + 1, k, e),
-                                    log=log)
-                                error = True
-                        if k in required:
-                            del required[k]
-                    else:
-                        if strict:
-                            warnings.warn(
-                                'Unspecified column "{0}" in table {1}'.format(k, self.local_name))
-                        res[k] = v
-
-                for k, j in required.items():
-                    if k not in res:
-                        log_or_raise(
-                            '{0}:{1}:{2} {3}: {4}'.format(
-                                fname, lineno, j + 1, k, 'required column value is missing'),
-                            log=log)
-                        error = True
-
-                # Augment result with regular columns not provided in the data:
-                for key in colnames:
-                    res.setdefault(key, None)
-
-                # Augment result with virtual columns:
-                for key, valueUrl in virtualcols:
-                    res[key] = valueUrl.expand(**res)
-
-                if not error:
-                    if with_metadata:
-                        yield fname, lineno, res
-                    else:
-                        yield res
+                parse_spec = RowParseSpec(strict=strict, log=log, row_implementation=_Row)
+                res = self._read_row(
+                    CsvRow(fname=fname, lineno=lineno, row=row),
+                    parse_spec,
+                    header_cols,
+                    table_parse_spec,
+                )
+                if not parse_spec.error:
+                    yield (fname, lineno, res) if with_metadata else res
         self._comments = reader.comments
+
+
+@dataclasses.dataclass(frozen=True)
+class ForeignKeyInstance:
+    """Simple structure holding the specification of a foreign key."""
+    target_table: Table
+    pk: ColRefType
+    source_table: Table
+    fk: ColRefType
+
+    def validate(self, strict: bool) -> None:
+        """Checks whether the colrefs for fk and pk match."""
+        if len(self.fk) != len(self.pk):
+            raise ValueError(
+                'Foreign key error: non-matching number of columns in source and target')
+        for scol, tcol in zip(self.fk, self.pk):
+            scolumn = self.source_table.tableSchema.get_column(scol, strict=strict)
+            tcolumn = self.target_table.tableSchema.get_column(tcol, strict=strict)
+            if not (scolumn and tcolumn):
+                raise ValueError(
+                    f'Foreign key error: missing column "{scol}" or "{tcol}"')
+            if scolumn.datatype and tcolumn.datatype and \
+                    scolumn.datatype.base != tcolumn.datatype.base:
+                raise ValueError(
+                    f'Foregin key error: non-matching datatype "{scol}:{scolumn.datatype.base}" '
+                    f'or "{tcol}:{tcolumn.datatype.base}"')
 
 
 @dataclasses.dataclass
@@ -1464,10 +1287,11 @@ class TableGroup(TableLike):
         self.tables = res
         super().__post_init__()
         for table in self.tables:
-            table._parent = self
+            table._parent = self  # pylint: disable=protected-access
 
     @classmethod
     def from_frictionless_datapackage(cls, dp):
+        """Initialize a TableGroup from a frictionless DataPackage."""
         return DataPackage(dp).to_tablegroup(cls)
 
     def read(self):
@@ -1509,24 +1333,30 @@ class TableGroup(TableLike):
 
     @property
     def tabledict(self) -> dict[str, Table]:
+        """Convenient access to tables by name."""
         return {t.local_name: t for t in self.tables}
 
-    def foreign_keys(self) -> list[tuple[Table, ColRefType, Table, ColRefType]]:
-        return [
-            (
-                self.tabledict[fk.reference.resource.string],
-                tuple(fk.reference.columnReference),
-                t,
-                tuple(fk.columnReference))
-            for t in self.tables for fk in t.tableSchema.foreignKeys
-            if not fk.reference.schemaReference]
-
-    def validate_schema(self, strict=False):
+    def validate_schema(self, strict: bool = False) -> list[ForeignKeyInstance]:
+        """Check whether pk and fk specs in foreign key constraints match."""
         try:
-            for fki in [ForeignKeyInstance(*fk) for fk in self.foreign_keys()]:
+            fkis = sorted(
+                [
+                    ForeignKeyInstance(
+                        self.tabledict[fk.reference.resource.string],
+                        tuple(fk.reference.columnReference),
+                        t,
+                        tuple(fk.columnReference))
+                    for t in self.tables for fk in t.tableSchema.foreignKeys
+                    if not fk.reference.schemaReference],
+                key=lambda x: (x.target_table.local_name, x.pk, x.source_table.local_name))
+        except KeyError as e:
+            raise ValueError(f'Foreign key error: missing table "{e}" referenced') from e
+        try:
+            for fki in fkis:
                 fki.validate(strict=strict)
-        except (KeyError, AssertionError) as e:
-            raise ValueError('Foreign key error: missing table "{}" referenced'.format(e))
+        except AssertionError as e:
+            raise ValueError(f'Foreign key error: missing column "{e}" referenced') from e
+        return fkis
 
     def check_referential_integrity(self, data=None, log=None, strict=False):
         """
@@ -1540,17 +1370,19 @@ class TableGroup(TableLike):
                 for fk in t.tableSchema.foreignKeys:
                     for row in t:
                         if any(row.get(col) is None for col in fk.columnReference):
-                            raise ValueError('Foreign key column is null: {} {}'.format(
-                                [row.get(col) for col in fk.columnReference], fk.columnReference))
+                            raise ValueError(
+                                f'Foreign key column is null: '
+                                f'{[row.get(col) for col in fk.columnReference]} '
+                                f'{fk.columnReference}')
         try:
-            self.validate_schema()
+            fkis = self.validate_schema()
             success = True
         except ValueError as e:
+            fkis = []
             success = False
-            log_or_raise(str(e), log=log, level='error')
+            utils.log_or_raise(str(e), log=log, level='error')
 
-        fkeys = [ForeignKeyInstance(*fk) for fk in self.foreign_keys()]
-        # FIXME: We only support Foreign Key references between tables!
+        # FIXME: We only support Foreign Key references between tables!  pylint: disable=W0511
         # We group foreign key constraints by target table, because we only want to read the
         # available primary keys once and then check all tables referencing the target table in
         # a loop.
@@ -1558,10 +1390,7 @@ class TableGroup(TableLike):
         # Grouping by local_name of tables - even though we'd like to have the table objects
         # around, too. This it to prevent going down the rabbit hole of comparing table objects
         # for equality, when comparison of the string names is enough.
-        fkeys = sorted(
-            fkeys,
-            key=lambda x: (x.target_table.local_name, x.pk, x.source_table.local_name))
-        for _, grp in itertools.groupby(fkeys, lambda x: x.target_table.local_name):
+        for _, grp in itertools.groupby(fkis, lambda x: x.target_table.local_name):
             grp = list(grp)
             target_table = grp[0].target_table
             fks = collections.OrderedDict()
@@ -1618,28 +1447,29 @@ class ReferencedTable:
                 self.refs[pk].add(vals)
         return success
 
-    def _check_item(self, success: bool, ref: 'RefValues', pk: ColRefType) -> bool:
+    def _check_item(self, success: bool, vals: 'RefValues', pk: ColRefType) -> bool:
         """
         We check if the value for the foreign key are available in the referenced table.
         """
         pks = self.refs[pk]
         single_column = self.pks[pk]
-        if ref.values is None:  # null-valued foreign key.
+        if vals.values is None:  # null-valued foreign key.
             return success
-        if single_column and isinstance(ref.values, list):
+        if single_column and isinstance(vals.values, list):
             # We allow list-valued columns as foreign key columns in case it's not a composite key.
             # If a foreign key is list-valued, we check for a matching row for each of the values
             # in the list.
-            refs = ref.values
+            refs = vals.values
         else:
-            refs = [ref.values]
+            refs = [vals.values]
         for ref in refs:
             if not single_column and None in ref:  # pragma: no cover
                 # A composite key and one component of the fk is null?
-                # TODO: raise if any(c is not None for c in values)?
+                # TODO: raise if any(c is not None for c in values)?  pylint: disable=W0511
                 continue
             if ref not in pks:
-                log_or_raise(f'{ref} not found in table {self.table.url.string}', log=self.log)
+                utils.log_or_raise(
+                    f'{vals} not found in table {self.table.url.string}', log=self.log)
                 success = False
         return success
 
@@ -1658,31 +1488,6 @@ class ReferencedTable:
             item = RefValues(fname=fname, lineno=lineno, values=operator.itemgetter(*fk)(item))
             success = self._check_item(success, item, pk)
         return success
-
-
-@dataclasses.dataclass(frozen=True)
-class ForeignKeyInstance:
-    """Simple structure holding the specification of a foreign key."""
-    target_table: Table
-    pk: tuple[str]
-    source_table: Table
-    fk: tuple[str]
-
-    def validate(self, strict: bool):
-        if len(self.fk) != len(self.pk):
-            raise ValueError(
-                'Foreign key error: non-matching number of columns in source and target')
-        for scol, tcol in zip(self.fk, self.pk):
-            scolumn = self.source_table.tableSchema.get_column(scol, strict=strict)
-            tcolumn = self.target_table.tableSchema.get_column(tcol, strict=strict)
-            if not (scolumn and tcolumn):
-                raise ValueError(
-                    f'Foreign key error: missing column "{scol}" or "{tcol}"')
-            if scolumn.datatype and tcolumn.datatype and \
-                    scolumn.datatype.base != tcolumn.datatype.base:
-                raise ValueError(
-                    'Foregin key error: non-matching datatype "{}:{}" or "{}:{}"'.format(
-                        scol, scolumn.datatype.base, tcol, tcolumn.datatype.base))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1709,7 +1514,7 @@ class CSVW:
 
             no_header = False
             try:
-                md = get_json(md_url or url)
+                md = utils.get_json(md_url or url)
                 # The URL could be read as JSON document, thus, the user supplied us with overriding
                 # metadata as per https://w3c.github.io/csvw/syntax/#overriding-metadata
             except json.decoder.JSONDecodeError:
@@ -1787,7 +1592,8 @@ class CSVW:
         """
         def describes(md, url):
             for table in md.get('tables', [md]):
-                # FIXME: We check whether the metadata describes a CSV file just superficially,
+                # FIXME: pylint: disable=W0511
+                # We check whether the metadata describes a CSV file just superficially,
                 # by comparing the last path components of the respective URLs.
                 if url.split('/')[-1] == table['url'].split('/')[-1]:
                     return True
@@ -1802,7 +1608,7 @@ class CSVW:
             desc = res.links.get('describedby')
             if desc and desc['type'] in [
                     "application/csvm+json", "application/ld+json", "application/json"]:
-                md = get_json(Link(desc['url']).resolve(url))
+                md = utils.get_json(Link(desc['url']).resolve(url))
                 if describes(md, url):
                     return md, no_header
                 warnings.warn('Ignoring linked metadata because it does not reference the data')
@@ -1829,7 +1635,7 @@ class CSVW:
         elif url:
             # Default Locations for local files:
             if pathlib.Path(str(url) + '-metadata.json').exists():
-                return get_json(pathlib.Path(str(url) + '-metadata.json')), no_header
+                return utils.get_json(pathlib.Path(str(url) + '-metadata.json')), no_header
         res = {
             '@context': "http://www.w3.org/ns/csvw",
             'url': url,
@@ -1861,7 +1667,7 @@ class CSVW:
 
     def _table_to_json(self, table):
         res = collections.OrderedDict()
-        # FIXME: id
+        # FIXME: id  pylint: disable=W0511
         res['url'] = str(table.url.resolve(table.base))
         if 'id' in table.at_props:
             res['@id'] = table.at_props['id']

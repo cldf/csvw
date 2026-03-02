@@ -15,6 +15,7 @@ import functools
 import dataclasses
 
 from . import utils
+from .metadata_utils import dataclass_asdict
 
 __all__ = ['Dialect']
 
@@ -101,7 +102,7 @@ class Dialect:
         }[self.trim]
 
     def asdict(self, omit_defaults=True):
-        return utils.attr_asdict(self, omit_defaults=omit_defaults)
+        return dataclass_asdict(self, omit_defaults=omit_defaults)
 
     @property
     def python_encoding(self):

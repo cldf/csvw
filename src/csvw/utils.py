@@ -1,3 +1,4 @@
+import io
 import re
 import copy
 import html
@@ -8,7 +9,39 @@ import pathlib
 import warnings
 import collections
 import unicodedata
-from typing import Callable, Any
+from types import MethodType
+from typing import Callable, Any, Union
+
+import requests
+
+
+def log_or_raise(msg, log=None, level='warning', exception_cls=ValueError):
+    if log:
+        getattr(log, level)(msg)
+    else:
+        raise exception_cls(msg)
+
+
+def nolog(level='warning'):
+    class Log(object):
+        pass
+
+    log = Log()
+    setattr(log, level, MethodType(lambda *args, **kw: None, log))
+    return log
+
+
+def json_open(filename, mode='r', encoding='utf-8'):
+    assert encoding == 'utf-8'
+    return io.open(filename, mode, encoding=encoding)
+
+
+def get_json(fname) -> Union[list, dict]:
+    fname = str(fname)
+    if is_url(fname):
+        return requests.get(fname).json(object_pairs_hook=collections.OrderedDict)
+    with json_open(fname) as f:
+        return json.load(f, object_pairs_hook=collections.OrderedDict)
 
 
 def optional(type_: type) -> Callable[[Any], Any]:
@@ -36,21 +69,6 @@ def ensure_path(fname):
         assert isinstance(fname, str)
         return pathlib.Path(fname)
     return fname
-
-
-def attr_asdict(obj, omit_defaults=True, omit_private=True):
-    import dataclasses
-
-    res = collections.OrderedDict()
-    for field in dataclasses.fields(obj):
-        default = field.default_factory() if callable(field.default_factory) else field.default
-        if not (omit_private and field.name.startswith('_')):
-            value = getattr(obj, field.name)
-            if not (omit_defaults and value == default):
-                if hasattr(value, 'asdict'):
-                    value = value.asdict(omit_defaults=True)
-                res[field.name] = value
-    return res
 
 
 def normalize_name(s):

@@ -8,7 +8,8 @@ import urllib.request
 import pytest
 import attr
 
-from csvw.metadata import CSVW, get_json
+from csvw.metadata import CSVW
+from csvw.utils import get_json
 
 
 def pytest_addoption(parser):

@@ -8,7 +8,7 @@ import operator
 import warnings
 import collections
 
-from csvw.metadata import json_open
+from csvw.utils import json_open
 
 import pytest
 
