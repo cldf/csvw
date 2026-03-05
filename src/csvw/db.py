@@ -33,7 +33,7 @@ import sqlite3
 import functools
 import contextlib
 import collections
-from collections.abc import Sequence
+from collections.abc import Sequence, Iterator
 import dataclasses
 
 import csvw
@@ -436,52 +436,18 @@ FROM {2} {3} GROUP BY {0}""".format(
                 # FIXME: how much do we want to use DB types? Probably as much as possible!
                 # Thus we need to convert on write **and** read!
                 #
-                convert, seps, refs = {}, {}, collections.defaultdict(dict)
-                table = self.tdict[tname]  # The TableSpec object.
-
-                # Assemble the conversion dictionary:
-                for col in table.columns:
-                    convert[self.translate(tname, col.name)] = [col.name, identity]
-                    if col.csvw_type in TYPE_MAP:
-                        convert[self.translate(tname, col.name)][1] = \
-                            TYPE_MAP[col.csvw_type].convert
-                    else:
-                        convert[self.translate(tname, col.name)][1] = \
-                            DATATYPES[col.csvw_type].to_python
-                    if col.separator:
-                        if col.csvw_type == 'string':
-                            seps[self.translate(tname, col.name)] = col.separator
-                        else:
-                            seps[self.translate(tname, col.name)] = 'json'
-
+                spec = TableReadSpec(self.tdict[tname], tname, self.translate)
                 # Retrieve the many-to-many relations:
-                for col, at in table.many_to_many.items():
+                for col, at in spec.table.many_to_many.items():
                     for pk, v in self.select_many_to_many(conn, at, col).items():
-                        refs[pk][self.translate(tname, col)] = v
+                        spec.references[pk][self.translate(tname, col)] = v
 
                 cols, rows = select(conn, self.translate(tname))
                 for row in rows:
-                    d = collections.OrderedDict()
-                    for k, v in zip(cols, row):
-                        if k in seps:
-                            if v is None:
-                                d[k] = None
-                            elif not v:
-                                d[k] = []
-                            elif seps[k] == 'json':
-                                d[k] = json.loads(v)
-                            else:
-                                d[k] = [convert[k][1](v_) for v_ in (v or '').split(seps[k])]
-                        else:
-                            d[k] = convert[k][1](v) if v is not None else None
-                    pk = d[self.translate(tname, table.primary_key[0])] \
-                        if table.primary_key and len(table.primary_key) == 1 else None
-                    d.update({k: [] for k in table.many_to_many})
-                    d.update(refs.get(pk, {}))
-                    res[self.translate(tname)].append(d)
+                    res[self.translate(tname)].append(spec.read_row(zip(cols, row)))
         return res
 
-    def association_table_context(self, table, column, fkey):
+    def association_table_context(self, _, column, fkey):
         """
         Context for association tables is created calling this method.
 
@@ -498,11 +464,49 @@ FROM {2} {3} GROUP BY {0}""".format(
         return fkey, column
 
     def write_from_tg(self, _force=False, _exists_ok=False, _skip_extra=False):
+        """Write the data from the contained tablegroup to a db."""
         return self.write(
             force=_force,
             _exists_ok=_exists_ok,
             _skip_extra=_skip_extra,
             **self.tg.read())
+
+    def _get_rows(self, t, items, refs, _skip_extra):
+        rows, keys = [], []
+        cols = {c.name: c for c in t.columns}
+        for i, row in enumerate(items):
+            pk = row[t.primary_key[0]] if t.primary_key and len(t.primary_key) == 1 else None
+            values = []
+            for k, v in row.items():
+                if k in t.many_to_many:
+                    assert pk
+                    atkey = tuple([t.many_to_many[k].name] +  # noqa: W504
+                                  [c.name for c in t.many_to_many[k].columns])
+                    # We distinguish None - meaning NULL - and [] - meaning no items - as
+                    # values of list-valued columns.
+                    refs[atkey] = [
+                        tuple([pk] + list(self.association_table_context(t, k, vv)))
+                        for vv in (v or [])]
+                else:
+                    if k not in cols:
+                        if _skip_extra:
+                            continue
+                        raise ValueError(f'unspecified column {k} found in data')
+                    col = cols[k]
+                    if isinstance(v, list):
+                        # Note: This assumes list-valued columns are of datatype string!
+                        if col.csvw_type == 'string':
+                            v = (col.separator or ';').join(
+                                col.db_type.convert(vv) or '' for vv in v)
+                        else:
+                            v = json.dumps(v)
+                    else:
+                        v = col.db_type.convert(v) if v is not None else None
+                    if i == 0:
+                        keys.append(col.name)
+                    values.append(v)
+            rows.append(tuple(values))
+        return rows, keys
 
     def write(self, *, force=False, _exists_ok=False, _skip_extra=False, **items):
         """
@@ -513,8 +517,7 @@ FROM {2} {3} GROUP BY {0}""".format(
         if self.fname and self.fname.exists():
             if not force:
                 raise ValueError('db file already exists, use force=True to overwrite')
-            else:
-                self.fname.unlink()
+            self.fname.unlink()
 
         with self.connection() as db:
             for table in self.tables:
@@ -527,46 +530,56 @@ FROM {2} {3} GROUP BY {0}""".format(
             for t in self.tables:
                 if t.name not in items:
                     continue
-                rows, keys = [], []
-                cols = {c.name: c for c in t.columns}
-                for i, row in enumerate(items[t.name]):
-                    pk = row[t.primary_key[0]] \
-                        if t.primary_key and len(t.primary_key) == 1 else None
-                    values = []
-                    for k, v in row.items():
-                        if k in t.many_to_many:
-                            assert pk
-                            at = t.many_to_many[k]
-                            atkey = tuple([at.name] + [c.name for c in at.columns])
-                            # We distinguish None - meaning NULL - and [] - meaning no items - as
-                            # values of list-valued columns.
-                            for vv in (v or []):
-                                fkey, context = self.association_table_context(t, k, vv)
-                                refs[atkey].append((pk, fkey, context))
-                        else:
-                            if k not in cols:
-                                if _skip_extra:
-                                    continue
-                                else:
-                                    raise ValueError(
-                                        'unspecified column {0} found in data'.format(k))
-                            col = cols[k]
-                            if isinstance(v, list):
-                                # Note: This assumes list-valued columns are of datatype string!
-                                if col.csvw_type == 'string':
-                                    v = (col.separator or ';').join(
-                                        col.db_type.convert(vv) or '' for vv in v)
-                                else:
-                                    v = json.dumps(v)
-                            else:
-                                v = col.db_type.convert(v) if v is not None else None
-                            if i == 0:
-                                keys.append(col.name)
-                            values.append(v)
-                    rows.append(tuple(values))
+                rows, keys = self._get_rows(t, items[t.name], refs, _skip_extra)
                 insert(db, self.translate, t.name, keys, *rows)
 
             for atkey, rows in refs.items():
                 insert(db, self.translate, atkey[0], atkey[1:], *rows)
 
             db.commit()
+
+
+@dataclasses.dataclass
+class TableReadSpec:
+    """Bundles data informing the reading of table rows."""
+    table: TableSpec
+    name: str
+    translate: SchemaTranslator
+    converters: dict[str, tuple[str, Callable]] = dataclasses.field(default_factory=dict)
+    separators: dict[str, str] = dataclasses.field(default_factory=dict)
+    references: dict = dataclasses.field(default_factory=lambda: collections.defaultdict(dict))
+
+    def __post_init__(self):
+        # Assemble the conversion dictionary:
+        for col in self.table.columns:
+            if col.csvw_type in TYPE_MAP:
+                conv = TYPE_MAP[col.csvw_type].convert
+            else:
+                conv = DATATYPES[col.csvw_type].to_python
+            self.converters[self.translate(self.name, col.name)] = (col.name, conv)
+            if col.separator:
+                if col.csvw_type == 'string':
+                    self.separators[self.translate(self.name, col.name)] = col.separator
+                else:
+                    self.separators[self.translate(self.name, col.name)] = 'json'
+
+    def read_row(self, row: Iterator[tuple[str, Any]]) -> collections.OrderedDict[str, Any]:
+        """Read a table according to spec."""
+        d = collections.OrderedDict()
+        for k, v in row:
+            if k in self.separators:
+                if v is None:
+                    d[k] = None
+                elif not v:
+                    d[k] = []
+                elif self.separators[k] == 'json':
+                    d[k] = json.loads(v)
+                else:
+                    d[k] = [self.converters[k][1](v_) for v_ in (v or '').split(self.separators[k])]
+            else:
+                d[k] = self.converters[k][1](v) if v is not None else None
+        pk = d[self.translate(self.name, self.table.primary_key[0])] \
+            if self.table.primary_key and len(self.table.primary_key) == 1 else None
+        d.update({k: [] for k in self.table.many_to_many})
+        d.update(self.references.get(pk, {}))
+        return d

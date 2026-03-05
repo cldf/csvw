@@ -44,7 +44,7 @@ def json_open(filename, mode='r', encoding='utf-8'):
 def get_json(fname) -> Union[list, dict]:
     fname = str(fname)
     if is_url(fname):
-        return requests.get(fname).json(object_pairs_hook=collections.OrderedDict)
+        return requests.get(fname, timeout=10).json(object_pairs_hook=collections.OrderedDict)
     with json_open(fname) as f:
         return json.load(f, object_pairs_hook=collections.OrderedDict)
 
@@ -158,14 +158,13 @@ def metadata2markdown(tg, link_files=False) -> str:
         For inclusion in tables we must use HTML for lists.
         """
         if isinstance(obj, list):
-            return '<ol>{}</ol>'.format(
-                ''.join('<li>{}</li>'.format(htmlify(item, key=key)) for item in obj))
+            lis = ''.join(f'<li>{htmlify(item, key=key)}</li>' for item in obj)
+            return f'<ol>{lis}</ol>'
         if isinstance(obj, dict):
             items = []
             for k, v in obj.items():
-                items.append('<dt>{}</dt><dd>{}</dd>'.format(
-                    qname2link(k, html=True), html.escape(str(v))))
-            return '<dl>{}</dl>'.format(''.join(items))
+                items.append(f'<dt>{qname2link(k, html=True)}</dt><dd>{html.escape(str(v))}</dd>')
+            return f"<dl>{''.join(items)}</dl>"
         return str(obj)
 
     def properties(props):
@@ -193,15 +192,15 @@ def metadata2markdown(tg, link_files=False) -> str:
             if col.datatype.format:
                 if re.fullmatch(r'[\w\s]+(\|[\w\s]+)*', col.datatype.format):
                     dt += '<br>Valid choices:<br>'
-                    dt += ''.join(' `{}`'.format(w) for w in col.datatype.format.split('|'))
+                    dt += ''.join(f' `{w}`' for w in col.datatype.format.split('|'))
                 elif col.datatype.base == 'string':
-                    dt += '<br>Regex: `{}`'.format(col.datatype.format)
+                    dt += f'<br>Regex: `{col.datatype.format}`'
             if col.datatype.minimum:
-                dt += '<br>&ge; {}'.format(col.datatype.minimum)
+                dt += f'<br>&ge; {col.datatype.minimum}'
             if col.datatype.maximum:
-                dt += '<br>&le; {}'.format(col.datatype.maximum)
+                dt += f'<br>&le; {col.datatype.maximum}'
         if col.separator:
-            dt = 'list of {} (separated by `{}`)'.format(dt, col.separator)
+            dt = f'list of {dt} (separated by `{col.separator}`)'
         desc = col.common_props.get('dc:description', '').replace('\n', ' ')
 
         if pk and col.name in pk:

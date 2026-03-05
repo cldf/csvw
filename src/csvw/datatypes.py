@@ -1,3 +1,4 @@
+# pylint: disable=C0302
 """
 We model the hierarchy of basic datatypes using a class hierarchy.
 
@@ -25,6 +26,7 @@ import isodate
 import rfc3986
 import babel.numbers
 import babel.dates
+from babel.dates import format_date
 import jsonschema
 import dateutil.parser
 
@@ -38,12 +40,12 @@ __all__ = ['DATATYPES']
 DATATYPES = {}
 
 
-def register(cls):
+def register(cls):  # pylint: disable=C0116
     DATATYPES[cls.name] = cls
     return cls
 
 
-def to_binary(s, encoding='utf-8'):
+def to_binary(s, encoding='utf-8'):  # pylint: disable=C0116
     if not isinstance(s, bytes):
         return bytes(s, encoding=encoding)
     return s  # pragma: no cover
@@ -73,16 +75,16 @@ class anyAtomicType:  # pylint: disable=invalid-name
         return self.name
 
     @staticmethod
-    def derived_description(datatype: "csvw.Datatype") -> dict:  # pylint: disable=C0116
+    def derived_description(datatype: "csvw.Datatype") -> dict:  # pylint: disable=C0116,W0613
         return {}
 
     @staticmethod
-    def to_python(v: str, **kw) -> Any:  # pylint: disable=C0116
+    def to_python(v: str, **_) -> Any:  # pylint: disable=C0116
         return v  # pragma: no cover
 
     @staticmethod
-    def to_string(v: object, **kw) -> str:  # pylint: disable=C0116
-        return '{}'.format(v)
+    def to_string(v: object, **_) -> str:  # pylint: disable=C0116
+        return f'{v}'
 
 
 @register
@@ -137,7 +139,7 @@ class anyURI(string):  # pylint: disable=invalid-name
         return rfc3986.URIReference.from_string(res.encode('utf-8'))
 
     @staticmethod
-    def to_string(v, **kw):  # pylint: disable=C0116
+    def to_string(v, **_):  # pylint: disable=C0116
         if hasattr(v, 'geturl'):
             # Presumably a `urllib.parse.ParseResult`.
             return v.geturl()
@@ -183,19 +185,19 @@ class base64Binary(anyAtomicType):  # pylint: disable=invalid-name
     example = 'YWJj'
 
     @staticmethod
-    def to_python(v, **kw):  # pylint: disable=C0116
+    def to_python(v, **_):  # pylint: disable=C0116
         try:
             res = to_binary(v, encoding='ascii')
         except UnicodeEncodeError:
             base64Binary.value_error(v[:10])
         try:
             res = base64.decodebytes(res)
-        except Exception:
-            raise ValueError('invalid base64 encoding')
+        except Exception as e:
+            raise ValueError('invalid base64 encoding') from e
         return res
 
     @staticmethod
-    def to_string(v, **kw):  # pylint: disable=C0116
+    def to_string(v, **_):  # pylint: disable=C0116
         return base64.encodebytes(v).decode().strip()
 
 
@@ -221,19 +223,19 @@ class hexBinary(anyAtomicType):  # pylint: disable=invalid-name
     example = 'ab'
 
     @staticmethod
-    def to_python(v, **kw):  # pylint: disable=C0116
+    def to_python(v, **_):  # pylint: disable=C0116
         try:
             res = to_binary(v, encoding='ascii')
         except UnicodeEncodeError:
             hexBinary.value_error(v[:10])
         try:
             res = binascii.unhexlify(res)
-        except (binascii.Error, TypeError):
-            raise ValueError('invalid hexBinary encoding')
+        except (binascii.Error, TypeError) as e:
+            raise ValueError('invalid hexBinary encoding') from e
         return res
 
     @staticmethod
-    def to_string(v, **kw):  # pylint: disable=C0116
+    def to_string(v, **_):  # pylint: disable=C0116
         return binascii.hexlify(v).decode().upper()
 
 
@@ -347,7 +349,7 @@ class dateTime(anyAtomicType):  # pylint: disable=invalid-name
             return dateTime._parse(v, datetime.datetime, regex, tz_marker=tz_marker)
 
     @staticmethod
-    def to_string(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
+    def to_string(v, regex=None, pattern=None, **_):  # pylint: disable=C0116
         if pattern:
             return babel.dates.format_datetime(v, tzinfo=v.tzinfo, format=pattern)
         return v.isoformat()
@@ -380,11 +382,10 @@ class date(dateTime):  # pylint: disable=invalid-name
     @staticmethod
     def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
         return with_tz(
-            v.strip(), dateTime.to_python, [], dict(regex=regex, fmt=fmt, pattern=pattern))
+            v.strip(), dateTime.to_python, [], {'regex': regex, 'fmt': fmt, 'pattern': pattern})
 
     @staticmethod
     def to_string(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
-        from babel.dates import format_date
         if pattern:
             return format_date(v, format=pattern, locale='en')
         return dateTime.to_string(v, regex=regex, fmt=fmt, tz_marker=tz_marker, pattern=pattern)
@@ -421,12 +422,12 @@ class _time(dateTime):  # pylint: disable=invalid-name
     @staticmethod
     def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
         if pattern and 'x' in pattern.lower():
-            return dateutil.parser.parse('{}T{}'.format(datetime.date.today().isoformat(), v))
+            return dateutil.parser.parse(f'{datetime.date.today().isoformat()}T{v}')
         assert regex is not None
-        return with_tz(v, dateTime._parse, [datetime.datetime, regex], dict(tz_marker=tz_marker))
+        return with_tz(v, dateTime._parse, [datetime.datetime, regex], {'tz_marker': tz_marker})
 
     @staticmethod
-    def to_string(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
+    def to_string(v, regex=None, pattern=None, **_):  # pylint: disable=C0116
         return babel.dates.format_time(v, tzinfo=v.tzinfo, format=pattern)
 
 
@@ -452,13 +453,13 @@ class duration(anyAtomicType):  # pylint: disable=invalid-name
         return {'format': datatype.format}
 
     @staticmethod
-    def to_python(v, format=None, **kw):  # pylint: disable=C0116
+    def to_python(v, format=None, **_):  # pylint: disable=C0116,W0622
         if format and not re.match(format, v):
             raise ValueError
         return isodate.parse_duration(v)
 
     @staticmethod
-    def to_string(v, format=None, **kw):  # pylint: disable=C0116
+    def to_string(v, format=None, **_):  # pylint: disable=C0116,W0613,W0622
         return isodate.duration_isoformat(v)
 
 
@@ -530,11 +531,12 @@ class decimal(anyAtomicType):  # pylint: disable=invalid-name
         return {}
 
     @staticmethod
-    def to_python(v, pattern=None, decimalChar=None, groupChar=None):  # pylint: disable=C0116
-        if isinstance(v, str) and 'e' in v.lower():
-            raise ValueError('Invalid value for decimal')
-
-        if isinstance(v, str) and re.search('{0}{0}+'.format(re.escape(groupChar or ',')), v):
+    def to_python(v, pattern=None, decimalChar=None, groupChar=None):  # pylint: disable=C0116,W0221
+        if any((
+            isinstance(v, str) and 'e' in v.lower(),
+            isinstance(v, str) and  # noqa: W504
+            re.search(f"{re.escape(groupChar or ',')}{re.escape(groupChar or ',')}+", v),
+        )):
             raise ValueError('Invalid value for decimal')
 
         if groupChar is None and pattern and ',' in pattern:
@@ -543,8 +545,7 @@ class decimal(anyAtomicType):  # pylint: disable=invalid-name
             decimalChar = '.'
         if pattern and not NumberPattern(pattern).is_valid(
                 v.replace(groupChar or ',', ',').replace(decimalChar or '.', '.')):
-            raise ValueError(
-                'Invalid value "{}" for decimal with pattern "{}"'.format(v, pattern))
+            raise ValueError(f'Invalid value "{v}" for decimal with pattern "{pattern}"')
 
         factor = 1
         if isinstance(v, str):
@@ -565,9 +566,10 @@ class decimal(anyAtomicType):  # pylint: disable=invalid-name
             return _decimal.Decimal(v) * factor
         except (TypeError, _decimal.InvalidOperation):
             decimal.value_error(v)
+        return None  # pragma: no cover
 
     @staticmethod
-    def to_string(v, pattern=None, decimalChar=None, groupChar=None):  # pylint: disable=C0116
+    def to_string(v, pattern=None, decimalChar=None, groupChar=None):  # pylint: disable=C0116,W0221
         if f'{v}' in decimal._reverse_special:
             return decimal._reverse_special[f'{v}']
 
@@ -600,7 +602,8 @@ class decimal(anyAtomicType):  # pylint: disable=invalid-name
                     return groupChar
                 if m.group('c') == '.':
                     return decimalChar
-            r = '(?P<c>[{}])'.format(re.escape((decimalChar or '') + (groupChar or '')))
+                return None
+            r = f"(?P<c>[{re.escape((decimalChar or '') + (groupChar or ''))}])"
             v = re.sub(r, repl, v)
         return v
 
@@ -614,14 +617,14 @@ class integer(decimal):  # pylint: disable=invalid-name
     range: Optional[tuple[int, int]] = None
 
     @classmethod
-    def to_python(cls, v, **kw):  # pylint: disable=C0116
+    def to_python(cls, v, **kw):  # pylint: disable=C0116,W0221
         res = decimal.to_python(v, **kw)
         numerator, denominator = res.as_integer_ratio()
         if denominator == 1:
-            if cls.range and not cls.range[0] <= numerator <= cls.range[1]:
+            if cls.range and not cls.range[0] <= numerator <= cls.range[1]:  # pylint: disable=E1136
                 raise ValueError(
-                    f"{cls.name} must be an integer between {cls.range[0]} and {cls.range[1]}, "
-                    f"but got ", v)
+                    f"{cls.name} must be an integer between "
+                    f"{cls.range[0]} and {cls.range[1]}, but got ", v)  # pylint: disable=E1136
             return numerator
         raise ValueError('Invalid value for integer')
 
@@ -834,7 +837,7 @@ class _float(anyAtomicType):  # pylint: disable=invalid-name
         return {}
 
     @staticmethod
-    def to_python(v, pattern=None, **kw):  # pylint: disable=R1710
+    def to_python(v, pattern=None, **_):  # pylint: disable=R1710
         if pattern and not NumberPattern(pattern).is_valid(v):
             raise ValueError(f'Invalid value "{v}" for number with pattern "{pattern}"')
 
@@ -1021,7 +1024,7 @@ class json(string):  # pylint: disable=invalid-name
         return res
 
     @staticmethod
-    def to_string(v, **kw):
+    def to_string(v, **_):
         return _json.dumps(v)
 
 
