@@ -36,7 +36,7 @@ def format_value(value: Any, col: 'Column') -> str:  # pylint: disable=R0911
             res = re.sub('T[0-9.:]+', '', res)
         if isinstance(value, (datetime.datetime, datetime.time)):
             stamp, _, milliseconds = res.partition('.')
-            return f'{stamp}.{milliseconds.rstrip('0')}' if milliseconds \
+            return f'{stamp}.{milliseconds.rstrip("0")}' if milliseconds \
                 else stamp.replace('+00:00', 'Z')
         return res  # pragma: no cover
     if isinstance(value, datetime.timedelta):

@@ -14,7 +14,7 @@ import re
 import json as _json
 import math
 import base64
-from typing import Optional, TYPE_CHECKING, Any
+from typing import Optional, TYPE_CHECKING, Any, Callable
 import decimal as _decimal
 import binascii
 import datetime
@@ -103,13 +103,14 @@ class string(anyAtomicType):  # pylint: disable=invalid-name
             # We wrap a regex specified as `format` property into a group and add `$` to
             # make sure the whole string is matched when validating.
             try:
-                return {'regex': re.compile(r'({})$'.format(datatype.format))}
+                return {
+                    'regex': re.compile(r'({})$'.format(datatype.format))}  # pylint: disable=C0209
             except re.error:
                 warnings.warn('Invalid regex pattern as datatype format')
         return {}
 
     @staticmethod
-    def to_python(v, regex=None):  # pylint: disable=C0116
+    def to_python(v, regex=None, **_):  # pylint: disable=C0116
         if regex and not regex.match(v):
             string.value_error(v)
         return v
@@ -134,7 +135,7 @@ class anyURI(string):  # pylint: disable=invalid-name
     name = 'anyURI'
 
     @staticmethod
-    def to_python(v, regex=None):  # pylint: disable=C0116
+    def to_python(v, regex=None, **_):  # pylint: disable=C0116
         res = string.to_python(v, regex=regex)
         return rfc3986.URIReference.from_string(res.encode('utf-8'))
 
@@ -169,7 +170,7 @@ class NMTOKEN(string):  # pylint: disable=invalid-name
     name = "NMTOKEN"
 
     @staticmethod
-    def to_python(v, regex=None):  # pylint: disable=C0116
+    def to_python(v, regex=None, **_):  # pylint: disable=C0116
         v = string.to_python(v, regex=regex)
         if not re.fullmatch(r'[\w.:-]*', v):
             NMTOKEN.value_error(v)
@@ -271,24 +272,25 @@ class boolean(anyAtomicType):  # pylint: disable=invalid-name
         return {'true': true, 'false': false}
 
     @staticmethod
-    def to_python(s, true=('true', '1'), false=('false', '0')):  # pylint: disable=C0116
-        if isinstance(s, bool) or s is None:
-            return s
-        if s in true:
+    def to_python(v, true=('true', '1'), false=('false', '0'), **_):  # pylint: disable=C0116
+        if isinstance(v, bool) or v is None:
+            return v
+        if v in true:
             return True
-        if s in false:
+        if v in false:
             return False
-        raise boolean.value_error(s)
+        raise boolean.value_error(v)
 
     @staticmethod
-    def to_string(v, true=('true', '1'), false=('false', '0')):  # pylint: disable=C0116
+    def to_string(v, true=('true', '1'), false=('false', '0'), **_):  # pylint: disable=C0116
         return (true if v else false)[0]
 
 
-def with_tz(v, func, args, kw):
+def with_tz(v, func: Callable[..., datetime.datetime], args: tuple, kw: dict) -> datetime.datetime:
+    """Handle timezone when parsing a datatime using func."""
     tz_pattern = re.compile('(Z|[+-][0-2][0-9]:[0-5][0-9])$')
     tz = tz_pattern.search(v)
-    if tz:
+    if tz:  # We split off the timezone and handle it separately.
         v = v[:tz.start()]
         tz = tz.groups()[0]
     res = func(v, *args, **kw)
@@ -338,7 +340,7 @@ class dateTime(anyAtomicType):  # pylint: disable=invalid-name
         return res
 
     @staticmethod
-    def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
+    def to_python(v, regex=None, tz_marker=None, pattern=None, **_):  # pylint: disable=C0116
         if pattern and regex:
             match = regex.match(v)
             if not match:
@@ -349,7 +351,7 @@ class dateTime(anyAtomicType):  # pylint: disable=invalid-name
             return dateTime._parse(v, datetime.datetime, regex, tz_marker=tz_marker)
 
     @staticmethod
-    def to_string(v, regex=None, pattern=None, **_):  # pylint: disable=C0116
+    def to_string(v, pattern=None, **_):  # pylint: disable=C0116
         if pattern:
             return babel.dates.format_datetime(v, tzinfo=v.tzinfo, format=pattern)
         return v.isoformat()
@@ -380,12 +382,18 @@ class date(dateTime):  # pylint: disable=invalid-name
             return dt_format_and_regex('yyyy-MM-dd')
 
     @staticmethod
-    def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
+    def to_python(v,  # pylint: disable=C0116
+                  regex=None, tz_marker=None, pattern=None, fmt=None, **_):
         return with_tz(
             v.strip(), dateTime.to_python, [], {'regex': regex, 'fmt': fmt, 'pattern': pattern})
 
     @staticmethod
-    def to_string(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
+    def to_string(v,   # pylint: disable=C0116,W0221
+                  pattern=None,
+                  regex=None,
+                  tz_marker=None,
+                  fmt=None,
+                  **_):
         if pattern:
             return format_date(v, format=pattern, locale='en')
         return dateTime.to_string(v, regex=regex, fmt=fmt, tz_marker=tz_marker, pattern=pattern)
@@ -420,14 +428,14 @@ class _time(dateTime):  # pylint: disable=invalid-name
         return dt_format_and_regex(datatype.format or 'HH:mm:ss', no_date=True)
 
     @staticmethod
-    def to_python(v, regex=None, fmt=None, tz_marker=None, pattern=None):  # pylint: disable=C0116
+    def to_python(v, regex=None, tz_marker=None, pattern=None, **_):  # pylint: disable=C0116
         if pattern and 'x' in pattern.lower():
             return dateutil.parser.parse(f'{datetime.date.today().isoformat()}T{v}')
         assert regex is not None
         return with_tz(v, dateTime._parse, [datetime.datetime, regex], {'tz_marker': tz_marker})
 
     @staticmethod
-    def to_string(v, regex=None, pattern=None, **_):  # pylint: disable=C0116
+    def to_string(v, pattern=None, **_):  # pylint: disable=C0116
         return babel.dates.format_time(v, tzinfo=v.tzinfo, format=pattern)
 
 
@@ -886,7 +894,7 @@ class normalizedString(string):  # pylint: disable=invalid-name
     name = 'normalizedString'
 
     @staticmethod
-    def to_python(v, regex=None):
+    def to_python(v, regex=None, **_):
         if v:
             for c in '\r\n\t':
                 v = v.replace(c, ' ')
@@ -1011,7 +1019,6 @@ class json(string):  # pylint: disable=invalid-name
                 pass
         return {}
 
-    # FIXME: ignored **kw?
     # why not just to_python = staticmethod(_json.loads)?
     @staticmethod
     def to_python(v, schema=None, **_):  # pylint: disable=W0237
@@ -1245,7 +1252,7 @@ class NumberPattern:
         significant, leadingzero, skip = [], False, True
 
         for c in ''.join(groups):
-            if c in ['+', '-', '%',  # fixme: permil
+            if c in ['+', '-', '%',  # fixme: permil  # pylint: disable=fixme
                      ]:
                 continue
             if c == '0' and skip:

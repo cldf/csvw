@@ -244,6 +244,25 @@ def test_many_to_many(tg_with_foreign_keys):
     db._connection.close()
 
 
+def test_many_to_many_2(tg_with_foreign_keys):
+    db = Database(tg_with_foreign_keys)
+    db.write(
+        ref=[
+            {'pk': '1', 'ref1': ['y', 'x']},
+            {'pk': '2', 'ref1': ['x']},
+        ],
+        data=[{'v': 'x'}, {'v': 'y'}])
+
+    res = db.read()['ref'][0]
+    # Associations between the same pair of tables are grouped by foreign key column:
+    assert res['ref1'] == ['y', 'x']
+    assert res['ref2'] == []
+    res = db.read()['ref'][1]
+    # Associations between the same pair of tables are grouped by foreign key column:
+    assert res['ref1'] == ['x']
+    db._connection.close()
+
+
 def test_many_to_many_no_context(tg_with_foreign_keys):
     class DatabaseWithoutContext(Database):
         def association_table_context(self, table, column, fkey):

@@ -1,3 +1,6 @@
+"""
+Functionality to address python compatibility issues.
+"""
 import re
 import sys
 import datetime
