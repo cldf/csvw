@@ -27,7 +27,6 @@ import dataclasses
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from language_tags import tags
-import requests
 import uritemplate
 
 from . import utils
@@ -701,7 +700,7 @@ class Schema(Description):
         if isinstance(d, str):
             try:
                 # The schema is referenced with a URL
-                d = requests.get(d, timeout=10).json()
+                d = utils.request_get(d).json()
             except:  # pragma: no cover # noqa: E722  # pylint: disable=W0702
                 return d
         if not isinstance(d, dict):
@@ -1066,7 +1065,7 @@ class Table(TableLike):
     def _get_csv_reader(self, fname, dialect, stack) -> UnicodeReaderWithLineNumber:
         if is_url(fname):
             handle = io.TextIOWrapper(
-                io.BytesIO(requests.get(str(fname), timeout=10).content), encoding=dialect.encoding)
+                io.BytesIO(utils.request_get(str(fname)).content), encoding=dialect.encoding)
         else:
             handle = fname
             fpath = pathlib.Path(fname)
@@ -1609,23 +1608,24 @@ class CSVW:
         if url and is_url(url):
             # §5.2 Link Header
             # https://w3c.github.io/csvw/syntax/#link-header
-            res = requests.head(url, timeout=10)
-            no_header = bool(re.search(r'header\s*=\s*absent', res.headers.get('content-type', '')))
-            desc = res.links.get('describedby')
-            if desc and desc['type'] in [
-                    "application/csvm+json", "application/ld+json", "application/json"]:
-                md = utils.get_json(Link(desc['url']).resolve(url))
-                if describes(md, url):
-                    return md, no_header
+            content_type, links = utils.request_head(url)
+            no_header = bool(re.search(r'header\s*=\s*absent', content_type))
+            for link in links:
+                if link.params.get('rel') == 'describedby':
+                    if link.params.get('type') in [
+                            "application/csvm+json", "application/ld+json", "application/json"]:
+                        md = utils.get_json(Link(link.url).resolve(url))
+                        if describes(md, url):
+                            return md, no_header
                 warnings.warn('Ignoring linked metadata because it does not reference the data')
 
             # §5.3 Default Locations and Site-wide Location Configuration
             # https://w3c.github.io/csvw/syntax/
             # #default-locations-and-site-wide-location-configuration
-            res = requests.get(Link('/.well-known/csvm').resolve(url), timeout=10)
+            res = utils.request_get(Link('/.well-known/csvm').resolve(url))
             locs = res.text if res.status_code == 200 else '{+url}-metadata.json\ncsv-metadata.json'
             for line in locs.split('\n'):
-                res = requests.get(Link(URITemplate(line).expand(url=url)).resolve(url), timeout=10)
+                res = utils.request_get(Link(URITemplate(line).expand(url=url)).resolve(url))
                 if res.status_code == 200:
                     try:
                         md = res.json()

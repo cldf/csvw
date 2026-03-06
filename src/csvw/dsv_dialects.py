@@ -25,17 +25,18 @@ ENCODING_MAP = {
 
 
 def convert_encoding(s):
+    """We want to force utf-8 encoding, but accept diverse ways of specifying this :)."""
     s = utils.type_checker(str, 'utf-8', s)
     try:
         _ = 'x'.encode(ENCODING_MAP.get(s, s))
         return s
     except LookupError:
-        warnings.warn('Invalid value for property: {}'.format(s))
+        warnings.warn(f'Invalid value for property: {s}')
         return 'utf-8'
 
 
 @dataclasses.dataclass
-class Dialect:
+class Dialect:  # pylint: disable=too-many-instance-attributes
     """
     A CSV dialect specification.
 
@@ -43,17 +44,18 @@ class Dialect:
     """
 
     encoding: str = 'utf-8'
-    lineTerminators: list[str] = dataclasses.field(default_factory=lambda: ['\r\n', '\n'])
-    quoteChar: str = '"'
-    doubleQuote: bool = True
-    skipRows: int = 0
-    commentPrefix: str = '#'
+    lineTerminators: list[str] = dataclasses.field(  # pylint: disable=invalid-name
+        default_factory=lambda: ['\r\n', '\n'])
+    quoteChar: str = '"'  # pylint: disable=invalid-name
+    doubleQuote: bool = True  # pylint: disable=invalid-name
+    skipRows: int = 0  # pylint: disable=invalid-name
+    commentPrefix: str = '#'  # pylint: disable=invalid-name
     header: bool = True
-    headerRowCount: int = 1
+    headerRowCount: int = 1  # pylint: disable=invalid-name
     delimiter: str = ','
-    skipColumns: int = 0
-    skipBlankRows: bool = False
-    skipInitialSpace: bool = False
+    skipColumns: int = 0  # pylint: disable=invalid-name
+    skipBlankRows: bool = False  # pylint: disable=invalid-name
+    skipInitialSpace: bool = False  # pylint: disable=invalid-name
     trim: Literal['true', 'false', 'start', 'end'] = 'false'
 
     def __post_init__(self):

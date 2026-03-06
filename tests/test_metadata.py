@@ -14,6 +14,7 @@ import pytest
 
 import csvw
 from csvw.dsv import Dialect
+from csvw.utils import GetResponse
 
 FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
@@ -759,22 +760,20 @@ AF,9799379"""}
             with pytest.raises(ValueError):
                 tg.check_referential_integrity()
 
-    def test_remote_schema(self, tmp_path):
-        import requests_mock
+    def test_remote_schema(self, tmp_path, mocker):
+        def request_get(url):
+            return GetResponse(text="""\
+{"columns": [
+    {"name": "countryCode", "datatype": "string"},
+    {"name": "name", "datatype": "string"}]}""")
 
-        with requests_mock.Mocker() as m:
-            schema = """
-            {"columns": [
-                {"name": "countryCode", "datatype": "string"},
-                {"name": "name", "datatype": "string"}]}
-            """
-            m.get("http://example.com/schema", content=schema.encode('utf8'))
-            tg = self._make_tablegroup(
-                tmp_path,
-                metadata="""{
+        mocker.patch('csvw.metadata.utils.request_get', request_get)
+        tg = self._make_tablegroup(
+            tmp_path,
+            metadata="""{
   "@context": "http://www.w3.org/ns/csvw",
   "tables": [{"url": "countries.csv", "tableSchema": "http://example.com/schema"}]}""")
-            assert len(tg.tables[0].tableSchema.columns) == 2
+        assert len(tg.tables[0].tableSchema.columns) == 2
 
         # The remote content has been inlined:
         out = tmp_path / 'md.json'
@@ -824,20 +823,13 @@ def test_zip_support(tmp_path):
     assert len(list(csvw.TableGroup.from_file(out.parent / 'md.json').tables[0])) == 4
 
 
-def test_from_url():
-    import requests_mock
+def test_from_url(mocker):
+    def request_get(url):
+        return GetResponse(content=FIXTURES.joinpath(url.split('/')[-1]).read_bytes())
 
-    def content(req, ctx):
-        ctx.status_code = 200
-        return FIXTURES.joinpath(req.url.split('/')[-1]).read_bytes()
-
-    with requests_mock.Mocker() as m:
-        m.get(
-            requests_mock.ANY,
-            content=content)
-
-        t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
-        assert len(list(t)) == 2
+    mocker.patch('csvw.utils.request_get', request_get)
+    t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
+    assert len(list(t)) == 2
 
 
 def test_datatype_limits(tmp_path):

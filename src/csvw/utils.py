@@ -9,10 +9,89 @@ import keyword
 import logging
 import warnings
 import collections
+import dataclasses
 import unicodedata
+import urllib.request
 from typing import Callable, Any, Union, Optional
 
-import requests
+HTTP_REQUEST_TIMEOUT = 10
+
+
+@dataclasses.dataclass
+class LinkHeader:
+    """
+    https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Link
+    """
+    url: str
+    params: dict[str, str]
+
+    @classmethod
+    def from_string(cls, s):
+        """
+        <uri-reference>; param1=value1; param2="value2"
+        """
+        comps = re.split(r'>\s*;\s*', s.strip(), maxsplit=1)
+        if len(comps) == 2:
+            url, sparams = comps
+        else:
+            url, sparams = comps[0], ''
+        assert url.startswith('<')
+        url = url[1:].strip()
+        params = {}
+        for sparam in sparams.split(';'):
+            key, _, value = sparam.strip().partition('=')
+            key, value = key.strip(), (value or '').strip()
+            if value.startswith('"'):
+                assert value.endswith('"')
+                value = value[1:-1].strip()
+            params[key] = value or None
+        return cls(url=url, params=params)
+
+    @classmethod
+    def iter_links(cls, s):
+        """
+        A Link header might contain multiple links separated by comma.
+        """
+        for i, single in enumerate(re.split(r',\s*<', s)):
+            yield cls.from_string(single if i == 0 else '<' + single)
+
+
+def request_head(url) -> tuple[str, list[LinkHeader]]:
+    """Makes a HEAD request and returns the relevant response data."""
+    req = urllib.request.Request(url, method='HEAD')
+    with urllib.request.urlopen(req, timeout=HTTP_REQUEST_TIMEOUT) as response:
+        links = []
+        for mult in response.info().get_all('Link') or []:
+            links.extend(LinkHeader.iter_links(mult))
+        return response.info().get_content_type() or '', links
+
+
+@dataclasses.dataclass
+class GetResponse:
+    status_code: int = 200
+    content: bytes = None
+    text: str = None
+
+    def __post_init__(self):
+        if self.content and not self.text:
+            self.text = self.content.decode('utf8')
+        if self.text and not self.content:
+            self.content = self.text.encode('utf8')
+
+    @classmethod
+    def from_response(cls, response):
+        content = response.read()
+        text = content.decode(response.headers.get_content_charset() or 'utf-8')
+        return cls(status_code=response.status, content=content, text=text)
+
+    def json(self):
+        return json.loads(self.text, object_pairs_hook=collections.OrderedDict)
+
+
+def request_get(url: str) -> GetResponse:
+    """Makes a GET request."""
+    with urllib.request.urlopen(url, timeout=HTTP_REQUEST_TIMEOUT) as response:
+        return GetResponse.from_response(response)
 
 
 def log_or_raise(
@@ -40,7 +119,7 @@ def get_json(fname) -> Union[list, dict]:
     """Retrieve JSON content from a local file or remote URL."""
     fname = str(fname)
     if is_url(fname):
-        return requests.get(fname, timeout=10).json(object_pairs_hook=collections.OrderedDict)
+        return request_get(fname).json()
     with json_open(fname) as f:
         return json.load(f, object_pairs_hook=collections.OrderedDict)
 

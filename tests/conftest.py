@@ -2,25 +2,26 @@ import json
 import pathlib
 import warnings
 import contextlib
+import dataclasses
 import urllib.parse
 import urllib.request
+from typing import Optional, Literal
 
 import pytest
-import attr
 
 from csvw.metadata import CSVW
-from csvw.utils import get_json
+from csvw.utils import get_json, LinkHeader, GetResponse
 
 
 def pytest_addoption(parser):
     parser.addoption("--number", type=int, help="csvw json test number", default=None)
 
 
-def csvw_tests_url(path):
-    return 'http://www.w3.org/2013/csvw/tests/{}'.format(path)
+def csvw_tests_url(path) -> str:
+    return f'http://www.w3.org/2013/csvw/tests/{path}'
 
 
-def csvw_tests_path(path):
+def csvw_tests_path(path) -> pathlib.Path:
     return pathlib.Path(__file__).parent / 'fixtures' / 'csvw' / 'tests' / path
 
 
@@ -32,27 +33,32 @@ def unorder(o):
     return o
 
 
-@attr.s
+@dataclasses.dataclass
 class CSWVTest:
-    id = attr.ib(converter=lambda s: s.split('#')[-1])
-    type = attr.ib(validator=attr.validators.in_([
+    id: str
+    type: Literal[
         'csvt:NegativeJsonTest',
         'csvt:ToJsonTest',
         'csvt:ToJsonTestWithWarnings',
         'csvt:PositiveValidationTest',
         'csvt:NegativeValidationTest',
-        'csvt:WarningValidationTest',
-    ]))
-    name = attr.ib()
-    comment = attr.ib()
-    approval = attr.ib()
-    option = attr.ib(
-        converter=lambda d: {k: csvw_tests_url(v) if k == 'metadata' else v for k, v in d.items()})
-    action = attr.ib(converter=lambda s: csvw_tests_url(s))
-    result = attr.ib(converter=lambda s: csvw_tests_url(s) if s else None, default=None)
-    implicit = attr.ib(default=None)
-    httpLink = attr.ib(default=None)
-    contentType = attr.ib(default=None)
+        'csvt:WarningValidationTest']
+    name: str
+    comment: str
+    approval: str
+    option: dict
+    action: str
+    result: Optional[str] = None
+    implicit: str = None
+    httpLink: str = None
+    contentType: str = None
+
+    def __post_init__(self):
+        self.id = self.id.split('#')[-1]
+        self.option = {
+            k: csvw_tests_url(v) if k == 'metadata' else v for k, v in self.option.items()}
+        self.action = csvw_tests_url(self.action)
+        self.result = csvw_tests_url(self.result) if self.result else None
 
     @property
     def is_json_test(self):
@@ -65,6 +71,31 @@ class CSWVTest:
     @property
     def number(self):  # pragma: no cover
         return int(self.id.replace('test', ''))
+
+    def request_head(self, _):
+        if self.contentType:
+            return self.contentType, []
+        if self.httpLink:
+            return '', [LinkHeader.from_string(self.httpLink)]
+        return '', []
+
+    @staticmethod
+    def request_get(url):
+        url = urllib.parse.urlparse(url)
+        if url.netloc == 'www.w3.org':
+            if url.path.startswith('/2013/csvw/tests/'):
+                p = csvw_tests_path(url.path.replace('/2013/csvw/tests/', ''))
+                if p.exists():
+                    return GetResponse(content=p.read_bytes())
+            elif url.path == '/.well-known/csvm':
+                return GetResponse(
+                    text="""{+url}-metadata.json
+    csv-metadata.json
+    {+url}.json
+    csvm.json
+    """)
+            return GetResponse(status_code=404)
+        raise ValueError(url)  # pragma: no cover
 
     def _run(self):
         with contextlib.ExitStack() as stack:
@@ -107,37 +138,11 @@ class CSWVTest:
                        unorder(get_json(self.result)), \
                     '{}: {}'.format(self.id, self.name)
 
-    def run(self):
-        import requests_mock
-
-        def text_callback(request, context):
-            url = urllib.parse.urlparse(request.url)
-            if url.netloc == 'www.w3.org':
-                if url.path.startswith('/2013/csvw/tests/'):
-                    p = csvw_tests_path(url.path.replace('/2013/csvw/tests/', ''))
-                    if p.exists():
-                        context.status_code = 200
-                        return p.read_text(encoding='utf8')
-                elif url.path == '/.well-known/csvm':
-                    context.status_code = 200
-                    return """{+url}-metadata.json
-csv-metadata.json
-{+url}.json
-csvm.json
-"""
-                context.status_code = 404
-                return ''
-            raise ValueError(request.url)  # pragma: no cover
-
-        with requests_mock.Mocker() as mock:
-            if self.contentType:
-                mock.head(self.action, text='', headers={'Content-Type': self.contentType})
-            elif self.httpLink:
-                mock.head(self.action, text='', headers={'Link': self.httpLink})
-            else:
-                mock.head(self.action, text='', headers={})
-            mock.get(requests_mock.ANY, text=text_callback)
-            self._run()
+    def run(self, mocker):
+        mocker.patch('csvw.metadata.utils.request_head', self.request_head)
+        mocker.patch('csvw.metadata.utils.request_get', self.request_get)
+        mocker.patch('csvw.utils.request_get', self.request_get)
+        self._run()
 
 
 def pytest_generate_tests(metafunc):

@@ -6,18 +6,18 @@ FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
 
 @pytest.mark.conformance
-def test_csvw_json(csvwjsontest):
-    csvwjsontest.run()
+def test_csvw_json(csvwjsontest, mocker):
+    csvwjsontest.run(mocker)
 
 
 @pytest.mark.conformance
-def test_csvw_nonnorm(csvwnonnormtest):
-    csvwnonnormtest.run()
+def test_csvw_nonnorm(csvwnonnormtest, mocker):
+    csvwnonnormtest.run(mocker)
 
 
 @pytest.mark.conformance
-def test_csvw_validation(csvwvalidationtest):
-    csvwvalidationtest.run()
+def test_csvw_validation(csvwvalidationtest, mocker):
+    csvwvalidationtest.run(mocker)
 
 
 def test_prefix_in_property_url():
