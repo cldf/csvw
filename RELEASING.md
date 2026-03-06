@@ -7,6 +7,14 @@ Releasing csvw
 tox -r
 ```
 
+- Run the integration test from the README:
+```python
+import json
+from csvw import CSVW
+data = CSVW('https://raw.githubusercontent.com/cldf/csvw/master/tests/fixtures/test.tsv')
+print(json.dumps(data.to_json(minimal=True), indent=4))
+```
+
 - Make sure flake8 passes:
 ```shell
 flake8 src

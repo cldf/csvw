@@ -8,11 +8,12 @@ import string
 import keyword
 import logging
 import warnings
+import contextlib
 import collections
 import dataclasses
 import unicodedata
 import urllib.request
-from typing import Callable, Any, Union, Optional
+from typing import Callable, Any, Union, Optional, Literal
 
 HTTP_REQUEST_TIMEOUT = 10
 
@@ -58,10 +59,31 @@ class LinkHeader:
             yield cls.from_string(single if i == 0 else '<' + single)
 
 
+@contextlib.contextmanager
+def urlopen(
+        url,
+        method: Optional[Literal['HEAD', 'GET']] = 'GET',
+        timeout=HTTP_REQUEST_TIMEOUT,
+):
+    """
+    Open URLs
+    - without raising an exception on HTTP errors,
+    - passing a specific User-Agent header,
+    - specifying a timeout.
+    """
+    from csvw import __version__
+
+    class NonRaisingHTTPErrorProcessor(urllib.request.HTTPErrorProcessor):
+        http_response = https_response = lambda self, request, response: response
+
+    opener = urllib.request.build_opener(NonRaisingHTTPErrorProcessor)
+    opener.addheaders = [('User-agent', f'csvw/{__version__}')]
+    yield opener.open(urllib.request.Request(url, method=method), timeout=timeout)
+
+
 def request_head(url) -> tuple[str, list[LinkHeader]]:
     """Makes a HEAD request and returns the relevant response data."""
-    req = urllib.request.Request(url, method='HEAD')
-    with urllib.request.urlopen(req, timeout=HTTP_REQUEST_TIMEOUT) as response:
+    with urlopen(url) as response:
         links = []
         for mult in response.info().get_all('Link') or []:
             links.extend(LinkHeader.iter_links(mult))
@@ -94,7 +116,7 @@ class GetResponse:
 
 def request_get(url: str) -> GetResponse:
     """Makes a GET request."""
-    with urllib.request.urlopen(url, timeout=HTTP_REQUEST_TIMEOUT) as response:
+    with urlopen(url) as response:
         return GetResponse.from_response(response)
 
 

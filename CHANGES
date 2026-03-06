@@ -1,6 +1,19 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- removed dependency on `attrs`
+
+Backwards incompatibility
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Since formerly `@attr.s` decorated classes are now dataclasses, any class inheriting from these
+  will be broken.
+- Some functions have been moved to different modules, so imports may be broken.
+
+
 Version 3.7.0
 -------------
 
