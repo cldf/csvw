@@ -547,7 +547,6 @@ class Database:
                     continue
                 rows, keys = self._get_rows(t, items[t.name], refs, _skip_extra)
                 insert(db, self.translate, t.name, keys, *rows)
-            print(refs)
 
             for atkey, rows in refs.items():
                 insert(db, self.translate, atkey[0], atkey[1:], *rows)

@@ -133,7 +133,7 @@ def csvw2json(args=None, test=False):
     return exit(0, test=test)  # pylint: disable=R1722
 
 
-def csvw2sqlite(args=None, test=False):  # pragma: no cover
+def csvw2sqlite(args=None, test=False):
     """Convert CSVW to SQLite"""
     args = parsed_args(
         csvw2sqlite.__doc__,

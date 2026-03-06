@@ -15,14 +15,7 @@ FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
 @pytest.fixture
 def tg():
-    return TableGroup.fromvalue({'tables': [
-        {
-            'url': 'data',
-            'tableSchema': {
-                'columns': []
-            }
-        }
-    ]})
+    return TableGroup.fromvalue({'tables': [{'url': 'data', 'tableSchema': {'columns': []}}]})
 
 
 @pytest.fixture

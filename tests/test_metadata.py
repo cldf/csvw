@@ -42,7 +42,7 @@ def test_Link(link, base, res):
     assert csvw.Link(link).resolve(base) == res
 
 
-class TestColumnEquality(object):
+class TestColumnEquality:
 
     def test_get_column(self):
         t1 = csvw.Table.fromvalue({
@@ -58,7 +58,7 @@ class TestColumnEquality(object):
         assert t1.tableSchema.columns[0] == t2.tableSchema.columns[0]
 
 
-class TestColumnAccess(object):
+class TestColumnAccess:
 
     def test_get_column(self):
         t = csvw.Table.fromvalue({
@@ -77,7 +77,7 @@ class TestColumnAccess(object):
         assert t.get_column('xyz').name is None
 
 
-class TestDialect(object):
+class TestDialect:
 
     @staticmethod
     def _roundtrip(t, fpath, *items):
@@ -135,7 +135,7 @@ class TestDialect(object):
         assert res[0]['col1'] == '$val'
 
 
-class TestNaturalLanguage(object):
+class TestNaturalLanguage:
 
     def test_string(self):
         l = csvw.NaturalLanguage('abc')
@@ -169,7 +169,7 @@ class TestNaturalLanguage(object):
                '{"und": ["\\u00e4", "a"], "de": "\\u00f6"}'
 
 
-class TestColumn(object):
+class TestColumn:
 
     def test_read_rite_with_separator(self):
         col = csvw.Column.fromvalue({'separator': ';', 'null': 'nn'})
@@ -240,7 +240,7 @@ def _load_json(path):
         return json.load(f)
 
 
-class TestTable(object):
+class TestTable:
 
     @staticmethod
     def _make_table(tmp_path, data=None, metadata=None):
@@ -301,7 +301,7 @@ class TestTable(object):
             list(t.iterdicts(fname=str(data)))
 
 
-class TestTableGroup(object):
+class TestTableGroup:
 
     @staticmethod
     def _make_tablegroup(tmp_path, data=None, metadata=None):
