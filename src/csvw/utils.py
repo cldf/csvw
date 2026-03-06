@@ -33,18 +33,20 @@ class LinkHeader:
         comps = re.split(r'>\s*;\s*', s.strip(), maxsplit=1)
         if len(comps) == 2:
             url, sparams = comps
+            url += '>'
         else:
             url, sparams = comps[0], ''
-        assert url.startswith('<')
-        url = url[1:].strip()
+        assert url.startswith('<') and url.endswith('>')
+        url = url[1:-1].strip()
         params = {}
-        for sparam in sparams.split(';'):
-            key, _, value = sparam.strip().partition('=')
-            key, value = key.strip(), (value or '').strip()
-            if value.startswith('"'):
-                assert value.endswith('"')
-                value = value[1:-1].strip()
-            params[key] = value or None
+        if sparams:
+            for sparam in sparams.split(';'):
+                key, _, value = sparam.strip().partition('=')
+                key, value = key.strip(), (value or '').strip()
+                if value.startswith('"'):
+                    assert value.endswith('"')
+                    value = value[1:-1].strip()
+                params[key] = value or None
         return cls(url=url, params=params)
 
     @classmethod
@@ -68,6 +70,7 @@ def request_head(url) -> tuple[str, list[LinkHeader]]:
 
 @dataclasses.dataclass
 class GetResponse:
+    """Relevant data from an HTTP GET response."""
     status_code: int = 200
     content: bytes = None
     text: str = None
@@ -79,12 +82,13 @@ class GetResponse:
             self.content = self.text.encode('utf8')
 
     @classmethod
-    def from_response(cls, response):
+    def from_response(cls, response) -> 'GetResponse':
         content = response.read()
         text = content.decode(response.headers.get_content_charset() or 'utf-8')
         return cls(status_code=response.status, content=content, text=text)
 
-    def json(self):
+    def json(self) -> Any:
+        """The content of the repsonse parsed as JSON."""
         return json.loads(self.text, object_pairs_hook=collections.OrderedDict)
 
 

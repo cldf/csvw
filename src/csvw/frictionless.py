@@ -13,7 +13,7 @@ import pathlib
 from typing import Any, TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from csvw.metadata import TableGroup
+    from csvw.metadata import TableGroup  # pragma: no cover
 
 
 def _convert_numeric_datatype(spec):

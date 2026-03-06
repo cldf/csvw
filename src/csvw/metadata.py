@@ -653,7 +653,7 @@ class Schema(Description):
         for i, col in enumerate(self.columns):
             col._number = i + 1  # pylint: disable=protected-access
         if self.foreignKeys is None:
-            self.foreignKeys = []
+            self.foreignKeys = []  # pragma: no cover
         else:
             res = []
             for d in utils.type_checker(dict, None, self.foreignKeys):

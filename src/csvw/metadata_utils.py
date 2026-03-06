@@ -17,7 +17,7 @@ from language_tags import tags
 from .utils import is_url, slug
 
 if TYPE_CHECKING:
-    from csvw.metadata import TableGroup
+    from csvw.metadata import TableGroup  # pragma: no cover
 
 __all__ = ['valid_common_property', 'valid_id_property', 'valid_context_property',
            'DescriptionBase', 'dataclass_asdict', 'NAMESPACES', 'dialect_props']

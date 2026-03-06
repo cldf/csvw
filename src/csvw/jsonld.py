@@ -19,7 +19,7 @@ from isodate.duration import Duration
 from .utils import is_url
 
 if TYPE_CHECKING:
-    from .metadata import Table, Column
+    from .metadata import Table, Column  # pragma: no cover
 
 __all__ = ['group_triples', 'to_json', 'Triple', 'format_value']
 

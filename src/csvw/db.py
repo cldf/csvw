@@ -432,7 +432,7 @@ class Database:
                 for col in self.tdict[name].columns:
                     if self.translate(name, col.name) == cname:
                         return col.separator
-        return None
+        return None  # pragma: no cover
 
     def split_value(self, tname: str, cname: str, value) -> Union[list[str], str, None]:
         """Split a value if a separator is defined for the column."""

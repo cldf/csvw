@@ -610,9 +610,8 @@ class decimal(anyAtomicType):  # pylint: disable=invalid-name
                     return groupChar
                 if m.group('c') == '.':
                     return decimalChar
-                return None
-            r = f"(?P<c>[{re.escape((decimalChar or '') + (groupChar or ''))}])"
-            v = re.sub(r, repl, v)
+                raise ValueError(m.group('c'))  # pragma: no cover
+            v = re.sub(r"(?P<c>[,.])", repl, v)
         return v
 
 

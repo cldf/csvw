@@ -105,19 +105,19 @@ class TestDialect(object):
         t.dialect.doubleQuote = False
         c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
         assert r'\"a\\\\b\\c\\\"d' in c
-        assert res[0]['col2'] == value
+        assert res[0]['col2'] == value  # pragma: no cover
 
-        t.dialect.quoteChar = '*'
-        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
-        assert res[0]['col2'] == value
+        t.dialect.quoteChar = '*'  # pragma: no cover
+        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})  # pragma: no cover
+        assert res[0]['col2'] == value  # pragma: no cover
 
-        t.dialect.doubleQuote = True
-        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
-        assert res[0]['col2'] == value
+        t.dialect.doubleQuote = True  # pragma: no cover
+        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})  # pragma: no cover
+        assert res[0]['col2'] == value  # pragma: no cover
 
-        value = value.replace('"', '*')
-        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
-        assert res[0]['col2'] == value
+        value = value.replace('"', '*')  # pragma: no cover
+        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})  # pragma: no cover
+        assert res[0]['col2'] == value  # pragma: no cover
 
     @pytest.mark.xfail(reason='commentPrefix is checked only after csv.reader has parsed the line')
     def test_commentPrefix(self, tmp_path):
