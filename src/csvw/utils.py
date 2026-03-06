@@ -71,13 +71,12 @@ def urlopen(
     - passing a specific User-Agent header,
     - specifying a timeout.
     """
-    from csvw import __version__
-
     class NonRaisingHTTPErrorProcessor(urllib.request.HTTPErrorProcessor):
-        http_response = https_response = lambda self, request, response: response
+        """Don't raise exceptions on HTTP errors."""
+        http_response = https_response = lambda self, req, res: res  # pylint: disable=C3001
 
     opener = urllib.request.build_opener(NonRaisingHTTPErrorProcessor)
-    opener.addheaders = [('User-agent', f'csvw/{__version__}')]
+    opener.addheaders = [('User-agent', 'csvw/4.0.0')]
     yield opener.open(urllib.request.Request(url, method=method), timeout=timeout)
 
 
@@ -105,6 +104,7 @@ class GetResponse:
 
     @classmethod
     def from_response(cls, response) -> 'GetResponse':
+        """Initialize instance with data from a urllib response."""
         content = response.read()
         text = content.decode(response.headers.get_content_charset() or 'utf-8')
         return cls(status_code=response.status, content=content, text=text)

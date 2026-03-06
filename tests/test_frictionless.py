@@ -43,10 +43,10 @@ def test_DataPackage_init():
         warnings.simplefilter('ignore')
         dp = DataPackage(dict(resources=[], name='x'))
         dp = DataPackage(dp)
-        assert dp.to_tablegroup().common_props['dc:identifier'] == 'x'
+        assert dp.to_tablegroup(TableGroup).common_props['dc:identifier'] == 'x'
         dp = DataPackage('{"resources": [], "name": "x", "id": "y"}')
-        assert dp.to_tablegroup().common_props['dc:identifier'] == 'y'
-        assert dp.to_tablegroup().common_props['dc:title'] == 'x'
+        assert dp.to_tablegroup(TableGroup).common_props['dc:identifier'] == 'y'
+        assert dp.to_tablegroup(TableGroup).common_props['dc:title'] == 'x'
 
 
 def test_DataPackage_constraints(datafactory):
@@ -54,23 +54,23 @@ def test_DataPackage_constraints(datafactory):
         warnings.simplefilter('ignore')
         dp = datafactory([{'name': 'col', 'constraints': {'maxLength': 3}}], [['abcd']])
         with pytest.raises(ValueError):
-            _ = list(DataPackage(dp).to_tablegroup().tables[0])
+            _ = list(DataPackage(dp).to_tablegroup(TableGroup).tables[0])
 
         dp = datafactory([{'name': 'col', 'constraints': {'pattern': '[a-z]{2}'}}], [['abcd']])
         with pytest.raises(ValueError):
-            _ = list(DataPackage(dp).to_tablegroup().tables[0])
+            _ = list(DataPackage(dp).to_tablegroup(TableGroup).tables[0])
 
         dp = datafactory(
             [{'name': 'col', 'type': 'year', 'constraints': {'pattern': '[2].*'}}], [['1990']])
         with pytest.raises(ValueError):
-            _ = list(DataPackage(dp).to_tablegroup().tables[0])
+            _ = list(DataPackage(dp).to_tablegroup(TableGroup).tables[0])
 
 
 def test_DataPackage(tmpfixtures):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         dp = DataPackage(tmpfixtures / 'datapackage.json')
-        tg = dp.to_tablegroup()
+        tg = dp.to_tablegroup(TableGroup)
         rows = list(tg.tables[0])
         assert len(rows) == 9
         assert rows[-1]['Year'] == 2012

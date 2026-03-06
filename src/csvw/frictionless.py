@@ -10,7 +10,7 @@ CSVW metadata to "raw" CSV tables.
 """
 import json
 import pathlib
-from typing import Any, TYPE_CHECKING, Optional
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from csvw.metadata import TableGroup  # pragma: no cover
@@ -180,9 +180,7 @@ class DataPackage:  # pylint: disable=R0903
 
         self.json = spec
 
-    def to_tablegroup(self, cls: Optional[type] = None) -> 'TableGroup':  # pylint: disable=C0116
-        from csvw import TableGroup  # pylint: disable=C0415
-
+    def to_tablegroup(self, cls: type) -> 'TableGroup':  # pylint: disable=C0116
         md: dict[str, Any] = {'@context': "http://www.w3.org/ns/csvw"}
         # Package metadata:
         md['dc:replaces'] = json.dumps(self.json)
@@ -228,7 +226,6 @@ class DataPackage:  # pylint: disable=R0903
                 }
                 md['tables'].append(table)
 
-        cls = cls or TableGroup
         res = cls.fromvalue(md)
         res._fname = self.dir / 'csvw-metadata.json'  # pylint: disable=W0212
         return res
