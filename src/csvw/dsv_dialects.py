@@ -9,7 +9,7 @@ for the basic formatting parameters, CSVW recognizes a couple more, like `skipCo
     - `<https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters>`_
     - `<https://specs.frictionlessdata.io/csv-dialect/>`_
 """
-import typing
+from typing import Callable, Literal
 import warnings
 import functools
 import dataclasses
@@ -25,7 +25,7 @@ ENCODING_MAP = {
 
 
 def convert_encoding(s):
-    s = utils.converter(str, 'utf-8', s)
+    s = utils.type_checker(str, 'utf-8', s)
     try:
         _ = 'x'.encode(ENCODING_MAP.get(s, s))
         return s
@@ -54,44 +54,46 @@ class Dialect:
     skipColumns: int = 0
     skipBlankRows: bool = False
     skipInitialSpace: bool = False
-    trim: typing.Literal['true', 'false', 'start', 'end'] = 'false'
+    trim: Literal['true', 'false', 'start', 'end'] = 'false'
 
     def __post_init__(self):
         self.encoding = convert_encoding(self.encoding)
-        self.line_terminators = utils.converter(list, ['\r\n', '\n'], self.line_terminators)
-        self.quoteChar = utils.converter(str, '"', self.quoteChar, allow_none=True)
-        self.doubleQuote = utils.converter(bool, True, self.doubleQuote)
-        self.skipRows = utils.converter(int, 0, self.skipRows, cond=lambda s: s >= 0)
-        self.commentPrefix = utils.converter(str, '#', self.commentPrefix, allow_none=True)
-        self.header = utils.converter(bool, True, self.header)
-        self.headerRowCount = utils.converter(
+        self.line_terminators = utils.type_checker(list, ['\r\n', '\n'], self.line_terminators)
+        self.quoteChar = utils.type_checker(str, '"', self.quoteChar, allow_none=True)
+        self.doubleQuote = utils.type_checker(bool, True, self.doubleQuote)
+        self.skipRows = utils.type_checker(int, 0, self.skipRows, cond=lambda s: s >= 0)
+        self.commentPrefix = utils.type_checker(str, '#', self.commentPrefix, allow_none=True)
+        self.header = utils.type_checker(bool, True, self.header)
+        self.headerRowCount = utils.type_checker(
             int, 1, self.headerRowCount, cond=lambda s: s >= 0)
-        self.delimiter = utils.converter(str, ',', self.delimiter)
-        self.skipColumns = utils.converter(int, 0, self.skipColumns, cond=lambda s: s >= 0)
-        self.skipBlankRows = utils.converter(bool, False, self.skipBlankRows)
-        self.skipInitialSpace = utils.converter(bool, False, self.skipInitialSpace)
-        self.trim = utils.converter(
+        self.delimiter = utils.type_checker(str, ',', self.delimiter)
+        self.skipColumns = utils.type_checker(int, 0, self.skipColumns, cond=lambda s: s >= 0)
+        self.skipBlankRows = utils.type_checker(bool, False, self.skipBlankRows)
+        self.skipInitialSpace = utils.type_checker(bool, False, self.skipInitialSpace)
+        self.trim = utils.type_checker(
             (str, bool), 'false', str(self.trim).lower()
             if isinstance(self.trim, bool) else self.trim)
         assert self.trim in ['true', 'false', 'start', 'end'], 'invalid trim'
 
-    def updated(self, **kw):
+    def updated(self, **kw) -> 'Dialect':
+        """Update the spec, returning a new updated object."""
         res = self.__class__(**dataclasses.asdict(self))
         for k, v in kw.items():
             setattr(res, k, v)
         return res
 
     @functools.cached_property
-    def escape_character(self):
+    def escape_character(self):  # pylint: disable=C0116
         return None if self.quoteChar is None else ('"' if self.doubleQuote else '\\')
 
     @functools.cached_property
-    def line_terminators(self):
+    def line_terminators(self) -> list[str]:  # pylint: disable=C0116
         return [self.lineTerminators] \
             if isinstance(self.lineTerminators, str) else self.lineTerminators
 
     @functools.cached_property
-    def trimmer(self):
+    def trimmer(self) -> Callable[[str], str]:
+        """Map trim spec to a callable to do the trimming."""
         return {
             True: lambda s: s.strip(),
             'true': lambda s: s.strip(),
@@ -102,13 +104,20 @@ class Dialect:
         }[self.trim]
 
     def asdict(self, omit_defaults=True):
+        """The dialect spec as dict suitable for JSON serialization."""
         return dataclass_asdict(self, omit_defaults=omit_defaults)
 
     @property
     def python_encoding(self):
+        """
+        Turn the encoding name into something understood by python.
+        """
         return ENCODING_MAP.get(self.encoding, self.encoding)
 
     def as_python_formatting_parameters(self):
+        """
+        Turn the dialect spec into a dict suitable as kwargs for Python's csv implementation.
+        """
         return {
             'delimiter': self.delimiter,
             'doublequote': self.doubleQuote,

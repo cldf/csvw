@@ -54,7 +54,7 @@ RowType = collections.OrderedDict[str, Any]
 T = TypeVar('T')
 
 
-class Invalid:
+class Invalid:  # pylint: disable=R0903,C0115:
     pass
 
 
@@ -86,7 +86,7 @@ class Dialect(BaseDialect):
 
 
 class URITemplate(uritemplate.URITemplate):
-
+    """URITemplate properties support expansion, given suitable context."""
     def __eq__(self, other):
         if isinstance(other, str):
             return self.uri == other
@@ -94,11 +94,11 @@ class URITemplate(uritemplate.URITemplate):
             return False
         return super().__eq__(other)
 
-    def asdict(self, **_):
+    def asdict(self, **_):  # pylint: disable=C0116
         return f'{self}'
 
 
-def convert_uri_template(v):
+def convert_uri_template(v):  # pylint: disable=C0116
     if v is None:
         return None  # pragma: no cover
     if not isinstance(v, str):
@@ -119,7 +119,7 @@ class Link:
         self.string = string
 
     @classmethod
-    def from_value(cls, v: Union['Link', str, pathlib.Path]):
+    def from_value(cls, v: Union['Link', str, pathlib.Path]):  # pylint: disable=C0116
         if isinstance(v, Link):
             return v  # pragma: no cover
         return cls(v)
@@ -233,7 +233,7 @@ class Datatype(DescriptionBase):  # pylint: disable=too-many-instance-attributes
 
     def __post_init__(self):
         self.base = functools.partial(
-            utils.converter,
+            utils.type_checker,
             str,
             'string',
             allow_none=True,
@@ -305,7 +305,7 @@ class Datatype(DescriptionBase):  # pylint: disable=too-many-instance-attributes
 
     def _set_constraints(self):
         for att in ('length', 'maxLength', 'minLength'):
-            setattr(self, att, utils.optional(int)(getattr(self, att)))
+            setattr(self, att, utils.optcast(int)(getattr(self, att)))
         for attr_ in [
             'minimum', 'maximum', 'minInclusive', 'maxInclusive', 'minExclusive', 'maxExclusive'
         ]:
@@ -332,7 +332,8 @@ class Datatype(DescriptionBase):  # pylint: disable=too-many-instance-attributes
 
         raise ValueError(d)
 
-    def asdict(self, omit_defaults=True):
+    def asdict(self, omit_defaults=True) -> dict:
+        """The datatype serialized as dict suitable for conversion to JSON."""
         res = DescriptionBase.asdict(self, omit_defaults=omit_defaults)
         for attr_ in [
             'minimum', 'maximum', 'minInclusive', 'maxInclusive', 'minExclusive', 'maxExclusive'
@@ -344,11 +345,11 @@ class Datatype(DescriptionBase):  # pylint: disable=too-many-instance-attributes
         return res
 
     @property
-    def basetype(self) -> type:
+    def basetype(self) -> type:  # pylint: disable=C0116
         return DATATYPES[self.base]
 
     @property
-    def derived_description(self) -> dict:
+    def derived_description(self) -> dict:  # pylint: disable=C0116
         return self.basetype.derived_description(self)
 
     def formatted(self, v: Any) -> str:
@@ -424,7 +425,7 @@ class Description(DescriptionBase):  # pylint: disable=R0902
     def __post_init__(self):
         if self.datatype is not None:
             self.datatype = Datatype.fromvalue(self.datatype)
-        self.default = utils.converter(str, "", self.default, allow_list=False)
+        self.default = utils.type_checker(str, "", self.default, allow_list=False)
         if not tags.check(self.lang):
             warnings.warn('Invalid language tag')
             self.lang = 'und'
@@ -434,9 +435,9 @@ class Description(DescriptionBase):  # pylint: disable=R0902
         if not all(isinstance(vv, str) for vv in self.null):
             warnings.warn('Invalid null property')
             self.null = [""]
-        self.ordered = utils.converter(bool, False, self.ordered, allow_none=True)
-        self.separator = utils.converter(str, None, self.separator, allow_none=True)
-        self.textDirection = utils.converter(
+        self.ordered = utils.type_checker(bool, False, self.ordered, allow_none=True)
+        self.separator = utils.type_checker(str, None, self.separator, allow_none=True)
+        self.textDirection = utils.type_checker(
             str,
             None,
             self.textDirection,
@@ -487,8 +488,8 @@ class Column(Description):
 
     def __post_init__(self):
         super().__post_init__()
-        self.name = utils.converter(str, None, self.name, allow_none=True)
-        self.suppressOutput = utils.converter(bool, False, self.suppressOutput)
+        self.name = utils.type_checker(str, None, self.name, allow_none=True)
+        self.suppressOutput = utils.type_checker(bool, False, self.suppressOutput)
 
         if self.titles is not None:
             try:
@@ -497,7 +498,7 @@ class Column(Description):
                 warnings.warn('Invalid titles property')
                 self.titles = None
 
-        self.virtual = utils.converter(bool, False, self.virtual)
+        self.virtual = utils.type_checker(bool, False, self.virtual)
 
     def __str__(self):
         return self.name or (self.titles and self.titles.getfirst()) or f'_col.{self._number}'
@@ -649,14 +650,14 @@ class Schema(Description):
         super().__post_init__()
         self.columns = [
             Column.fromvalue(c) for c in
-            utils.converter(dict, None, utils.converter(list, [], self.columns))]
+            utils.type_checker(dict, None, utils.type_checker(list, [], self.columns))]
         for i, col in enumerate(self.columns):
             col._number = i + 1  # pylint: disable=protected-access
         if self.foreignKeys is None:
             self.foreignKeys = []
         else:
             res = []
-            for d in utils.converter(dict, None, self.foreignKeys):
+            for d in utils.type_checker(dict, None, self.foreignKeys):
                 try:
                     res.append(ForeignKey.fromdict(d))
                 except TypeError:
@@ -770,7 +771,7 @@ class TableLike(Description):
         elif self.dialect is not None:
             self.dialect = Dialect(**dialect_props(self.dialect))
 
-        self.tableDirection = utils.converter(
+        self.tableDirection = utils.type_checker(
             str, 'auto', self.tableDirection, cond=lambda s: s in ['rtl', 'ltr', 'auto'])
         self.tableSchema = Schema.fromvalue(self.tableSchema)
 
@@ -823,7 +824,7 @@ class TableLike(Description):
         description objects. If `omit_defaults==True`, these properties will be pruned from \
         the JSON object.
         """
-        fname = utils.ensure_path(fname)
+        fname = pathlib.Path(fname)
         data = self.asdict(omit_defaults=omit_defaults)
         with utils.json_open(str(fname), 'w') as f:
             json.dump(data, f, indent=4, separators=(',', ': '))
@@ -1037,6 +1038,11 @@ class Table(TableLike):
 
     def check_primary_key(self, log=None, items=None) -> bool:
         """Make sure primary keys are unique."""
+        # We want to silence error logging when reading table rows, because we are not interested
+        # in conversion errors here.
+        nolog = logging.getLogger(__name__)
+        nolog.addHandler(logging.NullHandler())
+
         success = True
         if items is not None:
             warnings.warn('the items argument of check_primary_key '
@@ -1045,7 +1051,7 @@ class Table(TableLike):
             get_pk = operator.itemgetter(*self.tableSchema.primaryKey)
             seen = set()
             # Read all rows in the table, ignoring errors:
-            for fname, lineno, row in self.iterdicts(log=utils.nolog(), with_metadata=True):
+            for fname, lineno, row in self.iterdicts(log=nolog, with_metadata=True):
                 pk = get_pk(row)
                 if pk in seen:
                     utils.log_or_raise(f'{fname}:{lineno} duplicate primary key: {pk}', log=log)

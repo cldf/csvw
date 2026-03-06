@@ -1,16 +1,23 @@
 """
 Helpers to model CSVW metadata as dataclasses.
 """
+import re
+import copy
+import html
+import json
 import decimal
 import warnings
 import collections
 from collections.abc import Generator
 import dataclasses
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, TYPE_CHECKING
 
 from language_tags import tags
 
-from .utils import is_url
+from .utils import is_url, slug
+
+if TYPE_CHECKING:
+    from csvw.metadata import TableGroup
 
 __all__ = ['valid_common_property', 'valid_id_property', 'valid_context_property',
            'DescriptionBase', 'dataclass_asdict', 'NAMESPACES', 'dialect_props']
@@ -170,7 +177,11 @@ def valid_id_property(v: str) -> Optional[str]:
     return v
 
 
-def valid_context_property(ctx):
+def valid_context_property(ctx: Union[None, str, list]) -> Union[None, str, list]:
+    """
+    Make sure the requirements for @context objects in CSVW are met.
+    If not, warn or raise exceptions accordingly.
+    """
     nsurl = NAMESPACES['csvw'].replace('#', '')
     if ctx is None:
         return ctx
@@ -333,3 +344,129 @@ def dialect_props(d: dict[str, Any]) -> dict:
     if partitioned.get('headerRowCount'):
         partitioned['header'] = True
     return partitioned
+
+
+def qname2url(qname: str) -> Optional[str]:
+    """Turn a qname into an http URL by replacing the prefix with the associated URL."""
+    for prefix, uri in NAMESPACES.items():
+        if qname.startswith(prefix + ':'):
+            return qname.replace(prefix + ':', uri)
+    return None
+
+
+def metadata2markdown(tg: 'TableGroup', link_files: bool = False) -> str:
+    """
+    Render the metadata of a dataset as markdown.
+
+    :param link_files: If True, links to data files will be added, assuming the markdown is stored \
+    in the same directory as the metadata file.
+    :return: `str` with markdown formatted text
+    """
+    fname = tg._fname  # pylint: disable=W0212
+    res = [f"# {tg.common_props.get('dc:title', 'Dataset')}\n"]
+    if fname and link_files:
+        res.append(f'> [!NOTE]\n> Described by [{fname.name}]({fname.name}).\n')
+
+    res.append(_properties({k: v for k, v in tg.common_props.items() if k != 'dc:title'}))
+
+    for table in tg.tables:
+        res.extend(list(_iter_table2markdown(tg, table, link_files)))
+    return '\n'.join(res)
+
+
+def _qname2link(qname, html=False):  # pylint: disable=W0621
+    url = qname2url(qname)
+    if url:
+        if html:
+            return f'<a href="{url}">{qname}</a>'
+        return f'[{qname}]({url})'
+    return qname
+
+
+def _htmlify(obj, key=None):
+    """
+    For inclusion in tables we must use HTML for lists.
+    """
+    if isinstance(obj, list):
+        lis = ''.join(f'<li>{_htmlify(item, key=key)}</li>' for item in obj)
+        return f'<ol>{lis}</ol>'
+    if isinstance(obj, dict):
+        items = []
+        for k, v in obj.items():
+            items.append(f'<dt>{_qname2link(k, html=True)}</dt><dd>{html.escape(str(v))}</dd>')
+        return f"<dl>{''.join(items)}</dl>"
+    return str(obj)
+
+
+def _properties(props):
+    def _img(img: Union[str, dict]):
+        if isinstance(img, str):  # pragma: no cover
+            img = {'https://schema.org/contentUrl': img}
+        return (f"![{img.get('https://schema.org/caption') or ''}]"
+                f"({img.get('https://schema.org/contentUrl')})\n")
+
+    props = {k: v for k, v in copy.deepcopy(props).items() if v}
+    res = []
+    desc = props.pop('dc:description', None)
+    if desc:
+        res.append(desc + '\n')
+    img = props.pop('https://schema.org/image', None)
+    if img:
+        res.append(_img(img))
+    if props:
+        res.append('property | value\n --- | ---')
+        for k, v in props.items():
+            res.append(f'{_qname2link(k)} | {_htmlify(v, key=k)}')
+    return '\n'.join(res) + '\n'
+
+
+def _iter_table2markdown(tg, table, link_files):
+    fks = {
+        fk.columnReference[0]: (fk.reference.columnReference[0], fk.reference.resource.string)
+        for fk in table.tableSchema.foreignKeys if len(fk.columnReference) == 1}
+    header = f'## <a name="table-{slug(table.url.string)}"></a>Table '
+    fname = tg._fname  # pylint: disable=W0212
+    if (link_files and fname and fname.parent.joinpath(table.url.string).exists()):
+        header += f'[{table.url.string}]({table.url.string})\n'
+    else:  # pragma: no cover
+        header += table.url.string
+    yield '\n' + header + '\n'
+    yield _properties(table.common_props)
+    dialect = table.inherit('dialect')
+    if dialect.asdict():
+        yield f'\n**CSV dialect**: `{json.dumps(dialect.asdict())}`\n'
+    yield '\n### Columns\n'
+    yield 'Name/Property | Datatype | Description'
+    yield ' --- | --- | --- '
+    for col in table.tableSchema.columns:
+        yield _colrow(col, fks, table.tableSchema.primaryKey)
+
+
+def _colrow(col, fks, pk):
+    dt = f"`{col.datatype.base if col.datatype else 'string'}`"
+    if col.datatype:
+        if col.datatype.format:
+            if re.fullmatch(r'[\w\s]+(\|[\w\s]+)*', col.datatype.format):
+                dt += '<br>Valid choices:<br>'
+                dt += ''.join(f' `{w}`' for w in col.datatype.format.split('|'))
+            elif col.datatype.base == 'string':
+                dt += f'<br>Regex: `{col.datatype.format}`'
+        if col.datatype.minimum:
+            dt += f'<br>&ge; {col.datatype.minimum}'
+        if col.datatype.maximum:
+            dt += f'<br>&le; {col.datatype.maximum}'
+    if col.separator:
+        dt = f'list of {dt} (separated by `{col.separator}`)'
+    desc = col.common_props.get('dc:description', '').replace('\n', ' ')
+
+    if pk and col.name in pk:
+        desc = (desc + '<br>') if desc else desc
+        desc += 'Primary key'
+
+    if col.name in fks:
+        desc = (desc + '<br>') if desc else desc
+        cname, tname = fks[col.name]
+        desc += f'References [{tname}::{cname}](#table-{slug(tname)})'
+
+    return ' | '.join([
+        f'[{col.name}]({col.propertyUrl})' if col.propertyUrl else f'`{col.name}`', dt, desc])

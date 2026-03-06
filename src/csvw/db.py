@@ -39,7 +39,7 @@ import dataclasses
 import csvw
 from csvw.datatypes import DATATYPES
 from csvw.metadata import TableGroup, Datatype
-from .utils import optional
+from .utils import optcast
 
 
 def identity(s):  # pylint: disable=C0116
@@ -57,8 +57,8 @@ class DBType:
 TYPE_MAP = {
     'string': DBType('TEXT'),
     'integer': DBType('INTEGER'),
-    'boolean': DBType('INTEGER', optional(int), optional(bool)),
-    'decimal': DBType('REAL', optional(float), optional(decimal.Decimal)),
+    'boolean': DBType('INTEGER', optcast(int), optcast(bool)),
+    'decimal': DBType('REAL', optcast(float), optcast(decimal.Decimal)),
     'hexBinary': DBType('BLOB'),
 }
 

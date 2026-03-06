@@ -12,7 +12,7 @@ from termcolor import colored
 
 from csvw import CSVW, TableGroup
 from csvw.db import Database
-from csvw.utils import metadata2markdown
+from csvw.metadata_utils import metadata2markdown
 
 
 def parsed_args(desc, args, *argspecs):
