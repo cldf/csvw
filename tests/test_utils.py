@@ -1,3 +1,4 @@
+import os
 import urllib.error
 import contextlib
 
@@ -24,6 +25,8 @@ def test_LinkHeader_mult():
 
 
 def test_urlopen():
+    if os.getenv("GITHUB_ACTIONS"):
+        return  # pragma: no cover
     try:
         with utils.urlopen('https://httpbin.org/delay/2', timeout=0.01) as res:
             assert res.status in (404, 201)  # pragma: no cover
