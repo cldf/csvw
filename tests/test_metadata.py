@@ -8,12 +8,13 @@ import operator
 import warnings
 import collections
 
-from csvw.metadata import json_open
+from csvw.utils import json_open
 
 import pytest
 
 import csvw
 from csvw.dsv import Dialect
+from csvw.utils import GetResponse
 
 FIXTURES = pathlib.Path(__file__).parent / 'fixtures'
 
@@ -41,7 +42,7 @@ def test_Link(link, base, res):
     assert csvw.Link(link).resolve(base) == res
 
 
-class TestColumnEquality(object):
+class TestColumnEquality:
 
     def test_get_column(self):
         t1 = csvw.Table.fromvalue({
@@ -57,7 +58,7 @@ class TestColumnEquality(object):
         assert t1.tableSchema.columns[0] == t2.tableSchema.columns[0]
 
 
-class TestColumnAccess(object):
+class TestColumnAccess:
 
     def test_get_column(self):
         t = csvw.Table.fromvalue({
@@ -76,7 +77,7 @@ class TestColumnAccess(object):
         assert t.get_column('xyz').name is None
 
 
-class TestDialect(object):
+class TestDialect:
 
     @staticmethod
     def _roundtrip(t, fpath, *items):
@@ -104,19 +105,19 @@ class TestDialect(object):
         t.dialect.doubleQuote = False
         c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
         assert r'\"a\\\\b\\c\\\"d' in c
-        assert res[0]['col2'] == value
+        assert res[0]['col2'] == value  # pragma: no cover
 
-        t.dialect.quoteChar = '*'
-        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
-        assert res[0]['col2'] == value
+        t.dialect.quoteChar = '*'  # pragma: no cover
+        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})  # pragma: no cover
+        assert res[0]['col2'] == value  # pragma: no cover
 
-        t.dialect.doubleQuote = True
-        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
-        assert res[0]['col2'] == value
+        t.dialect.doubleQuote = True  # pragma: no cover
+        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})  # pragma: no cover
+        assert res[0]['col2'] == value  # pragma: no cover
 
-        value = value.replace('"', '*')
-        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})
-        assert res[0]['col2'] == value
+        value = value.replace('"', '*')  # pragma: no cover
+        c, res = self._roundtrip(t, fpath, {"col1": "", "col2": value})  # pragma: no cover
+        assert res[0]['col2'] == value  # pragma: no cover
 
     @pytest.mark.xfail(reason='commentPrefix is checked only after csv.reader has parsed the line')
     def test_commentPrefix(self, tmp_path):
@@ -134,7 +135,7 @@ class TestDialect(object):
         assert res[0]['col1'] == '$val'
 
 
-class TestNaturalLanguage(object):
+class TestNaturalLanguage:
 
     def test_string(self):
         l = csvw.NaturalLanguage('abc')
@@ -168,7 +169,7 @@ class TestNaturalLanguage(object):
                '{"und": ["\\u00e4", "a"], "de": "\\u00f6"}'
 
 
-class TestColumn(object):
+class TestColumn:
 
     def test_read_rite_with_separator(self):
         col = csvw.Column.fromvalue({'separator': ';', 'null': 'nn'})
@@ -239,7 +240,7 @@ def _load_json(path):
         return json.load(f)
 
 
-class TestTable(object):
+class TestTable:
 
     @staticmethod
     def _make_table(tmp_path, data=None, metadata=None):
@@ -300,7 +301,7 @@ class TestTable(object):
             list(t.iterdicts(fname=str(data)))
 
 
-class TestTableGroup(object):
+class TestTableGroup:
 
     @staticmethod
     def _make_tablegroup(tmp_path, data=None, metadata=None):
@@ -759,22 +760,20 @@ AF,9799379"""}
             with pytest.raises(ValueError):
                 tg.check_referential_integrity()
 
-    def test_remote_schema(self, tmp_path):
-        import requests_mock
+    def test_remote_schema(self, tmp_path, mocker):
+        def request_get(url):
+            return GetResponse(text="""\
+{"columns": [
+    {"name": "countryCode", "datatype": "string"},
+    {"name": "name", "datatype": "string"}]}""")
 
-        with requests_mock.Mocker() as m:
-            schema = """
-            {"columns": [
-                {"name": "countryCode", "datatype": "string"},
-                {"name": "name", "datatype": "string"}]}
-            """
-            m.get("http://example.com/schema", content=schema.encode('utf8'))
-            tg = self._make_tablegroup(
-                tmp_path,
-                metadata="""{
+        mocker.patch('csvw.metadata.utils.request_get', request_get)
+        tg = self._make_tablegroup(
+            tmp_path,
+            metadata="""{
   "@context": "http://www.w3.org/ns/csvw",
   "tables": [{"url": "countries.csv", "tableSchema": "http://example.com/schema"}]}""")
-            assert len(tg.tables[0].tableSchema.columns) == 2
+        assert len(tg.tables[0].tableSchema.columns) == 2
 
         # The remote content has been inlined:
         out = tmp_path / 'md.json'
@@ -824,20 +823,13 @@ def test_zip_support(tmp_path):
     assert len(list(csvw.TableGroup.from_file(out.parent / 'md.json').tables[0])) == 4
 
 
-def test_from_url():
-    import requests_mock
+def test_from_url(mocker):
+    def request_get(url):
+        return GetResponse(content=FIXTURES.joinpath(url.split('/')[-1]).read_bytes())
 
-    def content(req, ctx):
-        ctx.status_code = 200
-        return FIXTURES.joinpath(req.url.split('/')[-1]).read_bytes()
-
-    with requests_mock.Mocker() as m:
-        m.get(
-            requests_mock.ANY,
-            content=content)
-
-        t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
-        assert len(list(t)) == 2
+    mocker.patch('csvw.utils.request_get', request_get)
+    t = csvw.Table.from_file('http://example.com/csv.txt-table-metadata.json')
+    assert len(list(t)) == 2
 
 
 def test_datatype_limits(tmp_path):

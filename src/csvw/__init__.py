@@ -1,4 +1,6 @@
-# csvw - https://w3c.github.io/csvw/primer/
+"""
+csvw - https://w3c.github.io/csvw/primer/
+"""
 
 from .metadata import (
     TableGroup, Table, Column, ForeignKey, Link, NaturalLanguage, Datatype, URITemplate, CSVW,

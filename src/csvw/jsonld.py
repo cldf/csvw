@@ -1,23 +1,30 @@
+"""
+Functionality to transform CSVW row values to RDF.
+"""
 import re
 import json
 import math
-import typing
+from typing import TYPE_CHECKING, Any, Union
 import decimal
 import pathlib
 import datetime
 import collections
+from collections.abc import Iterable
+import dataclasses
 
-import attr
 from rdflib import Graph, URIRef, Literal
 from rfc3986 import URIReference
 from isodate.duration import Duration
 
 from .utils import is_url
 
+if TYPE_CHECKING:
+    from .metadata import Table, Column  # pragma: no cover
+
 __all__ = ['group_triples', 'to_json', 'Triple', 'format_value']
 
 
-def format_value(value, col):
+def format_value(value: Any, col: 'Column') -> str:  # pylint: disable=R0911
     """
     Format values as JSON-LD literals.
     """
@@ -29,66 +36,76 @@ def format_value(value, col):
             res = re.sub('T[0-9.:]+', '', res)
         if isinstance(value, (datetime.datetime, datetime.time)):
             stamp, _, milliseconds = res.partition('.')
-            return '{}.{}'.format(stamp, milliseconds.rstrip('0')) if milliseconds \
+            return f'{stamp}.{milliseconds.rstrip("0")}' if milliseconds \
                 else stamp.replace('+00:00', 'Z')
         return res  # pragma: no cover
     if isinstance(value, datetime.timedelta):
         return col.datatype.formatted(value)
     if isinstance(value, Duration):
         return col.datatype.formatted(value)
-    if isinstance(value, decimal.Decimal):
-        value = float(value)
     if isinstance(value, URIReference):
         return value.unsplit()
     if isinstance(value, bytes):
         return col.datatype.formatted(value)
     if isinstance(value, pathlib.Path):
         return str(value)
+    if isinstance(value, decimal.Decimal):
+        value = float(value)
     if isinstance(value, float):
         return 'NaN' if math.isnan(value) else (
-            '{}INF'.format('-' if value < 0 else '') if math.isinf(value) else value)
+            f"{'-' if value < 0 else ''}INF" if math.isinf(value) else value)
     return value
 
 
-@attr.s
+@dataclasses.dataclass
 class Triple:
     """
     A table cell's data as RDF triple.
     """
-    about = attr.ib()
-    property = attr.ib()
-    value = attr.ib()
+    about: str
+    property: str
+    value: str
 
-    def as_rdflib_triple(self):
+    def as_rdflib_triple(self) -> tuple[URIRef, URIRef, Union[URIRef, Literal]]:
+        """The triple suitable for inclusion in an rdflib.Graph."""
         return (
             URIRef(self.about),
             URIRef(self.property),
             URIRef(self.value) if is_url(self.value) else Literal(self.value))
 
     @classmethod
-    def from_col(cls, table, col, row, prop, val, rownum):
+    def from_col(  # pylint: disable=R0913,R0917
+            cls,
+            table: 'Table',
+            col: 'Column',
+            row: collections.OrderedDict[str, Any],
+            prop: str,
+            val: Any,
+            rownum: int,
+    ) -> 'Triple':
         """
-
+        Instantiate a triple from the data (and metadata) of a column value.
         """
         _name = col.header if col else None
 
-        propertyUrl = col.propertyUrl if col else table.inherit('propertyUrl')
+        propertyUrl = col.propertyUrl if col \
+            else table.inherit('propertyUrl')  # pylint: disable=C0103
         if propertyUrl:
             prop = table.expand(propertyUrl, row, _row=rownum, _name=_name, qname=True)
 
         is_type = prop == 'rdf:type'
-        valueUrl = col.valueUrl if col else table.inherit('valueUrl')
+        valueUrl = col.valueUrl if col else table.inherit('valueUrl')  # pylint: disable=C0103
         if valueUrl:
             val = table.expand(valueUrl, row, _row=rownum, _name=_name, qname=is_type)
         val = format_value(val, col)
         s = None
-        aboutUrl = col.aboutUrl if col else None
+        aboutUrl = col.aboutUrl if col else None  # pylint: disable=invalid-name
         if aboutUrl:
             s = table.expand(aboutUrl, row, _row=rownum, _name=_name) or s
         return cls(about=s, property=prop, value=val)
 
 
-def frame(data: list) -> list:
+def frame(data: list[dict]) -> list:
     """
     Inline referenced items to force a deterministic graph layout.
 
@@ -131,13 +148,11 @@ def to_json(obj, flatten_list=False):
     return obj
 
 
-def group_triples(triples: typing.Iterable[Triple]) -> typing.List[dict]:
-    """
-    Group and frame triples into a `list` of JSON objects.
-    """
+def _merged_triples(triples: Iterable[Triple]) -> list[Triple]:
     merged = []
     for triple in triples:
         if isinstance(triple.value, list):
+            # We check, whether a list-valued triple for the same property is already present.
             for t in merged:
                 if t.property == triple.property and isinstance(t.value, list):
                     t.value.extend(triple.value)
@@ -146,25 +161,35 @@ def group_triples(triples: typing.Iterable[Triple]) -> typing.List[dict]:
                 merged.append(triple)
         else:
             merged.append(triple)
+    return merged
 
-    grouped = collections.OrderedDict()
-    triples = []
-    # First pass: get top-level properties.
-    for triple in merged:
+
+def _extract_grouped_triples(triples) -> tuple[collections.OrderedDict[str, Triple], list[Triple]]:
+    """Return triples grouped by property and purge these from `triples`."""
+    grouped, rem = collections.OrderedDict(), []
+    for triple in triples:
         if triple.about is None and triple.property == '@id':
             grouped[triple.property] = triple.value
-        else:
-            if not triple.about:
-                # For test48
-                if triple.property in grouped:
-                    if not isinstance(grouped[triple.property], list):
-                        grouped[triple.property] = [grouped[triple.property]]
-                    grouped[triple.property].append(triple.value)
-                else:
-                    grouped[triple.property] = triple.value
+            continue
+        if not triple.about:
+            # For test48
+            if triple.property in grouped:
+                if not isinstance(grouped[triple.property], list):
+                    grouped[triple.property] = [grouped[triple.property]]
+                grouped[triple.property].append(triple.value)
             else:
-                triples.append(triple)
-    if not triples:
+                grouped[triple.property] = triple.value
+            continue
+        rem.append(triple)
+    return grouped, rem
+
+
+def group_triples(triples: Iterable[Triple]) -> list[dict]:
+    """
+    Group and frame triples into a `list` of JSON objects.
+    """
+    grouped, triples = _extract_grouped_triples(_merged_triples(triples))
+    if not triples:  # All grouped.
         return [grouped]
 
     g = Graph()
@@ -174,6 +199,7 @@ def group_triples(triples: typing.Iterable[Triple]) -> typing.List[dict]:
         for prop, val in grouped.items():
             if prop != '@id':
                 g.add(Triple(about=grouped['@id'], property=prop, value=val).as_rdflib_triple())
+
     res = g.serialize(format='json-ld')
     # Frame and simplify the resulting objects, augment with list index:
     res = [(i, to_json(v, flatten_list=True)) for i, v in enumerate(frame(json.loads(res)))]

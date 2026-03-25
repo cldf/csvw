@@ -10,58 +10,66 @@ CSVW metadata to "raw" CSV tables.
 """
 import json
 import pathlib
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from csvw.metadata import TableGroup  # pragma: no cover
 
 
-def convert_column_spec(spec):
+def _convert_numeric_datatype(spec):
+    datatype = {'base': spec['type']}
+    if spec['type'] == 'string' and spec.get('format'):
+        datatype['dc:format'] = spec['format']
+    if spec['type'] == 'boolean' and spec.get('trueValues') and spec.get('falseValues'):
+        datatype['format'] = f"{spec['trueValues'][0]}|{spec['falseValues'][0]}"
+    if spec['type'] in ['number', 'integer']:
+        if spec.get('bareNumber') is True:  # pragma: no cover
+            raise NotImplementedError(
+                'bareNumber is not supported in CSVW. It may be possible to translate to '
+                'a number pattern, though. See '
+                'https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/'
+                '#formats-for-numeric-types')
+        if any(prop in spec for prop in ['decimalChar', 'groupChar']):
+            datatype['format'] = {}
+            for p in ['decimalChar', 'groupChar']:
+                if spec.get(p):
+                    datatype['format'][p] = spec[p]
+    return datatype
+
+
+def _convert_datatype(spec):  # pylint: disable=too-many-return-statements
+    typemap = {
+        'year': 'gYear',
+        'yearmonth': 'gYearMonth',
+    }
+    if 'type' in spec:
+        if spec['type'] == 'string' and spec.get('format') == 'binary':
+            return {'base': 'binary'}
+        if spec['type'] == 'string' and spec.get('format') == 'uri':
+            return {'base': 'anyURI'}
+        if spec['type'] in typemap:
+            return {'base': typemap[spec['type']]}
+        if spec['type'] in [
+            'string', 'number', 'integer', 'boolean', 'date', 'time', 'datetime', 'duration',
+        ]:
+            return _convert_numeric_datatype(spec)
+        if spec['type'] in ['object', 'array']:
+            return {'base': 'json', 'dc:format': 'application/json'}
+        if spec['type'] == 'geojson':
+            return {'base': 'json', 'dc:format': 'application/geo+json'}
+    return {'base': 'string'}
+
+
+def convert_column_spec(spec: dict[str, Any]) -> dict[str, Any]:
     """
     https://specs.frictionlessdata.io/table-schema/#field-descriptors
 
     :param spec:
     :return:
     """
-    typemap = {
-        'year': 'gYear',
-        'yearmonth': 'gYearMonth',
-    }
+    res = {'name': spec['name'], 'datatype': _convert_datatype(spec)}
 
     titles = [t for t in [spec.get('title')] if t]
-
-    res = {'name': spec['name'], 'datatype': {'base': 'string'}}
-    if 'type' in spec:
-        if spec['type'] == 'string' and spec.get('format') == 'binary':
-            res['datatype']['base'] = 'binary'
-        elif spec['type'] == 'string' and spec.get('format') == 'uri':
-            res['datatype']['base'] = 'anyURI'
-        elif spec['type'] in typemap:
-            res['datatype']['base'] = typemap[spec['type']]
-        elif spec['type'] in [
-            'string', 'number', 'integer', 'boolean', 'date', 'time', 'datetime', 'duration',
-        ]:
-            res['datatype']['base'] = spec['type']
-            if spec['type'] == 'string' and spec.get('format'):
-                res['datatype']['dc:format'] = spec['format']
-            if spec['type'] == 'boolean' and spec.get('trueValues') and spec.get('falseValues'):
-                res['datatype']['format'] = '{}|{}'.format(
-                    spec['trueValues'][0], spec['falseValues'][0])
-            if spec['type'] in ['number', 'integer']:
-                if spec.get('bareNumber') is True:  # pragma: no cover
-                    raise NotImplementedError(
-                        'bareNumber is not supported in CSVW. It may be possible to translate to '
-                        'a number pattern, though. See '
-                        'https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/'
-                        '#formats-for-numeric-types')
-                if any(prop in spec for prop in ['decimalChar', 'groupChar']):
-                    res['datatype']['format'] = {}
-                    for p in ['decimalChar', 'groupChar']:
-                        if spec.get(p):
-                            res['datatype']['format'][p] = spec[p]
-        elif spec['type'] in ['object', 'array']:
-            res['datatype']['base'] = 'json'
-            res['datatype']['dc:format'] = 'application/json'
-        elif spec['type'] == 'geojson':
-            res['datatype']['base'] = 'json'
-            res['datatype']['dc:format'] = 'application/geo+json'
-
     if titles:
         res['titles'] = titles
     if 'description' in spec:
@@ -75,24 +83,25 @@ def convert_column_spec(spec):
             res['datatype'][prop] = constraints[prop]
         if ('pattern' in constraints) and ('format' not in res['datatype']):
             res['datatype']['format'] = constraints['pattern']
-        # FIXME: we could transform the "enum" constraint for string into
+        # We could transform the "enum" constraint for string into
         # a regular expression in the "format" property.
     return res
 
 
-def convert_foreignKey(rsc_name, fk, resource_map):
+def convert_foreignKey(  # pylint: disable=C0103
+        rsc_name: str, fk: dict, resource_map: dict) -> dict[str, Any]:
     """
     https://specs.frictionlessdata.io/table-schema/#foreign-keys
     """
     # Rename "fields" to "columnReference" and map resource name to url (resolving self-referential
     # foreign keys).
-    return dict(
-        columnReference=fk['fields'],
-        reference=dict(
-            columnReference=fk['reference']['fields'],
-            resource=resource_map[fk['reference']['resource'] or rsc_name],
-        )
-    )
+    return {
+        'columnReference': fk['fields'],
+        'reference': {
+            'columnReference': fk['reference']['fields'],
+            'resource': resource_map[fk['reference']['resource'] or rsc_name],
+        }
+    }
 
 
 def convert_table_schema(rsc_name, schema, resource_map):
@@ -104,9 +113,7 @@ def convert_table_schema(rsc_name, schema, resource_map):
     key constraints.
     :return: `dict` suitable for instantiating a `csvw.metadata.Schema` object.
     """
-    res = dict(
-        columns=[convert_column_spec(f) for f in schema['fields']],
-    )
+    res = {'columns': [convert_column_spec(f) for f in schema['fields']]}
     for prop in [
         ('missingValues', 'null'),
         'primaryKey',
@@ -152,7 +159,10 @@ def convert_dialect(rsc):
     return res
 
 
-class DataPackage:
+class DataPackage:  # pylint: disable=R0903
+    """
+    Metadata according to the frictionless spec.
+    """
     def __init__(self, spec, directory=None):
         if isinstance(spec, DataPackage):
             self.json = spec.json
@@ -170,10 +180,8 @@ class DataPackage:
 
         self.json = spec
 
-    def to_tablegroup(self, cls=None):
-        from csvw import TableGroup
-
-        md = {'@context': "http://www.w3.org/ns/csvw"}
+    def to_tablegroup(self, cls: type) -> 'TableGroup':  # pylint: disable=C0116
+        md: dict[str, Any] = {'@context': "http://www.w3.org/ns/csvw"}
         # Package metadata:
         md['dc:replaces'] = json.dumps(self.json)
 
@@ -211,14 +219,13 @@ class DataPackage:
                     rsc.get('format') == 'csv':
                 # Table Schema:
                 md.setdefault('tables', [])
-                table = dict(
-                    url=rsc['path'],
-                    tableSchema=convert_table_schema(rsc.get('name'), schema, resource_map),
-                    dialect=convert_dialect(rsc),
-                )
+                table = {
+                    'url': rsc['path'],
+                    'tableSchema': convert_table_schema(rsc.get('name'), schema, resource_map),
+                    'dialect': convert_dialect(rsc),
+                }
                 md['tables'].append(table)
 
-        cls = cls or TableGroup
         res = cls.fromvalue(md)
-        res._fname = self.dir / 'csvw-metadata.json'
+        res._fname = self.dir / 'csvw-metadata.json'  # pylint: disable=W0212
         return res

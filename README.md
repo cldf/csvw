@@ -9,6 +9,10 @@ This package provides
 - a Python API to read and write relational, tabular data according to the [CSV on the Web](https://csvw.org/) specification and 
 - commandline tools for reading and validating CSVW data.
 
+> [!IMPORTANT]  
+> The Python API provided by `csvw` 4.x is not fully backwards compatible with `csvw` < 4.
+> See [CHANGES](CHANGES) for more information.
+
 
 ## Links
 
@@ -19,7 +23,7 @@ This package provides
 
 ## Installation
 
-This package runs under Python >=3.8, use pip to install:
+This package runs under Python >=3.9, use pip to install:
 
 ```bash
 $ pip install csvw

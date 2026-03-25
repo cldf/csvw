@@ -26,69 +26,64 @@ SQLite support has the following limitations:
   not enforced by the database.
 """
 import json
-import typing
+from typing import Optional, Union, Protocol, Callable, Any
 import decimal
 import pathlib
 import sqlite3
 import functools
 import contextlib
 import collections
-
-import attr
+from collections.abc import Sequence, Iterator
+import dataclasses
 
 import csvw
 from csvw.datatypes import DATATYPES
-from csvw.metadata import TableGroup
+from csvw.metadata import TableGroup, Datatype
+from .utils import optcast
 
 
-def identity(s):
+def identity(s):  # pylint: disable=C0116
     return s
 
 
+@dataclasses.dataclass
+class DBType:
+    """A DB datatype together with read/write converters."""
+    name: str
+    convert: Callable[[Any], Any] = identity
+    read: Callable[[Any], Any] = identity
+
+
 TYPE_MAP = {
-    'string': (
-        'TEXT',
-        identity,
-        identity),
-    'integer': (
-        'INTEGER',
-        identity,
-        identity),
-    'boolean': (
-        'INTEGER',
-        lambda s: s if s is None else int(s),
-        lambda s: s if s is None else bool(s)),
-    'decimal': (
-        'REAL',
-        lambda s: s if s is None else float(s),
-        lambda s: s if s is None else decimal.Decimal(s)),
-    'hexBinary': (
-        'BLOB',
-        identity,
-        identity),
+    'string': DBType('TEXT'),
+    'integer': DBType('INTEGER'),
+    'boolean': DBType('INTEGER', optcast(int), optcast(bool)),
+    'decimal': DBType('REAL', optcast(float), optcast(decimal.Decimal)),
+    'hexBinary': DBType('BLOB'),
 }
 
 
-class SchemaTranslator(typing.Protocol):
-    def __call__(self, table: str, column: typing.Optional[str] = None) -> str:
+class SchemaTranslator(Protocol):  # pylint: disable=R0903,C0115
+    def __call__(self, table: str, column: Optional[str] = None) -> str:
         ...  # pragma: no cover
 
 
-class ColumnTranslator(typing.Protocol):
+class ColumnTranslator(Protocol):  # pylint: disable=R0903,C0115
     def __call__(self, column: str) -> str:
         ...  # pragma: no cover
 
 
-def quoted(*names):
-    return ','.join('`{0}`'.format(name) for name in names)
+def quoted(*names: str) -> str:
+    """Returns a comma-separated list of quoted schema object names."""
+    return ','.join(f'`{name}`' for name in names)
 
 
 def insert(db: sqlite3.Connection,
            translate: SchemaTranslator,
            table: str,
-           keys: typing.Sequence[str],
+           keys: Sequence[str],
            *rows: list,
-           single: typing.Optional[bool] = False):
+           single: Optional[bool] = False):
     """
     Insert a sequence of rows into a table.
 
@@ -101,13 +96,12 @@ def insert(db: sqlite3.Connection,
     a time, allowing for more focused debugging output in case of errors.
     """
     if rows:
-        sql = "INSERT INTO {0} ({1}) VALUES ({2})".format(
-            quoted(translate(table)),
-            quoted(*[translate(table, k) for k in keys]),
-            ','.join(['?' for _ in keys]))
+        cols = quoted(*[translate(table, k) for k in keys])
+        vals = ','.join(['?' for _ in keys])
+        sql = f"INSERT INTO {quoted(translate(table))} ({cols}) VALUES ({vals})"
         try:
             db.executemany(sql, rows)
-        except:  # noqa: E722 - this is purely for debugging.
+        except:  # noqa: E722 - this is purely for debugging.  pylint: disable=bare-except
             if not single:
                 for row in rows:
                     insert(db, translate, table, keys, row, single=True)
@@ -117,37 +111,36 @@ def insert(db: sqlite3.Connection,
                 raise
 
 
-def select(db: sqlite3.Connection, table: str) -> typing.Tuple[typing.List[str], typing.Sequence]:
-    cu = db.execute("SELECT * FROM {0}".format(quoted(table)))
+def select(db: sqlite3.Connection, table: str) -> tuple[list[str], Sequence]:
+    """Shortcut to construct and execute simple SELECT statements."""
+    cu = db.execute(f"SELECT * FROM {quoted(table)}")
     cols = [d[0] for d in cu.description]
     return cols, list(cu.fetchall())
 
 
-@attr.s
+@dataclasses.dataclass
 class ColSpec:
     """
     A `ColSpec` captures sufficient information about a :class:`csvw.Column` for the DB schema.
     """
-    name = attr.ib()
-    csvw_type = attr.ib(default='string', converter=lambda s: s if s else 'string')
-    separator = attr.ib(default=None)
-    db_type = attr.ib(default=None)
-    convert = attr.ib(default=None)
-    read = attr.ib(default=None)
-    required = attr.ib(default=False)
-    csvw = attr.ib(default=None)
+    name: str
+    csvw_type: str = 'string'
+    separator: str = None
+    db_type: DBType = None
+    required: bool = False
+    csvw: Datatype = None
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
+        self.csvw_type = self.csvw_type or 'string'
         if self.csvw_type in TYPE_MAP:
-            self.db_type, self.convert, self.read = TYPE_MAP[self.csvw_type]
+            self.db_type = TYPE_MAP[self.csvw_type]
         else:
-            self.db_type = 'TEXT'
-            self.convert = DATATYPES[self.csvw_type].to_string
-            self.read = DATATYPES[self.csvw_type].to_python
+            self.db_type = DBType(
+                'TEXT', DATATYPES[self.csvw_type].to_string, DATATYPES[self.csvw_type].to_python)
         if self.separator and self.db_type != 'TEXT':
-            self.db_type = 'TEXT'
+            self.db_type = DBType('TEXT', self.db_type.convert, self.db_type.read)
 
-    def check(self, translate: ColumnTranslator) -> typing.Optional[str]:
+    def check(self, translate: ColumnTranslator) -> Optional[str]:
         """
         We try to convert as many data constraints as possible into SQLite CHECK constraints.
 
@@ -155,7 +148,7 @@ class ColSpec:
         :return: A string suitable as argument of an SQL CHECK constraint.
         """
         if not self.csvw:
-            return
+            return None
         c, cname = self.csvw, translate(self.name)
         constraints = []
         if (c.minimum is not None) or (c.maximum is not None):
@@ -165,34 +158,33 @@ class ColSpec:
             }.get(self.csvw_type)
             if c.minimum is not None:
                 if func:
-                    constraints.append("{2}(`{0}`) >= {2}('{1}')".format(cname, c.minimum, func))
+                    constraints.append(f"{func}(`{cname}`) >= {func}('{c.minimum}')")
                 else:
-                    constraints.append('`{0}` >= {1}'.format(cname, c.minimum))
+                    constraints.append(f'`{cname}` >= {c.minimum}')
             if c.maximum is not None:
                 if func:
-                    constraints.append("{2}(`{0}`) <= {2}('{1}')".format(cname, c.maximum, func))
+                    constraints.append(f"{func}(`{cname}`) <= {func}('{c.maximum}')")
                 else:
-                    constraints.append('`{0}` <= {1}'.format(cname, c.maximum))
+                    constraints.append(f'`{cname}` <= {c.maximum}')
         elif any(cc is not None for cc in [c.length, c.minLength, c.maxLength]):
             if c.length:
-                constraints.append('length(`{0}`) = {1}'.format(cname, c.length))
+                constraints.append(f'length(`{cname}`) = {c.length}')
             if c.minLength:
-                constraints.append('length(`{0}`) >= {1}'.format(cname, c.minLength))
+                constraints.append(f'length(`{cname}`) >= {c.minLength}')
             if c.maxLength:
-                constraints.append('length(`{0}`) <= {1}'.format(cname, c.maxLength))
+                constraints.append(f'length(`{cname}`) <= {c.maxLength}')
         return ' AND '.join(constraints)
 
     def sql(self, translate: ColumnTranslator) -> str:
+        """Format the column metadata suitable for inclusion in a CREATE TABLE statement."""
         _check = self.check(translate)
-        return '`{0}` {1}{2}{3}'.format(
-            translate(self.name),
-            self.db_type,
-            ' NOT NULL' if self.required else '',
-            ' CHECK ({0})'.format(_check) if _check else '')
+        null_constraint = ' NOT NULL' if self.required else ''
+        check_constraint = f' CHECK ({_check})' if _check else ''
+        return f'`{translate(self.name)}` {self.db_type.name}{null_constraint}{check_constraint}'
 
 
-@attr.s
-class TableSpec(object):
+@dataclasses.dataclass
+class TableSpec:
     """
     A `TableSpec` captures sufficient information about a :class:`csvw.Table` for the DB schema.
 
@@ -205,16 +197,17 @@ class TableSpec(object):
 
         .. seealso:: `<https://en.wikipedia.org/wiki/Associative_entity>`_
     """
-    name = attr.ib()
-    columns = attr.ib(default=attr.Factory(list))
-    foreign_keys = attr.ib(default=attr.Factory(list))
-    many_to_many = attr.ib(default=attr.Factory(collections.OrderedDict))
-    primary_key = attr.ib(default=None)
+    name: str
+    columns: list[ColSpec] = dataclasses.field(default_factory=list)
+    foreign_keys: list = dataclasses.field(default_factory=list)
+    many_to_many: collections.OrderedDict = dataclasses.field(
+        default_factory=collections.OrderedDict)
+    primary_key: Optional[list[str]] = None
 
     @classmethod
     def from_table_metadata(cls,
                             table: csvw.Table,
-                            drop_self_referential_fks: typing.Optional[bool] = True) -> 'TableSpec':
+                            drop_self_referential_fks: Optional[bool] = True) -> 'TableSpec':
         """
         Create a `TableSpec` from the schema description of a `csvw.metadata.Table`.
 
@@ -232,12 +225,11 @@ class TableSpec(object):
                 if len(fk.columnReference) == 1 and fk.columnReference[0] in list_valued:
                     # List-valued foreign keys are turned into a many-to-many relation!
                     assert len(fk.reference.columnReference) == 1, \
-                        'Composite key {0} in table {1} referenced'.format(
-                            fk.reference.columnReference,
-                            fk.reference.resource)
+                        (f'Composite key {fk.reference.columnReference} in table '
+                         f'{fk.reference.resource} referenced')
                     assert spec.primary_key and len(spec.primary_key) == 1, \
-                        'Table {0} referenced by list-valued foreign key must have non-composite ' \
-                        'primary key'.format(spec.name)
+                        (f'Table {spec.name} referenced by list-valued foreign key must have '
+                         f'non-composite primary key')
                     spec.many_to_many[fk.columnReference[0]] = TableSpec.association_table(
                         spec.name,
                         spec.primary_key[0],
@@ -271,13 +263,13 @@ class TableSpec(object):
         a column `context`, which stores the name of the foreign key column from which a row in the
         assocation table was created.
         """
-        afk = ColSpec('{0}_{1}'.format(atable, apk))
-        bfk = ColSpec('{0}_{1}'.format(btable, bpk))
+        afk = ColSpec(f'{atable}_{apk}')
+        bfk = ColSpec(f'{btable}_{bpk}')
         if afk.name == bfk.name:
             afk.name += '_1'
             bfk.name += '_2'
         return cls(
-            name='{0}_{1}'.format(atable, btable),
+            name=f'{atable}_{btable}',
             columns=[afk, bfk, ColSpec('context')],
             foreign_keys=[
                 ([afk.name], atable, [apk]),
@@ -291,21 +283,25 @@ class TableSpec(object):
         :return: The SQL statement to create the table.
         """
         col_translate = functools.partial(translate, self.name)
+        # Assemble the column specifications:
         clauses = [col.sql(col_translate) for col in self.columns]
+        # Then add the constraints:
         if self.primary_key:
-            clauses.append('PRIMARY KEY({0})'.format(quoted(
-                *[col_translate(c) for c in self.primary_key])))
+            qcols = quoted(*[col_translate(c) for c in self.primary_key])
+            clauses.append(f'PRIMARY KEY({qcols})')
         for fk, ref, refcols in self.foreign_keys:
-            clauses.append('FOREIGN KEY({0}) REFERENCES {1}({2}) ON DELETE CASCADE'.format(
-                quoted(*[col_translate(c) for c in fk]),
-                quoted(translate(ref)),
-                quoted(*[translate(ref, c) for c in refcols])))
-        return "CREATE TABLE IF NOT EXISTS `{0}` (\n    {1}\n)".format(
-            translate(self.name), ',\n    '.join(clauses))
+            fkcols = quoted(*[col_translate(c) for c in fk])
+            rtable = quoted(translate(ref))
+            pkcols = quoted(*[translate(ref, c) for c in refcols])
+            clauses.append(f'FOREIGN KEY({fkcols}) REFERENCES {rtable}({pkcols}) ON DELETE CASCADE')
+
+        clauses = ',\n    '.join(clauses)
+        return '\n'.join([
+            f"CREATE TABLE IF NOT EXISTS `{translate(self.name)}` (", f"{clauses}", ")"])
 
 
 def schema(tg: csvw.TableGroup,
-           drop_self_referential_fks: typing.Optional[bool] = True) -> typing.List[TableSpec]:
+           drop_self_referential_fks: Optional[bool] = True) -> list[TableSpec]:
     """
     Convert the table and column descriptions of a `TableGroup` into specifications for the
     DB schema.
@@ -317,7 +313,7 @@ def schema(tg: csvw.TableGroup,
     :return: A pair (tables, reference_tables).
     """
     tables = {}
-    for tname, table in tg.tabledict.items():
+    for table in tg.tabledict.values():
         t = TableSpec.from_table_metadata(
             table, drop_self_referential_fks=drop_self_referential_fks)
         tables[t.name] = t
@@ -343,7 +339,7 @@ def schema(tg: csvw.TableGroup,
     return list(ordered.values())
 
 
-class Database(object):
+class Database:
     """
     Represents a SQLite database associated with a :class:`csvw.TableGroup` instance.
 
@@ -365,26 +361,27 @@ class Database(object):
     def __init__(
             self,
             tg: TableGroup,
-            fname: typing.Optional[typing.Union[pathlib.Path, str]] = None,
-            translate: typing.Optional[SchemaTranslator] = None,
-            drop_self_referential_fks: typing.Optional[bool] = True,
+            fname: Optional[Union[pathlib.Path, str]] = None,
+            translate: Optional[SchemaTranslator] = None,
+            drop_self_referential_fks: Optional[bool] = True,
     ):
         self.translate = translate or Database.name_translator
         self.fname = pathlib.Path(fname) if fname else None
         self.init_schema(tg, drop_self_referential_fks=drop_self_referential_fks)
         self._connection = None  # For in-memory dbs we need to keep the connection!
 
-    def init_schema(self, tg, drop_self_referential_fks=True):
+    def init_schema(self, tg: TableGroup, drop_self_referential_fks: bool = True):
+        """Inititialize the db schema, possibly ignoring self-referential foreign keys."""
         self.tg = tg
         self.tables = schema(
             self.tg, drop_self_referential_fks=drop_self_referential_fks) if self.tg else []
 
     @property
-    def tdict(self) -> typing.Dict[str, TableSpec]:
+    def tdict(self) -> dict[str, TableSpec]:  # pylint: disable=C0116
         return {t.name: t for t in self.tables}
 
     @staticmethod
-    def name_translator(table: str, column: typing.Optional[str] = None) -> str:
+    def name_translator(table: str, column: Optional[str] = None) -> str:
         """
         A callable with this signature can be passed into DB creation to control the names
         of the schema objects.
@@ -396,31 +393,37 @@ class Database(object):
         # By default, no translation is done:
         return column or table
 
-    def connection(self) -> typing.Union[sqlite3.Connection, contextlib.closing]:
+    def connection(self) -> Union[sqlite3.Connection, contextlib.closing]:
+        """DB connection to be used as context manager."""
         if self.fname:
             return contextlib.closing(sqlite3.connect(str(self.fname)))
         if not self._connection:
             self._connection = sqlite3.connect(':memory:')
         return self._connection
 
-    def select_many_to_many(self, db, table, context) -> dict:
+    def _qt(self, tname: str, cname: Optional[str] = None) -> str:
+        """Translate and then quote a db schema object."""
+        if cname:
+            return quoted(self.translate(tname, cname))
+        return quoted(self.translate(tname))
+
+    def select_many_to_many(self, db, table, context) -> dict[str, Union[tuple[str, str], str]]:
+        """Select data from an association table, grouped by first foreign key."""
         if context is not None:
-            context_sql = "WHERE context = '{0}'".format(context)
+            context_sql = f"WHERE context = '{context}'"
         else:
             context_sql = ''
-        sql = """\
-SELECT {0}, group_concat({1}, ' '), group_concat(COALESCE(context, ''), '||')
-FROM {2} {3} GROUP BY {0}""".format(
-                quoted(self.translate(table.name, table.columns[0].name)),
-                quoted(self.translate(table.name, table.columns[1].name)),
-                quoted(self.translate(table.name)),
-                context_sql)
+        qt = functools.partial(self._qt, table.name)
+        sql = (f"SELECT {qt(table.columns[0].name)}, "
+               f"       group_concat({qt(table.columns[1].name)}, ' '), "
+               f"       group_concat(COALESCE(context, ''), '||') "
+               f"FROM {qt()} {context_sql} GROUP BY {qt(table.columns[0].name)}")
         cu = db.execute(sql)
         return {
             r[0]: [(k, v) if context is None else k
                    for k, v in zip(r[1].split(), r[2].split('||'))] for r in cu.fetchall()}
 
-    def separator(self, tname: str, cname: str) -> typing.Optional[str]:
+    def separator(self, tname: str, cname: str) -> Optional[str]:
         """
         :return: separator for the column specified by db schema names `tname` and `cname`.
         """
@@ -429,12 +432,14 @@ FROM {2} {3} GROUP BY {0}""".format(
                 for col in self.tdict[name].columns:
                     if self.translate(name, col.name) == cname:
                         return col.separator
+        return None  # pragma: no cover
 
-    def split_value(self, tname, cname, value) -> typing.Union[typing.List[str], str, None]:
+    def split_value(self, tname: str, cname: str, value) -> Union[list[str], str, None]:
+        """Split a value if a separator is defined for the column."""
         sep = self.separator(tname, cname)
         return (value or '').split(sep) if sep else value
 
-    def read(self) -> typing.Dict[str, typing.List[typing.OrderedDict]]:
+    def read(self) -> dict[str, list[collections.OrderedDict]]:
         """
         :return: A `dict` where keys are SQL table names corresponding to CSVW tables and values \
         are lists of rows, represented as dicts where keys are the SQL column names.
@@ -443,54 +448,21 @@ FROM {2} {3} GROUP BY {0}""".format(
         with self.connection() as conn:
             for tname in self.tg.tabledict:
                 #
-                # FIXME: how much do we want to use DB types? Probably as much as possible!
-                # Thus we need to convert on write **and** read!
+                # How much do we want to use DB types? Probably as much as possible!
+                # Thus we'd need to convert on write **and** read!
                 #
-                convert, seps, refs = {}, {}, collections.defaultdict(dict)
-                table = self.tdict[tname]  # The TableSpec object.
-
-                # Assemble the conversion dictionary:
-                for col in table.columns:
-                    convert[self.translate(tname, col.name)] = [col.name, identity]
-                    if col.csvw_type in TYPE_MAP:
-                        convert[self.translate(tname, col.name)][1] = TYPE_MAP[col.csvw_type][2]
-                    else:
-                        convert[self.translate(tname, col.name)][1] = \
-                            DATATYPES[col.csvw_type].to_python
-                    if col.separator:
-                        if col.csvw_type == 'string':
-                            seps[self.translate(tname, col.name)] = col.separator
-                        else:
-                            seps[self.translate(tname, col.name)] = 'json'
-
+                spec = TableReadSpec(self.tdict[tname], tname, self.translate)
                 # Retrieve the many-to-many relations:
-                for col, at in table.many_to_many.items():
+                for col, at in spec.table.many_to_many.items():
                     for pk, v in self.select_many_to_many(conn, at, col).items():
-                        refs[pk][self.translate(tname, col)] = v
+                        spec.references[pk][self.translate(tname, col)] = v
 
                 cols, rows = select(conn, self.translate(tname))
                 for row in rows:
-                    d = collections.OrderedDict()
-                    for k, v in zip(cols, row):
-                        if k in seps:
-                            if v is None:
-                                d[k] = None
-                            elif not v:
-                                d[k] = []
-                            elif seps[k] == 'json':
-                                d[k] = json.loads(v)
-                            else:
-                                d[k] = [convert[k][1](v_) for v_ in (v or '').split(seps[k])]
-                        else:
-                            d[k] = convert[k][1](v) if v is not None else None
-                    pk = d[self.translate(tname, table.primary_key[0])] \
-                        if table.primary_key and len(table.primary_key) == 1 else None
-                    d.update({k: [] for k in table.many_to_many})
-                    d.update(refs.get(pk, {}))
-                    res[self.translate(tname)].append(d)
+                    res[self.translate(tname)].append(spec.read_row(zip(cols, row)))
         return res
 
-    def association_table_context(self, table, column, fkey):
+    def association_table_context(self, _, column, fkey):
         """
         Context for association tables is created calling this method.
 
@@ -507,11 +479,49 @@ FROM {2} {3} GROUP BY {0}""".format(
         return fkey, column
 
     def write_from_tg(self, _force=False, _exists_ok=False, _skip_extra=False):
+        """Write the data from the contained tablegroup to a db."""
         return self.write(
             force=_force,
             _exists_ok=_exists_ok,
             _skip_extra=_skip_extra,
             **self.tg.read())
+
+    def _get_rows(self, t, items, refs, _skip_extra):
+        rows, keys = [], []
+        cols = {c.name: c for c in t.columns}
+        for i, row in enumerate(items):
+            pk = row[t.primary_key[0]] if t.primary_key and len(t.primary_key) == 1 else None
+            values = []
+            for k, v in row.items():
+                if k in t.many_to_many:
+                    assert pk
+                    atkey = tuple([t.many_to_many[k].name] +  # noqa: W504
+                                  [c.name for c in t.many_to_many[k].columns])
+                    # We distinguish None - meaning NULL - and [] - meaning no items - as
+                    # values of list-valued columns.
+                    refs[atkey].extend([
+                        tuple([pk] + list(self.association_table_context(t, k, vv)))
+                        for vv in (v or [])])
+                else:
+                    if k not in cols:
+                        if _skip_extra:
+                            continue
+                        raise ValueError(f'unspecified column {k} found in data')
+                    col = cols[k]
+                    if isinstance(v, list):
+                        # Note: This assumes list-valued columns are of datatype string!
+                        if col.csvw_type == 'string':
+                            v = (col.separator or ';').join(
+                                col.db_type.convert(vv) or '' for vv in v)
+                        else:
+                            v = json.dumps(v)
+                    else:
+                        v = col.db_type.convert(v) if v is not None else None
+                    if i == 0:
+                        keys.append(col.name)
+                    values.append(v)
+            rows.append(tuple(values))
+        return rows, keys
 
     def write(self, *, force=False, _exists_ok=False, _skip_extra=False, **items):
         """
@@ -522,8 +532,7 @@ FROM {2} {3} GROUP BY {0}""".format(
         if self.fname and self.fname.exists():
             if not force:
                 raise ValueError('db file already exists, use force=True to overwrite')
-            else:
-                self.fname.unlink()
+            self.fname.unlink()
 
         with self.connection() as db:
             for table in self.tables:
@@ -536,46 +545,56 @@ FROM {2} {3} GROUP BY {0}""".format(
             for t in self.tables:
                 if t.name not in items:
                     continue
-                rows, keys = [], []
-                cols = {c.name: c for c in t.columns}
-                for i, row in enumerate(items[t.name]):
-                    pk = row[t.primary_key[0]] \
-                        if t.primary_key and len(t.primary_key) == 1 else None
-                    values = []
-                    for k, v in row.items():
-                        if k in t.many_to_many:
-                            assert pk
-                            at = t.many_to_many[k]
-                            atkey = tuple([at.name] + [c.name for c in at.columns])
-                            # We distinguish None - meaning NULL - and [] - meaning no items - as
-                            # values of list-valued columns.
-                            for vv in (v or []):
-                                fkey, context = self.association_table_context(t, k, vv)
-                                refs[atkey].append((pk, fkey, context))
-                        else:
-                            if k not in cols:
-                                if _skip_extra:
-                                    continue
-                                else:
-                                    raise ValueError(
-                                        'unspecified column {0} found in data'.format(k))
-                            col = cols[k]
-                            if isinstance(v, list):
-                                # Note: This assumes list-valued columns are of datatype string!
-                                if col.csvw_type == 'string':
-                                    v = (col.separator or ';').join(
-                                        col.convert(vv) or '' for vv in v)
-                                else:
-                                    v = json.dumps(v)
-                            else:
-                                v = col.convert(v) if v is not None else None
-                            if i == 0:
-                                keys.append(col.name)
-                            values.append(v)
-                    rows.append(tuple(values))
+                rows, keys = self._get_rows(t, items[t.name], refs, _skip_extra)
                 insert(db, self.translate, t.name, keys, *rows)
 
             for atkey, rows in refs.items():
                 insert(db, self.translate, atkey[0], atkey[1:], *rows)
 
             db.commit()
+
+
+@dataclasses.dataclass
+class TableReadSpec:
+    """Bundles data informing the reading of table rows."""
+    table: TableSpec
+    name: str
+    translate: SchemaTranslator
+    converters: dict[str, tuple[str, Callable]] = dataclasses.field(default_factory=dict)
+    separators: dict[str, str] = dataclasses.field(default_factory=dict)
+    references: dict = dataclasses.field(default_factory=lambda: collections.defaultdict(dict))
+
+    def __post_init__(self):
+        # Assemble the conversion dictionary:
+        for col in self.table.columns:
+            if col.csvw_type in TYPE_MAP:
+                conv = TYPE_MAP[col.csvw_type].convert
+            else:
+                conv = DATATYPES[col.csvw_type].to_python
+            self.converters[self.translate(self.name, col.name)] = (col.name, conv)
+            if col.separator:
+                if col.csvw_type == 'string':
+                    self.separators[self.translate(self.name, col.name)] = col.separator
+                else:
+                    self.separators[self.translate(self.name, col.name)] = 'json'
+
+    def read_row(self, row: Iterator[tuple[str, Any]]) -> collections.OrderedDict[str, Any]:
+        """Read a table according to spec."""
+        d = collections.OrderedDict()
+        for k, v in row:
+            if k in self.separators:
+                if v is None:
+                    d[k] = None
+                elif not v:
+                    d[k] = []
+                elif self.separators[k] == 'json':
+                    d[k] = json.loads(v)
+                else:
+                    d[k] = [self.converters[k][1](v_) for v_ in (v or '').split(self.separators[k])]
+            else:
+                d[k] = self.converters[k][1](v) if v is not None else None
+        pk = d[self.translate(self.name, self.table.primary_key[0])] \
+            if self.table.primary_key and len(self.table.primary_key) == 1 else None
+        d.update({k: [] for k in self.table.many_to_many})
+        d.update(self.references.get(pk, {}))
+        return d

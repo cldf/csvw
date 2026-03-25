@@ -1,61 +1,185 @@
+"""
+Misc
+"""
+import io
 import re
-import copy
-import html
 import json
 import string
 import keyword
-import pathlib
+import logging
 import warnings
+import contextlib
 import collections
+import dataclasses
 import unicodedata
+import urllib.request
+from typing import Callable, Any, Union, Optional, Literal
 
-import attr
+HTTP_REQUEST_TIMEOUT = 10
 
 
-def is_url(s):
+@dataclasses.dataclass
+class LinkHeader:
+    """
+    https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Link
+    """
+    url: str
+    params: dict[str, str]
+
+    @classmethod
+    def from_string(cls, s):
+        """
+        <uri-reference>; param1=value1; param2="value2"
+        """
+        comps = re.split(r'>\s*;\s*', s.strip(), maxsplit=1)
+        if len(comps) == 2:
+            url, sparams = comps
+            url += '>'
+        else:
+            url, sparams = comps[0], ''
+        assert url.startswith('<') and url.endswith('>')
+        url = url[1:-1].strip()
+        params = {}
+        if sparams:
+            for sparam in sparams.split(';'):
+                key, _, value = sparam.strip().partition('=')
+                key, value = key.strip(), (value or '').strip()
+                if value.startswith('"'):
+                    assert value.endswith('"')
+                    value = value[1:-1].strip()
+                params[key] = value or None
+        return cls(url=url, params=params)
+
+    @classmethod
+    def iter_links(cls, s):
+        """
+        A Link header might contain multiple links separated by comma.
+        """
+        for i, single in enumerate(re.split(r',\s*<', s)):
+            yield cls.from_string(single if i == 0 else '<' + single)
+
+
+@contextlib.contextmanager
+def urlopen(
+        url,
+        method: Optional[Literal['HEAD', 'GET']] = 'GET',
+        timeout=HTTP_REQUEST_TIMEOUT,
+):
+    """
+    Open URLs
+    - without raising an exception on HTTP errors,
+    - passing a specific User-Agent header,
+    - specifying a timeout.
+    """
+    class NonRaisingHTTPErrorProcessor(urllib.request.HTTPErrorProcessor):
+        """Don't raise exceptions on HTTP errors."""
+        http_response = https_response = lambda self, req, res: res  # pylint: disable=C3001
+
+    opener = urllib.request.build_opener(NonRaisingHTTPErrorProcessor)
+    opener.addheaders = [('User-agent', 'csvw/4.0.0')]
+    yield opener.open(urllib.request.Request(url, method=method), timeout=timeout)
+
+
+def request_head(url) -> tuple[str, list[LinkHeader]]:
+    """Makes a HEAD request and returns the relevant response data."""
+    with urlopen(url) as response:
+        links = []
+        for mult in response.info().get_all('Link') or []:
+            links.extend(LinkHeader.iter_links(mult))
+        return response.info().get_content_type() or '', links
+
+
+@dataclasses.dataclass
+class GetResponse:
+    """Relevant data from an HTTP GET response."""
+    status_code: int = 200
+    content: bytes = None
+    text: str = None
+
+    def __post_init__(self):
+        if self.content and not self.text:
+            self.text = self.content.decode('utf8')
+        if self.text and not self.content:
+            self.content = self.text.encode('utf8')
+
+    @classmethod
+    def from_response(cls, response) -> 'GetResponse':
+        """Initialize instance with data from a urllib response."""
+        content = response.read()
+        text = content.decode(response.headers.get_content_charset() or 'utf-8')
+        return cls(status_code=response.status, content=content, text=text)
+
+    def json(self) -> Any:
+        """The content of the repsonse parsed as JSON."""
+        return json.loads(self.text, object_pairs_hook=collections.OrderedDict)
+
+
+def request_get(url: str) -> GetResponse:
+    """Makes a GET request."""
+    with urlopen(url) as response:
+        return GetResponse.from_response(response)
+
+
+def log_or_raise(
+        msg: str,
+        log: Optional[logging.Logger] = None,
+        level: str = 'warning',
+        exception_cls: type = ValueError):
+    """
+    Helper for error handling. In an inspection scenario, we want to list - i.e. log - all
+    errors. In a validation scenario, we raise an exception at the first error.
+    """
+    if log:
+        getattr(log, level)(msg)
+    else:
+        raise exception_cls(msg)
+
+
+def json_open(filename, mode='r', encoding='utf-8'):
+    """Open a text file suitable for reading JSON content, i.e. assuming it is utf-8 encoded."""
+    assert encoding == 'utf-8'
+    return io.open(filename, mode, encoding=encoding)
+
+
+def get_json(fname) -> Union[list, dict]:
+    """Retrieve JSON content from a local file or remote URL."""
+    fname = str(fname)
+    if is_url(fname):
+        return request_get(fname).json()
+    with json_open(fname) as f:
+        return json.load(f, object_pairs_hook=collections.OrderedDict)
+
+
+def optcast(type_: type) -> Callable[[Any], Any]:
+    """Returns a callable that casts its argument to type_ unless it is None."""
+    return lambda v: v if v is None else type_(v)
+
+
+def is_url(s):  # pylint: disable=C0116
     return re.match(r'https?://', str(s))
 
 
-def converter(type_, default, s, allow_none=False, cond=None, allow_list=True):
-    if allow_list and type_ != list and isinstance(s, list):
-        return [v for v in [converter(type_, None, ss, cond=cond) for ss in s] if v is not None]
+def type_checker(  # pylint: disable=R0913,R0917
+        type_: type,
+        default: Optional[Any],
+        v: Union[list[Any], Any],
+        allow_none: bool = False,
+        cond: Optional[Callable[[Any], bool]] = None,
+        allow_list=True,
+) -> Any:
+    """Check if a value has a certain type (with bells and whistles), warn if not."""
+    if allow_list and type_ != list and isinstance(v, list):
+        # Convert a list of strings by applying the conversion to each not-None item.
+        return [v for v in [type_checker(type_, None, vv, cond=cond) for vv in v] if v is not None]
 
-    if allow_none and s is None:
-        return s
-    if not isinstance(s, type_) or (type_ == int and isinstance(s, bool)) or (cond and not cond(s)):
-        warnings.warn('Invalid value for property: {}'.format(s))
+    if allow_none and v is None:
+        return v
+
+    # Note: `bool` is a `subclass` of int in Python!
+    if not isinstance(v, type_) or (type_ == int and isinstance(v, bool)) or (cond and not cond(v)):
+        warnings.warn(f'Invalid value for property: {v}')
         return default
-    return s
-
-
-def ensure_path(fname):
-    if not isinstance(fname, pathlib.Path):
-        assert isinstance(fname, str)
-        return pathlib.Path(fname)
-    return fname
-
-
-def attr_defaults(cls):
-    res = collections.OrderedDict()
-    for field in attr.fields(cls):
-        default = field.default
-        if isinstance(default, attr.Factory):
-            default = default.factory()
-        res[field.name] = default
-    return res
-
-
-def attr_asdict(obj, omit_defaults=True, omit_private=True):
-    defs = attr_defaults(obj.__class__)
-    res = collections.OrderedDict()
-    for field in attr.fields(obj.__class__):
-        if not (omit_private and field.name.startswith('_')):
-            value = getattr(obj, field.name)
-            if not (omit_defaults and value == defs[field.name]):
-                if hasattr(value, 'asdict'):
-                    value = value.asdict(omit_defaults=True)
-                res[field.name] = value
-    return res
+    return v
 
 
 def normalize_name(s):
@@ -103,128 +227,3 @@ def slug(s, remove_whitespace=True, lowercase=True):
     res = res.encode('ascii', 'ignore').decode('ascii')
     assert re.match('[ A-Za-z0-9]*$', res)
     return res
-
-
-def qname2url(qname):
-    for prefix, uri in {
-        'csvw': 'http://www.w3.org/ns/csvw#',
-        'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-        'rdfs': 'http://www.w3.org/2000/01/rdf-schema#',
-        'xsd': 'http://www.w3.org/2001/XMLSchema#',
-        'dc': 'http://purl.org/dc/terms/',
-        'dcat': 'http://www.w3.org/ns/dcat#',
-        'prov': 'http://www.w3.org/ns/prov#',
-    }.items():
-        if qname.startswith(prefix + ':'):
-            return qname.replace(prefix + ':', uri)
-
-
-def metadata2markdown(tg, link_files=False) -> str:
-    """
-    Render the metadata of a dataset as markdown.
-
-    :param link_files: If True, links to data files will be added, assuming the markdown is stored \
-    in the same directory as the metadata file.
-    :return: `str` with markdown formatted text
-    """
-    def qname2link(qname, html=False):
-        url = qname2url(qname)
-        if url:
-            if html:
-                return '<a href="{}">{}</a>'.format(url, qname)
-            return '[{}]({})'.format(qname, url)
-        return qname
-
-    def htmlify(obj, key=None):
-        """
-        For inclusion in tables we must use HTML for lists.
-        """
-        if isinstance(obj, list):
-            return '<ol>{}</ol>'.format(
-                ''.join('<li>{}</li>'.format(htmlify(item, key=key)) for item in obj))
-        if isinstance(obj, dict):
-            items = []
-            for k, v in obj.items():
-                items.append('<dt>{}</dt><dd>{}</dd>'.format(
-                    qname2link(k, html=True), html.escape(str(v))))
-            return '<dl>{}</dl>'.format(''.join(items))
-        return str(obj)
-
-    def properties(props):
-        props = {k: v for k, v in copy.deepcopy(props).items() if v}
-        res = []
-        desc = props.pop('dc:description', None)
-        if desc:
-            res.append(desc + '\n')
-        img = props.pop('https://schema.org/image', None)
-        if img:
-            if isinstance(img, str):  # pragma: no cover
-                img = {'contentUrl': img}
-            res.append('![{}]({})\n'.format(
-                img.get('https://schema.org/caption') or '',
-                img.get('https://schema.org/contentUrl')))
-        if props:
-            res.append('property | value\n --- | ---')
-            for k, v in props.items():
-                res.append('{} | {}'.format(qname2link(k), htmlify(v, key=k)))
-        return '\n'.join(res) + '\n'
-
-    def colrow(col, fks, pk):
-        dt = '`{}`'.format(col.datatype.base if col.datatype else 'string')
-        if col.datatype:
-            if col.datatype.format:
-                if re.fullmatch(r'[\w\s]+(\|[\w\s]+)*', col.datatype.format):
-                    dt += '<br>Valid choices:<br>'
-                    dt += ''.join(' `{}`'.format(w) for w in col.datatype.format.split('|'))
-                elif col.datatype.base == 'string':
-                    dt += '<br>Regex: `{}`'.format(col.datatype.format)
-            if col.datatype.minimum:
-                dt += '<br>&ge; {}'.format(col.datatype.minimum)
-            if col.datatype.maximum:
-                dt += '<br>&le; {}'.format(col.datatype.maximum)
-        if col.separator:
-            dt = 'list of {} (separated by `{}`)'.format(dt, col.separator)
-        desc = col.common_props.get('dc:description', '').replace('\n', ' ')
-
-        if pk and col.name in pk:
-            desc = (desc + '<br>') if desc else desc
-            desc += 'Primary key'
-
-        if col.name in fks:
-            desc = (desc + '<br>') if desc else desc
-            desc += 'References [{}::{}](#table-{})'.format(
-                fks[col.name][1], fks[col.name][0], slug(fks[col.name][1]))
-
-        return ' | '.join([
-            '[{}]({})'.format(col.name, col.propertyUrl)
-            if col.propertyUrl else '`{}`'.format(col.name),
-            dt,
-            desc,
-        ])
-
-    res = ['# {}\n'.format(tg.common_props.get('dc:title', 'Dataset'))]
-    if tg._fname and link_files:
-        res.append('> [!NOTE]\n> Described by [{0}]({0}).\n'.format(tg._fname.name))
-
-    res.append(properties({k: v for k, v in tg.common_props.items() if k != 'dc:title'}))
-
-    for table in tg.tables:
-        fks = {
-            fk.columnReference[0]: (fk.reference.columnReference[0], fk.reference.resource.string)
-            for fk in table.tableSchema.foreignKeys if len(fk.columnReference) == 1}
-        header = '## <a name="table-{}"></a>Table '.format(slug(table.url.string))
-        if link_files and tg._fname and tg._fname.parent.joinpath(table.url.string).exists():
-            header += '[{0}]({0})\n'.format(table.url.string)
-        else:  # pragma: no cover
-            header += table.url.string
-        res.append('\n' + header + '\n')
-        res.append(properties(table.common_props))
-        dialect = table.inherit('dialect')
-        if dialect.asdict():
-            res.append('\n**CSV dialect**: `{}`\n'.format(json.dumps(dialect.asdict())))
-        res.append('\n### Columns\n')
-        res.append('Name/Property | Datatype | Description')
-        res.append(' --- | --- | --- ')
-        for col in table.tableSchema.columns:
-            res.append(colrow(col, fks, table.tableSchema.primaryKey))
-    return '\n'.join(res)

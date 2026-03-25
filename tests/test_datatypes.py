@@ -82,8 +82,27 @@ def test_roundtrip(datatype, val, obj, roundtrip):
 
 
 @pytest.mark.parametrize(
+    'spec',
+    [
+        {'base': 'string', 'length': 5, 'minLength': 6},
+        {'base': 'string', 'length': 5, 'maxLength': 4},
+        {'base': 'string', 'maxLength': 5, 'minLength': 6},
+        5,
+        {'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.SGS'},
+        {'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.S XxX'},
+        {'base': 'dateTimeStamp', 'format': 'd.M.yyyy HH:mm:ss.SSS'},
+    ]
+)
+def test_invalid_spec(spec):
+    with pytest.raises(ValueError):
+        Datatype.fromvalue(spec)
+
+
+@pytest.mark.parametrize(
     'datatype,val',
     [
+        ({'base': 'string', 'maxLength': 4}, 'abcdefg'),
+        ({'base': 'string', 'minLength': 4}, 'abc'),
         ({'base': 'nonNegativeInteger'}, '-1'),
         ({'base': 'positiveInteger'}, '0'),
         ({'base': 'double', 'minimum': 10}, '3.1'),
@@ -100,7 +119,7 @@ def test_roundtrip(datatype, val, obj, roundtrip):
         ({'base': 'hexBinary'}, 'spam'),
     ]
 )
-def test_invalid(datatype, val):
+def test_invalid_value(datatype, val):
     t = Datatype.fromvalue(datatype)
     with pytest.raises(ValueError):
         t.read(val)
@@ -133,7 +152,7 @@ def test_number():
     assert t.formatted(v) == '3'
     with pytest.raises(ValueError):
         t.validate(12)
-    
+
     t = Datatype.fromvalue(
         {'base': 'decimal', 'format': {'groupChar': '.', 'decimalChar': ','}})
     with warnings.catch_warnings():
@@ -152,37 +171,9 @@ def test_number():
     assert t.formatted(decimal.Decimal('-3.1415')) == '3,14-'
 
 
-def test_errors():
-    with pytest.raises(ValueError):
-        Datatype.fromvalue({'base': 'string', 'length': 5, 'minLength': 6})
-
-    with pytest.raises(ValueError):
-        Datatype.fromvalue({'base': 'string', 'length': 5, 'maxLength': 4})
-
-    with pytest.raises(ValueError):
-        dt = Datatype.fromvalue({'base': 'string', 'minLength': 4})
-        dt.validate('abc')
-
-    with pytest.raises(ValueError):
-        dt = Datatype.fromvalue({'base': 'string', 'maxLength': 4})
-        dt.validate('abcdefg')
-
-    with pytest.raises(ValueError):
-        Datatype.fromvalue({'base': 'string', 'maxLength': 5, 'minLength': 6})
-
-    with pytest.raises(ValueError):
-        Datatype.fromvalue(5)
-
-
 def test_date():
     with pytest.warns(UserWarning):
         Datatype.fromvalue({'base': 'date', 'format': '2012+12+12'})
-
-    with pytest.raises(ValueError):
-        Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.SGS'})
-
-    with pytest.raises(ValueError):
-        Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.S XxX'})
 
     t = Datatype.fromvalue({'base': 'datetime', 'format': 'd.M.yyyy HH:mm:ss.SSS'})
     assert t.formatted(datetime.datetime(2012, 12, 12, 12, 12, 12, microsecond=12345)) == \
@@ -202,9 +193,6 @@ def test_date():
         t.parse('22.3.2015 22:05')
     assert t.formatted(t.parse('2012-12-01T12:12:12.123456+05:30')) == \
            '2012-12-01T12:12:12.123456+05:30'
-
-    with pytest.raises(ValueError):
-        Datatype.fromvalue({'base': 'dateTimeStamp', 'format': 'd.M.yyyy HH:mm:ss.SSS'})
 
     t = Datatype.fromvalue({'base': 'duration', 'format': 'P[1-5]Y'})
     with pytest.raises(ValueError):

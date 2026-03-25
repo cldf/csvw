@@ -15,12 +15,13 @@ import io
 import csv
 import codecs
 import shutil
-import typing
+from typing import Optional, Union, IO, Callable
 import pathlib
 import tempfile
 import warnings
 import functools
 import collections
+from collections.abc import Iterable, Generator
 
 from . import utils
 from .dsv_dialects import Dialect
@@ -32,14 +33,18 @@ __all__ = [
     'rewrite', 'add_rows', 'filter_rows_as_dict',
 ]
 
-LINES_OR_PATH = typing.Union[str, pathlib.Path, typing.IO, typing.Iterable[str]]
+PathType = Union[str, pathlib.Path]
+LinesOrPath = Union[PathType, IO, Iterable[str]]
+# Note: The value for restkey is a list of all surplus column values.
+DictRowType = collections.OrderedDict[str, Union[str, list[str]]]
 
 
 def normalize_encoding(encoding: str) -> str:
+    """Normalize the name of the encoding."""
     return codecs.lookup(encoding).name
 
 
-class UnicodeWriter:
+class UnicodeWriter:  # pylint: disable=too-many-instance-attributes
     """
     Write Unicode data to a csv file.
 
@@ -60,8 +65,8 @@ class UnicodeWriter:
 
     def __init__(
             self,
-            f: typing.Optional[typing.Union[str, pathlib.Path]] = None,
-            dialect: typing.Optional[typing.Union[Dialect, str]] = None,
+            f: Optional[PathType] = None,
+            dialect: Optional[Union[Dialect, str]] = None,
             **kw):
         self.f = f
         self.encoding = kw.pop('encoding', 'utf-8')
@@ -89,6 +94,7 @@ class UnicodeWriter:
         self._escapedoubled = _escapedoubled
         self._close = False
         self._rows_written = 0
+        self.writer = None
 
     def __enter__(self):
         if isinstance(self.f, (str, pathlib.Path)):
@@ -103,7 +109,7 @@ class UnicodeWriter:
         self.writer = csv.writer(self.f, **self.kw)
         return self
 
-    def read(self) -> typing.Optional[bytes]:
+    def read(self) -> Optional[bytes]:
         """
         If the writer has been initialized passing `None` as target, the CSV data as `bytes` can be
         retrieved calling this method.
@@ -112,16 +118,18 @@ class UnicodeWriter:
             self.f.seek(0)
         if hasattr(self.f, 'read'):
             return self.f.read().encode('utf-8')
+        return None  # pragma: no cover
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, type_, value, traceback):
         if self._close:
             self.f.close()
 
-    def writerow(self, row: typing.Iterable[typing.Union[str, None]]):
+    def writerow(self, row: Iterable[Union[str, None]]):
+        """Write multiple rows."""
         self.writer.writerow(self._escapedoubled(row))
         self._rows_written += 1
 
-    def writerows(self, rows: typing.Iterable[typing.Union[tuple, list, dict]]):
+    def writerows(self, rows: Iterable[Union[tuple, list, dict]]):
         """
         Writes each row in `rows` formatted as CSV row. This behaves as
         [`csvwriter.writerows`](https://docs.python.org/3/library/csv.html#csv.csvwriter.writerows)
@@ -141,7 +149,7 @@ class UnicodeWriter:
             self.writerow(row)
 
 
-class UnicodeReader:
+class UnicodeReader:  # pylint: disable=too-many-instance-attributes
     """
     Read Unicode data from a csv file.
 
@@ -164,13 +172,15 @@ class UnicodeReader:
     """
     def __init__(
             self,
-            f: LINES_OR_PATH,
-            dialect: typing.Optional[typing.Union[Dialect, str]] = None,
+            f: LinesOrPath,
+            dialect: Optional[Union[Dialect, str]] = None,
             **kw):
         self.f = f
         self.encoding = normalize_encoding(kw.pop('encoding', 'utf-8-sig'))
         self.newline = kw.pop('lineterminator', None)
         self.dialect = dialect if isinstance(dialect, Dialect) else None
+        self.lineno = None
+        self.reader = None
         if self.dialect:
             self.encoding = self.dialect.python_encoding
             self.kw = dialect.as_python_formatting_parameters()
@@ -215,7 +225,7 @@ class UnicodeReader:
         row = [
             s if isinstance(s, str) else s.decode(self._reader_encoding)
             for s in next(self.reader)]
-        self.lineno += sum([list(s).count('\n') for s in row])
+        self.lineno += sum(list(s).count('\n') for s in row)
         return row
 
     def __next__(self):
@@ -244,7 +254,7 @@ class UnicodeReader:
         return self
 
 
-class UnicodeReaderWithLineNumber(UnicodeReader):
+class UnicodeReaderWithLineNumber(UnicodeReader):  # pylint: disable=too-few-public-methods
     """
     A `UnicodeReader` yielding (lineno, row) pairs, where "lineno" is the 1-based number of the
     the **text line** where the (possibly multi-line) row data starts in the DSV file.
@@ -254,7 +264,7 @@ class UnicodeReaderWithLineNumber(UnicodeReader):
         :return: a pair (1-based line number in the input, row)
         """
         # Retrieve the row, thereby incrementing the line number:
-        row = super(UnicodeReaderWithLineNumber, self).__next__()
+        row = super().__next__()
         return self.lineno + 1, row
 
 
@@ -281,19 +291,26 @@ class UnicodeDictReader(UnicodeReader):
 
     """
 
-    def __init__(self, f, fieldnames=None, restkey=None, restval=None, **kw):
+    def __init__(
+            self,
+            f,
+            fieldnames: Optional[list[str]] = None,
+            restkey: Optional[str] = None,
+            restval: Optional[str] = None,
+            **kw):
         self._fieldnames = fieldnames   # list of keys for the dict
         self.restkey = restkey          # key to catch long rows
         self.restval = restval          # default value for short rows
         self.line_num = 0
-        super(UnicodeDictReader, self).__init__(f, **kw)
+        super().__init__(f, **kw)
 
     @property
-    def fieldnames(self):
+    def fieldnames(self) -> Optional[list[str]]:
+        """Get the fieldnames, i.e. the dictionary keys for the rows."""
         if self._fieldnames is None:
-            try:
-                self._fieldnames = super(UnicodeDictReader, self).__next__()
-            except StopIteration:
+            try:  # Read the first row.
+                self._fieldnames = super().__next__()
+            except StopIteration:  # No rows, so no fieldnames is ok.
                 pass
         self.line_num = self.reader.line_num
         if self._fieldnames:
@@ -301,21 +318,22 @@ class UnicodeDictReader(UnicodeReader):
                 warnings.warn('Duplicate column names!')
         return self._fieldnames
 
-    def __next__(self) -> collections.OrderedDict:
+    def __next__(self) -> DictRowType:
         if self.line_num == 0:
             # Used only for its side effect.
-            self.fieldnames
-        row = super(UnicodeDictReader, self).__next__()
+            self.fieldnames  # pylint: disable=pointless-statement
+        row = super().__next__()
         self.line_num = self.reader.line_num
 
         # unlike the basic reader, we prefer not to return blanks,
         # because we will typically wind up with a dict full of None
         # values
         while row == []:
-            row = super(UnicodeDictReader, self).__next__()
+            row = super().__next__()
         return self.item(row)
 
-    def item(self, row) -> collections.OrderedDict:
+    def item(self, row) -> DictRowType:
+        """Turn a row into a dict."""
         d = collections.OrderedDict((k, v) for k, v in zip(self.fieldnames, row))
         lf = len(self.fieldnames)
         lr = len(row)
@@ -341,10 +359,14 @@ class NamedTupleReader(UnicodeDictReader):
 
     @functools.cached_property
     def cls(self):
+        """
+        Creates a namedtuple class suitable for the columns of the CSV content.
+        """
         fieldnames = list(map(self._normalize_fieldname, self.fieldnames))
         return collections.namedtuple('Row', fieldnames)
 
     def item(self, row):
+        """Create a namedtuple from a row."""
         d = UnicodeDictReader.item(self, row)
         for name in self.fieldnames:
             d.setdefault(name, None)
@@ -352,11 +374,11 @@ class NamedTupleReader(UnicodeDictReader):
             **{self._normalize_fieldname(k): v for k, v in d.items() if k in self.fieldnames})
 
 
-def iterrows(lines_or_file: LINES_OR_PATH,
-             namedtuples: typing.Optional[bool] = False,
-             dicts: typing.Optional[bool] = False,
-             encoding: typing.Optional[str] = 'utf-8',
-             **kw) -> typing.Generator:
+def iterrows(lines_or_file: LinesOrPath,
+             namedtuples: Optional[bool] = False,
+             dicts: Optional[bool] = False,
+             encoding: Optional[str] = 'utf-8',
+             **kw) -> Generator:
     """Convenience factory function for csv reader.
 
     :param lines_or_file: Content to be read. Either a file handle, a file path or a list\
@@ -369,7 +391,7 @@ def iterrows(lines_or_file: LINES_OR_PATH,
     """
     if namedtuples and dicts:
         raise ValueError('either namedtuples or dicts can be chosen as output format')
-    elif namedtuples:
+    if namedtuples:
         _reader = NamedTupleReader
     elif dicts:
         _reader = UnicodeDictReader
@@ -377,16 +399,13 @@ def iterrows(lines_or_file: LINES_OR_PATH,
         _reader = UnicodeReader
 
     with _reader(lines_or_file, encoding=encoding, **kw) as r:
-        for item in r:
-            yield item
+        yield from r
 
 
 reader = iterrows
 
 
-def rewrite(fname: typing.Union[str, pathlib.Path],
-            visitor: typing.Callable[[int, typing.List[str]], typing.Union[None, typing.List[str]]],
-            **kw):
+def rewrite(fname: PathType, visitor: Callable[[int, list[str]], Union[None, list[str]]], **kw):
     """Utility function to rewrite rows in dsv files.
 
     :param fname: Path of the dsv file to operate on.
@@ -394,7 +413,7 @@ def rewrite(fname: typing.Union[str, pathlib.Path],
     (modified) row or None to filter out the row.
     :param kw: Keyword parameters are passed through to csv.reader/csv.writer.
     """
-    fname = utils.ensure_path(fname)
+    fname = pathlib.Path(fname)
     assert fname.is_file()
     with tempfile.NamedTemporaryFile(delete=False) as fp:
         tmp = pathlib.Path(fp.name)
@@ -405,26 +424,27 @@ def rewrite(fname: typing.Union[str, pathlib.Path],
                 row = visitor(i, row)
                 if row is not None:
                     writer.writerow(row)
-    shutil.move(str(tmp), str(fname))  # Path.replace is Python 3.3+
+    shutil.move(tmp, fname)
 
 
-def add_rows(fname: typing.Union[str, pathlib.Path], *rows: typing.List[str]):
+def add_rows(fname: PathType, *rows: list[str]):
+    """
+    Add rows to a CSV file.
+    """
     with tempfile.NamedTemporaryFile(delete=False) as fp:
         tmp = pathlib.Path(fp.name)
 
-    fname = utils.ensure_path(fname)
+    fname = pathlib.Path(fname)
     with UnicodeWriter(tmp) as writer:
         if fname.exists():
             with UnicodeReader(fname) as reader_:
                 for row in reader_:
                     writer.writerow(row)
         writer.writerows(rows)
-    shutil.move(str(tmp), str(fname))  # Path.replace is Python 3.3+
+    shutil.move(tmp, fname)
 
 
-def filter_rows_as_dict(fname: typing.Union[str, pathlib.Path],
-                        filter_: typing.Callable[[dict], bool],
-                        **kw) -> int:
+def filter_rows_as_dict(fname: PathType, filter_: Callable[[dict], bool], **kw) -> int:
     """Rewrite a dsv file, filtering the rows.
 
     :param fname: Path to dsv file
@@ -439,14 +459,14 @@ def filter_rows_as_dict(fname: typing.Union[str, pathlib.Path],
     return filter_.removed
 
 
-class DictFilter(object):
-
-    def __init__(self, filter_):
-        self.header = None
+class DictFilter:  # pylint: disable=R0903
+    """Utility to apply a filter to a row as dict, while iterating over rows a list."""
+    def __init__(self, filter_: Callable[[dict[str, str]], bool]):
+        self.header: Optional[list[str]] = None
         self.filter = filter_
-        self.removed = 0
+        self.removed: int = 0
 
-    def __call__(self, i, row):
+    def __call__(self, i: int, row: list[str]) -> Optional[list[str]]:
         if i == 0:
             self.header = row
             return row
@@ -454,5 +474,5 @@ class DictFilter(object):
             item = dict(zip(self.header, row))
             if self.filter(item):
                 return row
-            else:
-                self.removed += 1
+            self.removed += 1
+        return None

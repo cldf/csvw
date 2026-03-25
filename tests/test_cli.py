@@ -1,12 +1,13 @@
 import os
 import json
-import shutil
 import pathlib
+import sqlite3
 import argparse
 
 import pytest
 
-from csvw.__main__ import csvw2json, csvw2datasette, csvwdescribe, csvwvalidate, csvw2markdown
+from csvw.__main__ import (
+    csvw2json, csvw2datasette, csvwdescribe, csvwvalidate, csvw2markdown, csvw2sqlite)
 
 
 def relpath(fname):
@@ -82,3 +83,14 @@ def test_csvwdescribe(csvname, tsvname, capsys):
 def test_csvw2datasette(tmp_path, mdname):
     run(csvw2datasette, url=mdname, outdir=tmp_path)
     assert tmp_path.joinpath('datasette.db').exists()
+
+
+def test_csvw2sqlite(tmp_path, mdname):
+    out = tmp_path / 'db.sqlite'
+    run(csvw2sqlite, url=mdname, output=out)
+    assert out.exists()
+    conn = sqlite3.connect(out)
+    cu = conn.cursor()
+    cu.execute('select count(*) from `csv.txt`')
+    assert cu.fetchone()[0] == 2
+    conn.close()
