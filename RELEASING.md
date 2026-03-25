@@ -20,6 +20,11 @@ print(json.dumps(data.to_json(minimal=True), indent=4))
 flake8 src
 ```
 
+- Make sure pylint passes with a score of 10:
+```shell
+pylint src/csvw
+```
+
 - Make sure docs can be created:
 ```shell
 cd docs
