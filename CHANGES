@@ -1,8 +1,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+Version 4.0.0
+-------------
 
 - removed dependency on `attrs`
 
