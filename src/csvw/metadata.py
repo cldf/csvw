@@ -1510,8 +1510,15 @@ class CSVW:
     """
     Python API to read CSVW described data and convert it to JSON.
     """
-    def __init__(self, url: str, md_url: Optional[str] = None, validate: bool = False):
+    def __init__(
+            self,
+            url: str,
+            md_url: Optional[str] = None,
+            validate: bool = False,
+            strict: bool = True,
+    ):
         self.warnings = []
+        self._strict = strict
         w = None
         with contextlib.ExitStack() as stack:
             if validate:
@@ -1577,7 +1584,7 @@ class CSVW:
                     pass
                 if not table.check_primary_key():  # pragma: no cover
                     warnings.warn('Duplicate primary key')
-            if not self.tablegroup.check_referential_integrity(strict=True):
+            if not self.tablegroup.check_referential_integrity(strict=self._strict):
                 warnings.warn('Referential integrity check failed')
             if w:
                 self.warnings.extend(w)

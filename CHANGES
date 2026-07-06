@@ -1,6 +1,13 @@
 Changelog
 =========
 
+
+Version 4.1.0
+-------------
+
+Support "lax" validation, i.e. validation allowing for null-valued foreign keys.
+
+
 Version 4.0.0
 -------------
 

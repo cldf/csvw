@@ -60,14 +60,19 @@ def test_csvw2markdown(mdname, multitable_mdname, capsys):
     assert 'References' in out
 
 
+def test_csvwvalidate_2(multitable_mdname):
+    assert run(csvwvalidate, url=multitable_mdname, verbose=True, lax=False) == 2
+    assert run(csvwvalidate, url=multitable_mdname, verbose=True, lax=True) == 0
+
+
 def test_csvwvalidate(mdname, tmp_path):
-    assert run(csvwvalidate, url=mdname) == 0
+    assert run(csvwvalidate, url=mdname, lax=False) == 0
     p = tmp_path / 'md.json'
     p.write_text(pathlib.Path(mdname).read_text(encoding='utf8').replace('@context', 'context'))
-    assert run(csvwvalidate, url=str(p), verbose=True) == 2
+    assert run(csvwvalidate, url=str(p), verbose=True, lax=False) == 2
 
     p.write_text(pathlib.Path(mdname).read_text(encoding='utf8').replace('"en"', '1'))
-    assert run(csvwvalidate, url=str(p), verbose=True) == 1
+    assert run(csvwvalidate, url=str(p), verbose=True, lax=False) == 1
 
 
 def test_csvwdescribe(csvname, tsvname, capsys):

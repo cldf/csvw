@@ -73,10 +73,12 @@ def csvwvalidate(args=None, test=False):
         args,
         (['url'], {'help': 'URL or local path to CSV or JSON metadata file.'}),
         (['-v', '--verbose'], {'action': 'store_true', 'default': False}),
+        (['-l', '--lax'], {'action': 'store_true', 'default': False,
+                           'help': 'Allow null-valued foreign keys.'}),
     )
     ret = 0
     try:
-        csvw = CSVW(args.url, validate=True)
+        csvw = CSVW(args.url, validate=True, strict=not args.lax)
         if csvw.is_valid:
             print(colored('OK', 'green', attrs=['bold']))
         else:
