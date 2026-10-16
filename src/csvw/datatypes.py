@@ -590,19 +590,9 @@ class decimal(anyAtomicType):  # pylint: disable=invalid-name
             return v
 
         fmt = '{}' if groupChar is None else '{:,}'
-        try:
-            neg = v < 0
-        except TypeError:
-            neg = None
         v = fmt.format(v)
         if 'e' in v.lower():  # detect scientific notation
-            digits, exp = v.lower().split('e')
-            digits = digits.replace('.', '').replace('-', '')
-            exp = int(exp)
-            zero_padding = '0' * (abs(int(exp)) - 1)
-            sign = '-' if neg else ''
-            return f'{sign}{digits}{zero_padding}.0' if exp > 0 \
-                else f'{sign}0.{zero_padding}{digits}'
+            return format(_decimal.Decimal(v), 'f')
 
         if groupChar or decimalChar:
             def repl(m):
