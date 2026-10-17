@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from csvw import Datatype
+from csvw import Datatype, Table
 from csvw.datatypes import NumberPattern
 
 
@@ -79,6 +79,44 @@ def test_roundtrip(datatype, val, obj, roundtrip):
             assert o == obj
     if roundtrip:
         assert t.formatted(o) == val
+
+
+@pytest.mark.parametrize('value', [
+    decimal.Decimal('1E+6'),
+    decimal.Decimal('1.23E+5'),
+    decimal.Decimal('-1.234E+6'),
+    decimal.Decimal('1.2300E+6'),
+    1.23e20,
+    1e20,
+    -1.234e20,
+    '1e6',
+    '-1.23e6',
+    '+1.234e5',
+    '1.23e-8',
+    decimal.Decimal('1E-8'),
+    decimal.Decimal('-1.23E-8'),
+    decimal.Decimal('1.2300E-8'),
+    decimal.Decimal('123.45'),
+    decimal.Decimal('-0'),
+    decimal.Decimal('1.2E+5'),
+])
+def test_decimal_format_preserves_value(value):
+    datatype = Datatype.fromvalue('decimal')
+    formatted = datatype.formatted(value)
+    assert datatype.read(formatted) == decimal.Decimal(str(value))
+    assert 'e' not in formatted.lower()
+
+
+def test_decimal_exponential_csv_roundtrip(tmp_path):
+    table = Table.fromvalue({
+        'url': 'numbers.csv',
+        'tableSchema': {'columns': [{'name': 'value', 'datatype': 'decimal'}]},
+    })
+    values = [decimal.Decimal('1.23E+5'), decimal.Decimal('-1.234E+6'), 1e20]
+    path = tmp_path / 'numbers.csv'
+    table.write([{'value': value} for value in values], fname=path)
+    assert [row['value'] for row in table.iterdicts(fname=path)] == [
+        decimal.Decimal(str(value)) for value in values]
 
 
 @pytest.mark.parametrize(
@@ -210,7 +248,7 @@ def test_misc():
     assert t.formatted(True) == 'true'
 
     t = Datatype.fromvalue('decimal')
-    assert t.formatted('1e6') == '100000.0'
+    assert t.formatted('1e6') == '1000000'
 
 
 def test_NumberPattern():
