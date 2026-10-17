@@ -533,9 +533,7 @@ class Column(Description):
         if not v:
             v = default
 
-        if required and v in null:
-            if not strict:
-                warnings.warn('required column value is missing')
+        if required and (v in null):
             raise ValueError('required column value is missing')
 
         if separator:  # A list-valued column.
@@ -1586,8 +1584,8 @@ class CSVW:
                     warnings.warn('Duplicate primary key')
             if not self.tablegroup.check_referential_integrity(strict=self._strict):
                 warnings.warn('Referential integrity check failed')
-            if w:
-                self.warnings.extend(w)
+        if w:
+            self.warnings.extend(w)
         return not bool(self.warnings)
 
     @property

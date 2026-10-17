@@ -2,6 +2,13 @@ Changelog
 =========
 
 
+Version 4.1.1
+-------------
+
+Fixed bug whereby decimals in scientific notation were handled incorrectly.
+Thanks @Rajvira10 https://github.com/cldf/csvw/pull/84
+
+
 Version 4.1.0
 -------------
 
