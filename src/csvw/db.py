@@ -491,7 +491,7 @@ class Database:
         cols = {c.name: c for c in t.columns}
         for i, row in enumerate(items):
             pk = row[t.primary_key[0]] if t.primary_key and len(t.primary_key) == 1 else None
-            values = []
+            values = {}
             for k, v in row.items():
                 if k in t.many_to_many:
                     assert pk
@@ -517,10 +517,12 @@ class Database:
                             v = json.dumps(v)
                     else:
                         v = col.db_type.convert(v) if v is not None else None
-                    if i == 0:
-                        keys.append(col.name)
-                    values.append(v)
-            rows.append(tuple(values))
+                    values[col.name] = v
+            if i == 0:
+                keys = list(values)
+            elif values.keys() != set(keys):
+                raise ValueError('rows must have the same columns')
+            rows.append(tuple(values[k] for k in keys))
         return rows, keys
 
     def write(self, *, force=False, _exists_ok=False, _skip_extra=False, **items):
