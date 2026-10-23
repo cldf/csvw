@@ -188,6 +188,35 @@ def test_self_referential_foreign_keys(tg):
     db._connection.close()
 
 
+@pytest.mark.parametrize('columns,reference', [
+    (['left', 'right'], ['zeta', 'alpha']),
+    (['right', 'left'], ['alpha', 'zeta']),
+])
+def test_composite_foreign_key_order(columns, reference):
+    tg = TableGroup.fromvalue({'tables': [
+        {'url': 'parent', 'tableSchema': {
+            'columns': [{'name': 'alpha'}, {'name': 'zeta'}],
+            'primaryKey': ['alpha', 'zeta'],
+        }},
+        {'url': 'child', 'tableSchema': {
+            'columns': [{'name': 'left'}, {'name': 'right'}],
+            'foreignKeys': [{
+                'columnReference': columns,
+                'reference': {'resource': 'parent', 'columnReference': reference},
+            }],
+        }},
+    ]})
+    db = Database(tg)
+    db.write(parent=[{'alpha': 'a', 'zeta': 'z'}], child=[{'left': 'z', 'right': 'a'}])
+    assert db.read()['child'] == [{'left': 'z', 'right': 'a'}]
+    with db.connection() as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute('INSERT INTO child VALUES (?, ?)', ('a', 'z'))
+        conn.execute('DELETE FROM parent')
+        assert conn.execute('SELECT * FROM child').fetchall() == []
+    db._connection.close()
+
+
 @pytest.fixture
 def tg_with_foreign_keys(tg):
     tg.tables[0].tableSchema.columns.append(Column.fromvalue({'name': 'v'}))
