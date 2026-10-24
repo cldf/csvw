@@ -238,9 +238,9 @@ class TableSpec:
                     )
                 elif not (drop_self_referential_fks and fk.reference.resource.string == spec.name):
                     spec.foreign_keys.append((
-                        sorted(fk.columnReference),
+                        list(fk.columnReference),
                         fk.reference.resource.string,
-                        sorted(fk.reference.columnReference),
+                        list(fk.reference.columnReference),
                     ))
         for c in table.tableSchema.columns:
             if c.header not in spec.many_to_many:
