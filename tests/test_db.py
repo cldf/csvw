@@ -70,6 +70,32 @@ def test_list_valued_non_text(tg, translate):
     db._connection.close()
 
 
+@pytest.mark.parametrize('reverse_first', [False, True])
+def test_write_row_column_order(tg, reverse_first):
+    tg.tables[0].tableSchema.columns.extend([
+        Column.fromvalue({'name': 'ID'}),
+        Column.fromvalue({'name': 'Form'}),
+    ])
+    rows = [{'ID': '1', 'Form': 'house'}, {'Form': 'water', 'ID': '2'}]
+    if reverse_first:
+        rows.reverse()
+    db = Database(tg)
+    db.write(data=iter(rows))
+    assert db.read()['data'] == rows
+    db._connection.close()
+
+
+@pytest.mark.parametrize('second', [{'ID': '2'}, {'ID': '2', 'Other': 'water'}])
+def test_write_inconsistent_row_columns(tg, second):
+    tg.tables[0].tableSchema.columns.extend([
+        Column.fromvalue({'name': name}) for name in ['ID', 'Form', 'Other']
+    ])
+    db = Database(tg)
+    with pytest.raises(ValueError, match='same columns'):
+        db.write(data=[{'ID': '1', 'Form': 'house'}, second])
+    db._connection.close()
+
+
 def test_required(tg):
     tg.tables[0].tableSchema.columns.append(Column.fromvalue({'required': 'True', 'name': 'v'}))
     db = Database(tg)
