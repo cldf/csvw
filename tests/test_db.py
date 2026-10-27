@@ -292,6 +292,21 @@ def test_many_to_many(tg_with_foreign_keys):
     db._connection.close()
 
 
+@pytest.mark.parametrize('translate_context', [False, True])
+@pytest.mark.parametrize('populated', [False, True])
+def test_many_to_many_translated_columns(tg_with_foreign_keys, translate_context, populated):
+    def translate(table, column=None):
+        if column == 'context' and not translate_context:
+            return column
+        return 'c_' + column if column is not None else 't_' + table
+
+    db = Database(tg_with_foreign_keys, translate=translate)
+    values = ['y', 'x'] if populated else []
+    db.write(ref=[{'pk': '1', 'ref1': values, 'ref2': []}], data=[{'v': 'x'}, {'v': 'y'}])
+    assert db.read()['t_ref'] == [{'c_pk': '1', 'c_ref1': values, 'c_ref2': []}]
+    db._connection.close()
+
+
 def test_many_to_many_2(tg_with_foreign_keys):
     db = Database(tg_with_foreign_keys)
     db.write(
