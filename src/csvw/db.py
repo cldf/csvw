@@ -571,7 +571,7 @@ class TableReadSpec:
         # Assemble the conversion dictionary:
         for col in self.table.columns:
             if col.csvw_type in TYPE_MAP:
-                conv = TYPE_MAP[col.csvw_type].convert
+                conv = TYPE_MAP[col.csvw_type].read
             else:
                 conv = DATATYPES[col.csvw_type].to_python
             self.converters[self.translate(self.name, col.name)] = (col.name, conv)

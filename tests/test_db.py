@@ -1,4 +1,5 @@
 import time
+import decimal
 import pathlib
 import sqlite3
 import warnings
@@ -42,6 +43,20 @@ def test_datatypes(tg, datatype):
     data = db.read()['data']
     assert data[0]['v1'] == v
     assert data[0]['v2'] is None
+    db._connection.close()
+
+
+@pytest.mark.parametrize('datatype, values', [
+    ('boolean', [True, False, None]),
+    ('decimal', [decimal.Decimal('1.25'), decimal.Decimal('-2.5'), None]),
+])
+def test_read_preserves_declared_scalar_types(tg, datatype, values):
+    tg.tables[0].tableSchema.columns.append(Column.fromvalue({'datatype': datatype, 'name': 'v'}))
+    db = Database(tg)
+    db.write(data=[{'v': value} for value in values])
+    actual = [row['v'] for row in db.read()['data']]
+    assert actual == values
+    assert [type(value) for value in actual] == [type(value) for value in values]
     db._connection.close()
 
 
