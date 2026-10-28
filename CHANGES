@@ -2,6 +2,13 @@ Changelog
 =========
 
 
+Unreleased
+----------
+
+Some bug fixes making reading CSVW data from SQLite more robust.
+Thanks @antonsoo !
+
+
 Version 4.1.1
 -------------
 
