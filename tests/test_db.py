@@ -434,3 +434,40 @@ def test_write_file_exists(tmp_path):
         time.sleep(0.1)
         db.write(force=True)
         assert target.stat().st_mtime > mtime
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_large_acyclic_table_group(reverse):
+    tables = []
+    items = {}
+    for i in range(103):
+        schema = {'columns': [{'name': 'ID', 'datatype': 'integer'}], 'primaryKey': 'ID'}
+        row = {'ID': i}
+        if i:
+            schema['columns'].append({'name': 'parent', 'datatype': 'integer'})
+            schema['foreignKeys'] = [{
+                'columnReference': 'parent',
+                'reference': {'resource': f't{i - 1}', 'columnReference': 'ID'},
+            }]
+            row['parent'] = i - 1
+        tables.append({'url': f't{i}', 'tableSchema': schema})
+        items[f't{i}'] = [row]
+    if reverse:
+        tables.reverse()
+    db = Database(TableGroup.fromvalue({'tables': tables}))
+    assert [table.name for table in db.tables] == [f't{i}' for i in range(103)]
+    db.write(**items)
+    assert db.read() == items
+    db._connection.close()
+
+
+def test_cyclic_table_group():
+    tables = []
+    for name, target in [('a', 'b'), ('b', 'a')]:
+        tables.append({'url': name, 'tableSchema': {
+            'columns': [{'name': 'ID'}], 'primaryKey': 'ID',
+            'foreignKeys': [{'columnReference': 'ID', 'reference': {
+                'resource': target, 'columnReference': 'ID'}}],
+        }})
+    with pytest.raises(ValueError, match='cyclic dependencies'):
+        Database(TableGroup.fromvalue({'tables': tables}))
