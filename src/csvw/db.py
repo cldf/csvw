@@ -415,13 +415,14 @@ class Database:
         else:
             context_sql = ''
         sql = (f"SELECT {qt(table.columns[0].name)}, "
-               f"       group_concat({qt(table.columns[1].name)}, ' '), "
-               f"       group_concat(COALESCE({qt('context')}, ''), '||') "
-               f"FROM {qt()} {context_sql} GROUP BY {qt(table.columns[0].name)}")
-        cu = db.execute(sql)
-        return {
-            r[0]: [(k, v) if context is None else k
-                   for k, v in zip(r[1].split(), r[2].split('||'))] for r in cu.fetchall()}
+               f"       {qt(table.columns[1].name)}, COALESCE({qt('context')}, '') "
+               f"FROM {qt()} {context_sql}")
+        references = collections.defaultdict(list)
+        # Keep association rows intact: keys may contain whitespace, and
+        # custom contexts may contain the delimiters used by string aggregation.
+        for key, value, ctx in db.execute(sql):
+            references[key].append((value, ctx) if context is None else value)
+        return dict(references)
 
     def separator(self, tname: str, cname: str) -> Optional[str]:
         """
