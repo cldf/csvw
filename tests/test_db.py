@@ -292,6 +292,21 @@ def test_many_to_many(tg_with_foreign_keys):
     db._connection.close()
 
 
+@pytest.mark.parametrize('keys', [
+    ['New York', 'San Francisco'],
+    ['two\twords', 'line\nbreak'],
+    ['eau de vie', 'New York', 'eau de vie'],
+])
+def test_many_to_many_whitespace(tg_with_foreign_keys, keys):
+    db = Database(tg_with_foreign_keys)
+    db.write(ref=[{'pk': '1', 'ref1': keys, 'ref2': keys[::-1]}],
+             data=[{'v': key} for key in dict.fromkeys(keys)])
+    res = db.read()['ref'][0]
+    assert res['ref1'] == keys
+    assert res['ref2'] == keys[::-1]
+    db._connection.close()
+
+
 def test_many_to_many_2(tg_with_foreign_keys):
     db = Database(tg_with_foreign_keys)
     db.write(
@@ -326,6 +341,22 @@ def test_many_to_many_no_context(tg_with_foreign_keys):
     res = db.read()['ref'][0]
     # The context will then be returned for **each** foreign key column!
     assert res['ref2'] == [('y', '1234'), ('x', '1234')]
+    db._connection.close()
+
+
+def test_many_to_many_context_delimiter(tg_with_foreign_keys):
+    class DatabaseWithoutContext(Database):
+        def association_table_context(self, table, column, fkey):
+            return fkey, 'part1||part2'
+
+        def select_many_to_many(self, db, table, context):
+            return Database.select_many_to_many(self, db, table, None)
+
+    db = DatabaseWithoutContext(tg_with_foreign_keys)
+    db.write(ref=[{'pk': '1', 'ref1': ['New York', 'San Francisco']}],
+             data=[{'v': 'New York'}, {'v': 'San Francisco'}])
+    assert db.read()['ref'][0]['ref1'] == [
+        ('New York', 'part1||part2'), ('San Francisco', 'part1||part2')]
     db._connection.close()
 
 
