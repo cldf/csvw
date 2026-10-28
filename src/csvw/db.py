@@ -409,13 +409,13 @@ class Database:
 
     def select_many_to_many(self, db, table, context) -> dict[str, Union[tuple[str, str], str]]:
         """Select data from an association table, grouped by first foreign key."""
+        qt = functools.partial(self._qt, table.name)
         if context is not None:
-            context_sql = f"WHERE context = '{context}'"
+            context_sql = f"WHERE {qt('context')} = '{context}'"
         else:
             context_sql = ''
-        qt = functools.partial(self._qt, table.name)
         sql = (f"SELECT {qt(table.columns[0].name)}, "
-               f"       {qt(table.columns[1].name)}, COALESCE(context, '') "
+               f"       {qt(table.columns[1].name)}, COALESCE({qt('context')}, '') "
                f"FROM {qt()} {context_sql}")
         references = collections.defaultdict(list)
         # Keep association rows intact: keys may contain whitespace, and
@@ -598,6 +598,6 @@ class TableReadSpec:
                 d[k] = self.converters[k][1](v) if v is not None else None
         pk = d[self.translate(self.name, self.table.primary_key[0])] \
             if self.table.primary_key and len(self.table.primary_key) == 1 else None
-        d.update({k: [] for k in self.table.many_to_many})
+        d.update({self.translate(self.name, k): [] for k in self.table.many_to_many})
         d.update(self.references.get(pk, {}))
         return d
