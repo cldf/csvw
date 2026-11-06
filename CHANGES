@@ -2,6 +2,12 @@ Changelog
 =========
 
 
+Unreleased
+----------
+
+Drop py3.9 compat, run tests on py3.15.
+
+
 Version 4.1.1
 -------------
 
