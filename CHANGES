@@ -2,10 +2,11 @@ Changelog
 =========
 
 
-Unreleased
-----------
+Version 4.2.0
+-------------
 
-Drop py3.9 compat, run tests on py3.15.
+- Drop py3.9 compat, run tests on py3.15.
+- More robust sqlite writing and reading. Thanks @antonsoo
 
 
 Version 4.1.1
