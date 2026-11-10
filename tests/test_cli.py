@@ -75,6 +75,12 @@ def test_csvwvalidate(mdname, tmp_path):
     assert run(csvwvalidate, url=str(p), verbose=True, lax=False) == 1
 
 
+def test_csvwvalidate_missing_file(capsys):
+    assert run(csvwvalidate, url='does-not-exist.json', verbose=True, lax=False) == 2
+    out, _ = capsys.readouterr()
+    assert 'FAIL' in out
+
+
 def test_csvwdescribe(csvname, tsvname, capsys):
     run(csvwdescribe, csv=[csvname], delimiter=',')
     out, _ = capsys.readouterr()

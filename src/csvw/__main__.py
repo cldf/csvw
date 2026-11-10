@@ -87,7 +87,7 @@ def csvwvalidate(args=None, test=False):
             if args.verbose:
                 for w in csvw.warnings:
                     print(colored(str(w.message), 'blue'))
-    except ValueError as e:
+    except (ValueError, OSError) as e:
         ret = 2
         print(colored('FAIL', 'red', attrs=['bold']))
         if args.verbose:
