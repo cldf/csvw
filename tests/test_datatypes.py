@@ -81,6 +81,61 @@ def test_roundtrip(datatype, val, obj, roundtrip):
         assert t.formatted(o) == val
 
 
+@pytest.mark.parametrize('precision', [3, 28])
+@pytest.mark.parametrize('datatype, value, expected', [
+    ('integer', '123456789012345678901234567890', 123456789012345678901234567890),
+    ('integer', '-123456789012345678901234567890', -123456789012345678901234567890),
+    ('decimal', '123456789012345678901234567890.123456789',
+     decimal.Decimal('123456789012345678901234567890.123456789')),
+    ('decimal', '-0.123456789012345678901234567890000',
+     decimal.Decimal('-0.123456789012345678901234567890000')),
+    ('decimal', '-0.000', decimal.Decimal('-0.000')),
+    ({'base': 'decimal', 'format': {'groupChar': '.', 'decimalChar': ','}},
+     '12.345.678.901.234.567.890,123456789012',
+     decimal.Decimal('12345678901234567890.123456789012')),
+    ('decimal', '123456789012345678901234567890.123456789%',
+     decimal.Decimal('1234567890123456789012345678.90123456789')),
+    ('decimal', '-123456789012345678901234567890.123456789‰',
+     decimal.Decimal('-123456789012345678901234567.890123456789')),
+])
+def test_numeric_parsing_preserves_precision(datatype, value, expected, precision):
+    with decimal.localcontext() as context:
+        context.prec = precision
+        context.traps[decimal.Inexact] = True
+        context.traps[decimal.Rounded] = True
+
+        result = Datatype.fromvalue(datatype).read(value)
+
+        assert result == expected
+        if isinstance(expected, decimal.Decimal):
+            assert result.as_tuple() == expected.as_tuple()
+        assert context.prec == precision
+
+
+def test_high_precision_numeric_csv_roundtrip(tmp_path):
+    table = Table.fromvalue({
+        'url': 'numbers.csv',
+        'tableSchema': {'columns': [
+            {'name': 'id', 'datatype': 'integer'},
+            {'name': 'value', 'datatype': 'decimal'},
+        ]},
+    })
+    rows = [{
+        'id': 123456789012345678901234567890,
+        'value': decimal.Decimal('123456789012345678901234567890.123456789'),
+    }]
+    path = tmp_path / 'numbers.csv'
+
+    with decimal.localcontext() as context:
+        context.prec = 3
+        context.traps[decimal.Inexact] = True
+        context.traps[decimal.Rounded] = True
+
+        table.write(rows, fname=path)
+
+        assert list(table.iterdicts(fname=path)) == rows
+
+
 @pytest.mark.parametrize('value', [
     decimal.Decimal('1E+6'),
     decimal.Decimal('1.23E+5'),

@@ -571,7 +571,14 @@ class decimal(anyAtomicType):  # pylint: disable=invalid-name
             else:
                 factor = 1
         try:
-            return _decimal.Decimal(v) * factor
+            res = _decimal.Decimal(v)
+            if not res.is_finite():
+                return res * factor
+            if factor != 1:
+                # Adjust the exponent exactly; arithmetic would apply the active context.
+                sign, digits, exponent = res.as_tuple()
+                res = _decimal.Decimal((sign, digits, exponent + factor.as_tuple().exponent))
+            return res
         except (TypeError, _decimal.InvalidOperation):
             decimal.value_error(v)
         return None  # pragma: no cover
